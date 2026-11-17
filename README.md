@@ -83,3 +83,22 @@ Le API ora richiedono un consenso utente **attivo e limitato per sorgente** per 
 ## API throttling v0.2 (#37, first slice)
 
 I percorsi `/api/v1/memories` e `/api/v1/consents` ora usano il limiter ASP.NET Core (finestra fissa di un minuto, **120 richieste per identità autenticata** di default, `429 rate_limited`, `Retry-After: 60` e nessuna coda). La chiave di quota deriva soltanto da `tenant_id` + `sub` nel JWT validato; richieste non autenticate usano il peer IP, non header controllati dal client. `/health` rimane non limitato per i probe. Il limite può essere ridotto in test con `RateLimit__RequestsPerMinute`; valori fuori 1–1000 rifiutano l'avvio. Test HTTP reali (TestServer con scheme di identità **solo test**) verificano il 429 e l'isolamento dei tenant. Non è ancora un sistema completo di quote SaaS, limiti sui media o difesa DDoS.
+
+## Browser OAuth OIDC/PKCE + API reali (#39, #41 — web slice)
+
+Se configuri **tutte e tre** le variabili pubbliche Expo, la UI Web attiva il login OIDC Authorization Code + PKCE S256, il fetch dei consensi e delle note dal server, e il salvataggio reale su PostgreSQL. Non può inviare note in assenza di login e consenso `memory.capture`. La UI conserva i token di accesso/refresh **solo in memoria**, usa `sessionStorage` esclusivamente per lo stato temporaneo del redirect e rimuove `code` dall'indirizzo dopo il callback. Una ricarica completa richiede un nuovo login; il refresh in sessione prova a usare i token di rinnovo e al fallimento richiede login. Si può revocare il consenso manuale (le note vecchie NON vengono cancellate).
+
+Per l'ambiente Docker locale già predisposto:
+```sh
+# 1. Configura docker/.env con credenziali locali casuali, poi avvia Keycloak/PostgreSQL/API
+docker compose --env-file docker/.env -f docker/compose.yml up --build -d db keycloak api
+# 2. Da un'altra shell avvia il web server Expo con sole impostazioni PUBBLICHE (non secrets)
+cd src/mobile
+EXPO_PUBLIC_OMNIA_OIDC_ISSUER=http://localhost:8081/realms/omnia \
+EXPO_PUBLIC_OMNIA_OIDC_CLIENT_ID=omnia-web \
+EXPO_PUBLIC_OMNIA_API_URL=http://localhost:8080 \
+npm run web
+```
+Keycloak non crea credenziali utente reali per default: creare un utente sintetico nel realm locale e testare l'OIDC flow; non commitare password. Redirect consentiti nel realm import: `http://localhost:19006/*` e `http://127.0.0.1:19006/*`. Client OAuth **pubblico**, senza secret. L'API valida firma, issuer, audience e sub/tenant del bearer JWT. Configurare separatamente HTTPS, client, origins e issuer reali per una futura deployment Azure/Pages (non incluso). Le variabili `EXPO_PUBLIC_*` sono visibili nel browser: **NON inserire segreti**.
+
+La Pages pubblica su <https://keyserdsoze.github.io/Omnia/> mantiene la demo locale quando non riceve configurazione cloud. La presenza di una sola variabile viene trattata come errore di configurazione, mai come sync implicito. Native iOS/Android resta demo fino all'OIDC via browser nativo con SecureStore (#40). Audio resta solo locale, non viene caricato dal flusso memo.

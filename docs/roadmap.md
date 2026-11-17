@@ -54,3 +54,11 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Prima slice: limiter HTTP per tenant/sub derivati dal bearer JWT autenticato, 429 senza queue e Retry-After; fallback peer-IP per anonimi.
 - [x] API integration test TestServer con identità sintetiche per lo stato 429/isolamento, reale PostgreSQL nel test host (vedere CI run).
 - [ ] Limiti media / connector, distributed cluster-wide limiter, WAF/rate at edge, load test/metrics; feature #37 rimane **aperta**.
+
+## v0.2 — First functional Web slice (#39, #41)
+
+- [x] Expo Web OIDC Authorization Code + PKCE S256 con `oidc-client-ts`, token in sola memoria e stato redirect in sessionStorage; login, logout con revoca best-effort e refresh token durante sessione.
+- [x] Web UI note manuali ↔ API JWT ↔ PostgreSQL: consenso per scope manual, error handling, reload timeline e idempotent retry key, nessuna falsa conferma.
+- [x] Fallback Pages senza configurazione che dichiara apertamente demo locale; configurazione incompleta rifiutata.
+- [ ] Real-world end-to-end provider OIDC→API→DB (test in `e2e/auth-sync.spec.ts` e workflow da verificare).
+- [ ] Android/iOS AuthSession PKCE + secure storage (#40); offline sync persistente/encrypted (#117), export/delete, RLS, legal consent review.

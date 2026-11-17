@@ -36,3 +36,9 @@ La tabella SQL `consent_grants` e i servizi DI permettono `memory.capture` solo 
 ## API application rate limiting (slice of #37)
 
 Rate limiter fixed-window per signed JWT tenant+sub (default 120 requests/60s; no queue) su `/api/v1/memories` e `/api/v1/consents`, eseguito dopo autenticazione. Anonymous/invalid claim requests share a fallback peer-IP partition; forged `X-Forwarded-For` header is not used. HTTP 429 with JSON `rate_limited`, `Retry-After: 60`. `/health` remains probe-friendly. Native test HTTP uses a fixture auth handler **not enabled in production**, while real OIDC/JWKS browser end-to-end security remains #17. Missing: distributed store/shared quota across Container Apps replicas, connector limits, upload/media quotas, reverse proxy/WAF/DDoS, audit and load tests. Feature #37 remains open.
+
+## Web OIDC and scoped capture UI (first slice #39/#41)
+
+Adottato `oidc-client-ts` per state/nonce validation e OAuth PKCE S256 (non ad hoc crypto). Refresh/access tokens sono in **memory-only** userStore: un reload richiede nuova autenticazione; il PKCE request state per il redirect è in sessionStorage con TTL gestito dalla libreria. Browser callback ripulisce il codice dalla URL; cliente non conserva password o client_secret. Le fetch API non seguono redirect, non usano cookie, e usano un'origine con HTTPS salvo loopback. Il grant manual user-first viene scelto dopo testo informativo con accepted=true; niente consenso automatico. Backend continua a validare JWT e consenso prima di invocare AI.
+
+Limiti: non ancora certificata la user experience del rinnovo token/SSO e logout globale IdP; il logout locale tenta revoca token ma non chiude necessariamente la sessione SSO del provider. La Pages pubblica non dispone di backend Azure e resta solo demo. Native iOS/Android usa ancora demo e non un login fittizio. La UI non rende legale registrare conversazioni di terzi e non sostituisce DPIA, delete/export e RLS.

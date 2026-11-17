@@ -10,6 +10,8 @@ export function classifyMemo(text: string): MemoryTag[] {
   return tags.length ? tags : ['personale'];
 }
 
+export type ReturnTypeMemo = ReturnType<typeof normalizeMemo>;
+
 export function normalizeMemo(content: string, occurredAt: string) {
   const raw = content.trim();
   if (!raw) throw new Error('Il memo non può essere vuoto.');

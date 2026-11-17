@@ -98,3 +98,7 @@ Il grant non conferisce automaticamente il permesso di registrare terzi, acceder
 ## API per-identity throttling (first slice #37)
 
 ASP.NET Core built-in rate-limiter middleware is placed **after JWT authentication** and before authorization. Both v1 API groups require a fixed-window per authenticated tenant and subject partition (120 req/min default) or fallback peer IP for unauthorized requests. Endpoint rejects with 429 and no waiting queue. The limiter is **instance-local**: it does not establish a cluster-wide SaaS quota and is not a replacement for the Azure network edge WAF, per-tenant budget, or durable metering (#102).
+
+## OIDC web client + sync slice (2026-11-17)
+
+Il Browser Web (Expo static `/Omnia/`) usa `oidc-client-ts` come public client per Authorization Code + PKCE S256, valida il callback via state/nonce/issuer, mantiene JWT access e refresh **in RAM** (nessun storage persistente) e memorizza solo le transazioni OAuth necessarie in `sessionStorage`. Non affida al browser il controllo finale: .NET 10 verifica sempre firma JWT/JWKS, issuer, audience e claim unici `sub`/`tenant_id`. Il client non invia tenant/owner nel corpo. I token sono inviati esclusivamente in header `Authorization: Bearer` verso una API HTTPS configurata (HTTP solo localhost/loopback per sviluppo) con redirect vietati; errori HTTP/timeout non generano falsi salvataggi. Consent `manual/memory.capture` richiede spunta esplicita; revoca impedisce nuovi memo. La UI è solo Web, non una prova di autenticazione nativa.

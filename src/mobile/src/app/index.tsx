@@ -1,9 +1,19 @@
-import { useState } from 'react';
-import { useColorScheme, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { useColorScheme, Platform, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from 'react-native';
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { normalizeMemo } from '../domain/tags';
+import { configuredWebMode, type WebMode } from '../services/config';
+import { createBrowserAuth, type BrowserAuth } from '../services/webAuth';
+import { MemoryApi, type ConsentDto, type RemoteMemory } from '../services/memoryApi';
 
 type LocalMemo = { id: string; content: string; tags: string[]; time: string };
+const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
+const activeManualGrant = (grants: ConsentDto[]) =>
+  grants.find(item => item.source === 'manual' && item.purpose === 'memory.capture' && item.active) ?? null;
+const timelineMemo = (item: RemoteMemory): LocalMemo => ({
+  id: item.id, content: item.summary, tags: item.tags,
+  time: new Date(item.occurredAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+});
 type Palette = { bg: string; surface: string; text: string; subtle: string; border: string; accent: string; accentText: string; card2: string };
 const palettes: Record<'dark' | 'light', Palette> = {
   dark: { bg: '#0D1421', surface: '#172234', text: '#F5F8FF', subtle: '#9BA9BB', border: '#29374A', accent: '#A5E6D4', accentText: '#092D2A', card2: '#203246' },
@@ -17,22 +27,137 @@ export default function Home() {
   const p = palettes[mode];
   const [draft, setDraft] = useState('');
   const [memos, setMemos] = useState<LocalMemo[]>([]);
+  const [authState, setAuthState] = useState<'checking' | 'signed-out' | 'signed-in' | 'error'>(
+    webMode.kind === 'cloud' ? 'checking' : 'signed-out');
+  const [grant, setGrant] = useState<ConsentDto | null>(null);
+  const [accepted, setAccepted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const authRef = useRef<BrowserAuth | null>(null);
+  const apiRef = useRef<MemoryApi | null>(null);
+  const retryRef = useRef<{ raw: string; entry: ReturnType<typeof normalizeMemo> } | null>(null);
   const [recording, setRecording] = useState(false);
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
-  function captureText() {
-    try {
-      const occurredAt = new Date().toISOString();
-      const normalized = normalizeMemo(draft, occurredAt);
-      setMemos(current => [{ id: occurredAt, content: normalized.content, tags: normalized.tags,
-        time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) }, ...current]);
+  async function refreshCloud() {
+    const api = apiRef.current;
+    if (!api) throw new Error('Connessione API non disponibile.');
+    const [consents, recent] = await Promise.all([api.listConsents(), api.recent()]);
+    setGrant(activeManualGrant(consents));
+    setMemos(recent.map(timelineMemo));
+  }
+
+  useEffect(() => {
+    if (webMode.kind !== 'cloud') return;
+    let live = true;
+    const auth = createBrowserAuth(webMode.config);
+    authRef.current = auth;
+    apiRef.current = new MemoryApi(webMode.config, () => auth.accessToken());
+    void (async () => {
+      try {
+        await auth.handleRedirect();
+        if (!await auth.hasSession()) {
+          if (live) setAuthState('signed-out');
+          return;
+        }
+        if (live) setAuthState('signed-in');
+        await refreshCloud();
+      } catch (error) {
+        if (live) {
+          setAuthState('error');
+          setNotice(error instanceof Error ? error.message : 'Autenticazione non riuscita.');
+        }
+      }
+    })();
+    return () => { live = false; };
+  }, []);
+
+  async function login() {
+    try { await authRef.current?.login(); }
+    catch { setNotice('Impossibile avviare il login OIDC. Verifica il provider.'); }
+  }
+
+  async function logout() {
+    if (busy) return;
+    setBusy(true);
+    let revoked = true;
+    try { await authRef.current?.logout(); }
+    catch { revoked = false; }
+    finally {
+      setAuthState('signed-out');
+      setMemos([]);
+      setGrant(null);
+      setAccepted(false);
       setDraft('');
-      setNotice('Memo aggiunto a questa sessione. La sincronizzazione richiederà un accesso sicuro.');
-    } catch {
-      setNotice('Scrivi qualcosa prima di salvare il memo.');
+      retryRef.current = null;
+      setBusy(false);
+      setNotice(revoked ? 'Sessione locale chiusa e revoca token richiesta.' :
+        'Sessione locale chiusa; revoca remota non confermata. Chiudi anche la sessione del provider.');
     }
+  }
+
+  async function grantConsent() {
+    if (!accepted || !apiRef.current || busy || authState !== 'signed-in') return;
+    setBusy(true);
+    try {
+      await apiRef.current.grantManualCapture();
+      await refreshCloud();
+      setAccepted(false);
+      setNotice('Autorizzazione attiva per le tue note manuali (30 giorni).');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Consenso non salvato.');
+    } finally { setBusy(false); }
+  }
+
+  async function revokeConsent() {
+    if (!grant || !apiRef.current || busy) return;
+    setBusy(true);
+    try {
+      await apiRef.current.revokeConsent(grant.id);
+      setGrant(null);
+      setAccepted(false);
+      setNotice('Consenso revocato: niente nuove note. I dati precedenti restano finché non saranno cancellati.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Impossibile revocare il consenso.');
+    } finally { setBusy(false); }
+  }
+
+  async function captureText() {
+    if (busy) return;
+    try {
+      const normalized = normalizeMemo(draft, new Date().toISOString());
+      if (webMode.kind !== 'cloud') {
+        setMemos(current => [{
+          id: normalized.externalId, content: normalized.content, tags: normalized.tags,
+          time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+        }, ...current]);
+        setDraft('');
+        setNotice('Memo aggiunto a questa sessione. La sincronizzazione richiederà un accesso sicuro.');
+        return;
+      }
+      if (authState !== 'signed-in') {
+        setNotice('Accedi con OIDC prima di salvare nel cloud.');
+        return;
+      }
+      if (!grant) {
+        setNotice('Autorizza prima il salvataggio delle note manuali.');
+        return;
+      }
+      const api = apiRef.current;
+      if (!api) throw new Error('API non inizializzata.');
+      const entry = retryRef.current?.raw === normalized.content ? retryRef.current.entry : normalized;
+      retryRef.current = { raw: normalized.content, entry };
+      setBusy(true);
+      await api.save(entry);
+      retryRef.current = null;
+      setDraft('');
+      setNotice('Nota salvata nel cloud.');
+      try { await refreshCloud(); }
+      catch { setNotice('Nota salvata, ma la timeline non è aggiornata. Usa Aggiorna.'); }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Salvataggio non confermato. Riprova.');
+    } finally { setBusy(false); }
   }
 
   async function captureAudio() {
@@ -76,12 +201,85 @@ export default function Home() {
         <Text style={[styles.title, heading]}>La tua giornata.{"\n"}Più chiara, ogni giorno.</Text>
         <Text style={[styles.description, { color: p.subtle }]}>Un posto per raccogliere i tuoi momenti, collegare i puntini e costruire una memoria che controlli tu.</Text>
       </View>
+      <View style={[styles.card, cardStyle, { minHeight: 0, marginBottom: 20 }]}>
+        <Text style={[styles.kicker, { color: p.subtle }]}>ACCESSO E DATI</Text>
+        <Text testID="auth-status" style={[styles.hint, heading]}>
+          {webMode.kind === 'demo' ? 'Modalità demo locale: nessun dato sincronizzato.' :
+            webMode.kind === 'invalid' ? webMode.reason :
+            authState === 'checking' ? 'Verifica della sessione OIDC…' :
+            authState === 'signed-in' ? 'Sessione autenticata. Le note sono lette dal server.' :
+            'Accesso necessario per memorizzare le note nel cloud.'}
+        </Text>
+        {webMode.kind === 'cloud' && authState !== 'checking' && (
+          <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            {authState !== 'signed-in' ? (
+              <Pressable testID="auth-login" onPress={() => { void login(); }}
+                accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16 }]}>
+                <Text style={[styles.buttonText, heading]}>Accedi con OIDC</Text>
+              </Pressable>
+            ) : (
+              <>
+                <Pressable testID="sync-reload" onPress={() => { void refreshCloud().catch(() =>
+                  setNotice('Impossibile aggiornare la timeline. Riprova.')); }}
+                  accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16 }]}>
+                  <Text style={[styles.buttonText, heading]}>Aggiorna timeline</Text>
+                </Pressable>
+                <Pressable testID="auth-logout" onPress={() => { void logout(); }}
+                  accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16 }]}>
+                  <Text style={[styles.buttonText, heading]}>Esci</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        )}
+        {webMode.kind === 'cloud' && authState === 'signed-in' && (
+          <View style={{ marginTop: 16 }}>
+            {grant ? (
+              <>
+                <Text testID="consent-state" style={[styles.hint, heading]}>
+                  Autorizzazione attiva: note manuali fino al {new Date(grant.expiresAt).toLocaleDateString('it-IT')}.
+                </Text>
+                <Pressable testID="revoke-consent" accessibilityRole="button"
+                  onPress={() => { void revokeConsent(); }} disabled={busy}
+                  style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16, marginTop: 9, alignSelf: 'flex-start' }]}>
+                  <Text style={[styles.buttonText, heading]}>Revoca autorizzazione</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text testID="consent-state" style={[styles.hint, heading]}>Nessun consenso attivo per le note manuali.</Text>
+                <Pressable testID="consent-accept" accessibilityRole="checkbox"
+                  accessibilityState={{ checked: accepted }} onPress={() => setAccepted(!accepted)}
+                  style={{ marginTop: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
+                  <Text style={heading}>{accepted ? '☑' : '☐'}</Text>
+                  <Text style={[styles.hint, heading, { flex: 1, marginTop: 0 }]}>
+                    Autorizzo per 30 giorni la conservazione e l'elaborazione delle mie note manuali.
+                    La revoca blocca i nuovi salvataggi, non cancella quelli precedenti.
+                    Gli eventuali modelli AI configurati sul server possono elaborare il testo.
+                    Non caricherò contenuti di altre persone senza averne il diritto.
+                  </Text>
+                </Pressable>
+                <Pressable testID="grant-consent" accessibilityRole="button"
+                  disabled={!accepted || busy} onPress={() => { void grantConsent(); }}
+                  style={[styles.secondaryButton, { backgroundColor: p.card2,
+                    paddingHorizontal: 16, marginTop: 11, opacity: accepted && !busy ? 1 : 0.5, alignSelf: 'flex-start' }]}>
+                  <Text style={[styles.buttonText, heading]}>Attiva salvataggio note</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        )}
+      </View>
       <View style={styles.columns}>
         <View style={[styles.card, cardStyle, styles.primaryCard]}>
           <Text style={[styles.kicker, { color: p.subtle }]}>CATTURA UN MOMENTO</Text>
           <Text style={[styles.cardTitle, heading]}>Cosa vuoi ricordare?</Text>
-          <TextInput testID="memo-input" placeholder="Una riunione, un pensiero, un'intuizione…" placeholderTextColor={p.subtle} multiline value={draft} onChangeText={setDraft} style={[styles.input, { color: p.text, backgroundColor: p.bg, borderColor: p.border }]} />
-          <Pressable testID="save-memo" onPress={captureText} accessibilityRole="button" style={[styles.mainButton, { backgroundColor: p.accent }]}>
+          <TextInput testID="memo-input" placeholder="Una riunione, un pensiero, un'intuizione…" placeholderTextColor={p.subtle} multiline value={draft} onChangeText={value => {
+            setDraft(value);
+            retryRef.current = null;
+          }} style={[styles.input, { color: p.text, backgroundColor: p.bg, borderColor: p.border }]} />
+          <Pressable testID="save-memo" onPress={() => { void captureText(); }} disabled={busy}
+            accessibilityRole="button" style={[styles.mainButton, { backgroundColor: p.accent }]}>
             <Text style={[styles.buttonText, { color: p.accentText }]}>＋ Salva nota rapida</Text>
           </Pressable>
           <View style={[styles.separator, { backgroundColor: p.border }]} />
@@ -99,7 +297,7 @@ export default function Home() {
             <View style={styles.empty}>
               <Text style={{ fontSize: 35 }}>✦</Text>
               <Text style={[styles.emptyTitle, heading]}>Si comincia da qui.</Text>
-              <Text style={[styles.hint, { color: p.subtle }]}>Le note di questa sessione appariranno qui. Non sono ancora sincronizzate sul cloud.</Text>
+              <Text style={[styles.hint, { color: p.subtle }]}>{webMode.kind === 'cloud' ? 'Le note salvate nel cloud appariranno qui dopo l’accesso.' : 'Le note di questa sessione appariranno qui. Non sono ancora sincronizzate sul cloud.'}</Text>
             </View>
           ) : memos.map(memo => <View key={memo.id} style={[styles.memo, { borderColor: p.border }]}>
             <Text style={[styles.memoTime, { color: p.subtle }]}>{memo.time} · {memo.tags.join(', ')}</Text>
@@ -118,7 +316,7 @@ export default function Home() {
           <Text style={[styles.featureState, { color: p.subtle }]}>{feature.state}</Text>
         </View>)}
       </View>
-      <Text style={[styles.footer, { color: p.subtle }]}>OMNIA · FOUNDATION 0.1 · PRIVACY BY DESIGN · NESSUNA AUTOMAZIONE ATTIVA</Text>
+      <Text style={[styles.footer, { color: p.subtle }]}>OMNIA · FOUNDATION 0.2 · PRIVACY BY DESIGN · NESSUNA AUTOMAZIONE ATTIVA</Text>
     </ScrollView>
   );
 }

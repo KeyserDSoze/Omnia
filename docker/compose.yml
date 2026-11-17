@@ -46,6 +46,7 @@ services:
       Embeddings__Endpoint: http://ollama:11434/
       Embeddings__Model: nomic-embed-text
       Cors__Origins__0: http://localhost:19006
+      Cors__Origins__1: http://127.0.0.1:19006
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:

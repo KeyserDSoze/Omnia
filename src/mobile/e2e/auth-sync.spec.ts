@@ -18,13 +18,20 @@ async function browserLogin(page: import('@playwright/test').Page, username: str
   expect(request.searchParams.get('code_challenge')?.length).toBeGreaterThan(30);
   expect(request.searchParams.get('client_id')).toBe('omnia-web');
   // After the first sign-in Keycloak may reuse the IdP SSO cookie and skip the form.
+  const usernameInput = page.locator('input[name="username"]');
+  let loginFormVisible = false;
   try {
-    await page.locator('input[name="username"]').waitFor({ state: 'visible', timeout: 8_000 });
-    await page.locator('input[name="username"]').fill(username);
-    await page.locator('input[name="password"]').fill(password);
-    await page.locator('input[type="submit"]').click();
+    await usernameInput.waitFor({ state: 'visible', timeout: 6_000 });
+    loginFormVisible = true;
   } catch {
-    // Auth may already have redirected back via a valid SSO session.
+    // The IdP might have auto-redirected an existing SSO session.
+  }
+  if (loginFormVisible) {
+    await usernameInput.fill(username);
+    await page.locator('input[name="password"]').fill(password);
+    // Keycloak 26 renders an actual <button>, not <input type="submit">.
+    // Never swallow failures from clicking or submitting the real form.
+    await page.locator('#kc-login').click();
   }
   await expect(page.getByTestId('auth-status')).toContainText('Sessione autenticata', { timeout: 45_000 });
   expect(new URL(page.url()).searchParams.has('code')).toBe(false);

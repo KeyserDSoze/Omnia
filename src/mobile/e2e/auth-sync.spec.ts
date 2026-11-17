@@ -34,6 +34,9 @@ async function browserLogin(page: import('@playwright/test').Page, username: str
     await page.locator('#kc-login').click();
   }
   await expect(page.getByTestId('auth-status')).toContainText('Sessione autenticata', { timeout: 45_000 });
+  // A successful OIDC callback is not sufficient: the API must accept the
+  // signed access token with unique sub/tenant_id/aud before we proceed.
+  await expect(page.getByTestId('consent-state')).toBeVisible({ timeout: 15_000 });
   expect(new URL(page.url()).searchParams.has('code')).toBe(false);
   // Tokens must not land in browser persistent or session storage.
   const keys = await page.evaluate(() => ({

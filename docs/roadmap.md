@@ -62,3 +62,10 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Fallback Pages senza configurazione che dichiara apertamente demo locale; configurazione incompleta rifiutata.
 - [ ] Real-world end-to-end provider OIDC→API→DB (test in `e2e/auth-sync.spec.ts` e workflow da verificare).
 - [ ] Android/iOS AuthSession PKCE + secure storage (#40); offline sync persistente/encrypted (#117), export/delete, RLS, legal consent review.
+
+## Feature #30 — PostgreSQL RLS (2026-11-17)
+
+- [x] Migrazione forward-only `0003_rls_scope.sql` su memoria e consensi con `ENABLE` e `FORCE` RLS, policy select/write tenant+owner.
+- [x] Ruolo DB runtime distinto e non privilegiato con bootstrap locale, migration role separato e validazione fail-closed in API.
+- [x] Session actor scope transaction-local e test PostgreSQL reali per SELECT senza WHERE, INSERT/UPDATE fuori scope, ruolo amministrativo non consentito come runtime e pool reuse (run CI da confermare prima di dichiarare green).
+- [ ] Azure managed identity/DB role provisioning robusto, IAM e secret rotation, security review injection e portabilità su pgvector Flexible Server; aspetti da validare prima di release con dati reali.

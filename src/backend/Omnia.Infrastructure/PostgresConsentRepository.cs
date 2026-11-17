@@ -13,8 +13,10 @@ public sealed class PostgresConsentRepository(NpgsqlDataSource db)
 {
     public async Task<ConsentGrant> GrantAsync(ConsentGrant grant, CancellationToken ct)
     {
-        await using var conn = await db.OpenConnectionAsync(ct);
-        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var scope = await PostgresActorScope.OpenAsync(db,
+            grant.TenantId, grant.OwnerSubject, ct);
+        var conn = scope.Connection;
+        var tx = scope.Transaction;
         var scopeKey = $"{grant.TenantId}|{grant.OwnerSubject}|{grant.Source}|{grant.Purpose}";
 
         // Scope-specific lock serializes concurrent re-grants. Index still enforces uniqueness.
@@ -56,35 +58,39 @@ public sealed class PostgresConsentRepository(NpgsqlDataSource db)
             await insert.ExecuteNonQueryAsync(ct);
         }
 
-        await tx.CommitAsync(ct);
+        await scope.CommitAsync(ct);
         return grant;
     }
 
     public async Task<bool> RevokeAsync(string tenantId, string ownerSubject,
         Guid id, DateTimeOffset now, CancellationToken ct)
     {
-        await using var command = db.CreateCommand("""
+        await using var scope = await PostgresActorScope.OpenAsync(db, tenantId, ownerSubject, ct);
+        await using var command = new NpgsqlCommand("""
             UPDATE consent_grants SET revoked_at = COALESCE(revoked_at, @now)
             WHERE id = @id AND tenant_id = @tenant AND owner_sub = @owner
             RETURNING id
-            """);
+            """, scope.Connection, scope.Transaction);
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("tenant", tenantId);
         command.Parameters.AddWithValue("owner", ownerSubject);
         command.Parameters.AddWithValue("now", now);
-        return await command.ExecuteScalarAsync(ct) is Guid;
+        var changed = await command.ExecuteScalarAsync(ct) is Guid;
+        await scope.CommitAsync(ct);
+        return changed;
     }
 
     public async Task<IReadOnlyList<ConsentGrant>> ListAsync(string tenantId,
         string ownerSubject, CancellationToken ct)
     {
-        await using var command = db.CreateCommand("""
+        await using var scope = await PostgresActorScope.OpenAsync(db, tenantId, ownerSubject, ct);
+        await using var command = new NpgsqlCommand("""
             SELECT id, tenant_id, owner_sub, source, purpose,
                 policy_version, granted_at, expires_at, revoked_at
             FROM consent_grants
             WHERE tenant_id = @tenant AND owner_sub = @owner
             ORDER BY granted_at DESC, id DESC LIMIT 200
-            """);
+            """, scope.Connection, scope.Transaction);
         command.Parameters.AddWithValue("tenant", tenantId);
         command.Parameters.AddWithValue("owner", ownerSubject);
         var grants = new List<ConsentGrant>();
@@ -101,13 +107,14 @@ public sealed class PostgresConsentRepository(NpgsqlDataSource db)
     public async Task EnsureActiveAsync(string tenantId, string ownerSubject,
         string source, string purpose, CancellationToken ct)
     {
-        await using var command = db.CreateCommand("""
+        await using var scope = await PostgresActorScope.OpenAsync(db, tenantId, ownerSubject, ct);
+        await using var command = new NpgsqlCommand("""
             SELECT 1 FROM consent_grants
             WHERE tenant_id = @tenant AND owner_sub = @owner AND source = @source
                 AND purpose = @purpose AND revoked_at IS NULL
                 AND granted_at <= now() AND expires_at > now()
             LIMIT 1
-            """);
+            """, scope.Connection, scope.Transaction);
         command.Parameters.AddWithValue("tenant", tenantId);
         command.Parameters.AddWithValue("owner", ownerSubject);
         command.Parameters.AddWithValue("source", source);

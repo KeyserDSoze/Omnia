@@ -26,11 +26,14 @@ jobs:
           pgpass="$(openssl rand -hex 24)"
           kcpass="$(openssl rand -hex 24)"
           userpass="$(openssl rand -hex 24)"
+          apppass="$(openssl rand -hex 24)"
           echo "::add-mask::$pgpass"
           echo "::add-mask::$kcpass"
           echo "::add-mask::$userpass"
+          echo "::add-mask::$apppass"
           {
             echo "OMNIA_E2E_PG_PASSWORD=$pgpass"
+            echo "OMNIA_E2E_APP_PASSWORD=$apppass"
             echo "OMNIA_E2E_KC_PASSWORD=$kcpass"
             echo "OMNIA_E2E_PASSWORD=$userpass"
             echo "OMNIA_E2E_USER1=omnia-ci-one"
@@ -53,6 +56,13 @@ jobs:
             sleep 2
           done
           docker exec omnia-oidc-pg pg_isready -U omnia -d omnia_test
+          docker exec -i omnia-oidc-pg psql -v ON_ERROR_STOP=1 \
+            -U omnia -d omnia_test -v app_password="$apppass" <<'SQL'
+          SELECT format(
+            'CREATE ROLE omnia_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
+            :'app_password'
+          ) \gexec
+          SQL
 
           for i in $(seq 1 120); do
             if curl -fsS http://localhost:8081/realms/omnia/.well-known/openid-configuration >/dev/null; then break; fi
@@ -88,7 +98,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export Database__ConnectionString="Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia;Password=$OMNIA_E2E_PG_PASSWORD"
+          export Database__ConnectionString="Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_app;Password=$OMNIA_E2E_APP_PASSWORD"
+          export Database__MigrationConnectionString="Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia;Password=$OMNIA_E2E_PG_PASSWORD"
           export Auth__Issuer=http://localhost:8081/realms/omnia
           export Auth__Audience=omnia-api
           export Embeddings__Provider=none

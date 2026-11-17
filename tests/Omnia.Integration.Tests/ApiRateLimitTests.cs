@@ -20,12 +20,16 @@ public sealed class ApiRateLimitTests
     {
         var database = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
         Assert.False(string.IsNullOrWhiteSpace(database), "Disposable PostgreSQL is required.");
+        var runtimeDatabase = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
+        Assert.False(string.IsNullOrWhiteSpace(runtimeDatabase),
+            "A non-owner PostgreSQL test role is required.");
         // Minimal-host Program reads configuration at startup before test-host
         // callbacks; temporary environment values model the same secrets/flags
         // supplied to the production entrypoint, without hardcoding test creds.
         using var runtime = new TestEnvironment(new Dictionary<string, string?>
         {
-            ["Database__ConnectionString"] = database,
+            ["Database__ConnectionString"] = runtimeDatabase,
+            ["Database__MigrationConnectionString"] = database,
             ["Auth__Issuer"] = "http://localhost:8081/realms/omnia",
             ["Auth__Audience"] = "omnia-api",
             ["RateLimit__RequestsPerMinute"] = "3"
@@ -36,7 +40,8 @@ public sealed class ApiRateLimitTests
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Database:ConnectionString"] = database,
+                    ["Database:ConnectionString"] = runtimeDatabase,
+                    ["Database:MigrationConnectionString"] = database,
                     ["Auth:Issuer"] = "http://localhost:8081/realms/omnia",
                     ["Auth:Audience"] = "omnia-api",
                     ["Embeddings:Provider"] = "none",

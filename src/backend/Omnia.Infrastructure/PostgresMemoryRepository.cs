@@ -8,8 +8,10 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
 {
     public async Task<MemoryEntry> UpsertAsync(MemoryEntry entry, CancellationToken ct)
     {
-        await using var conn = await db.OpenConnectionAsync(ct);
-        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var scope = await PostgresActorScope.OpenAsync(db,
+            entry.TenantId, entry.OwnerSubject, ct);
+        var conn = scope.Connection;
+        var tx = scope.Transaction;
         await using (var gate = new NpgsqlCommand("""
             SELECT id FROM consent_grants
             WHERE tenant_id = @tenant AND owner_sub = @subject
@@ -59,19 +61,20 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
         command.Parameters.AddWithValue("model", (object?)entry.EmbeddingModel ?? DBNull.Value);
         var id = (Guid)(await command.ExecuteScalarAsync(ct)
             ?? throw new InvalidOperationException("Insert did not return a record ID."));
-        await tx.CommitAsync(ct);
+        await scope.CommitAsync(ct);
         return entry.WithPersistedId(id);
     }
 
     public async Task<IReadOnlyList<MemorySummary>> RecentAsync(
         string tenantId, string ownerSubject, int limit, CancellationToken ct)
     {
-        await using var command = db.CreateCommand("""
+        await using var scope = await PostgresActorScope.OpenAsync(db, tenantId, ownerSubject, ct);
+        await using var command = new NpgsqlCommand("""
             SELECT id, source, summary, tags, occurred_at, embedding IS NOT NULL
             FROM memory_entries
             WHERE tenant_id = @tenant AND owner_sub = @subject
             ORDER BY occurred_at DESC, id DESC LIMIT @limit
-            """);
+            """, scope.Connection, scope.Transaction);
         command.Parameters.AddWithValue("tenant", tenantId);
         command.Parameters.AddWithValue("subject", ownerSubject);
         command.Parameters.AddWithValue("limit", limit);

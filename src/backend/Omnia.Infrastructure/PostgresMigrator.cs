@@ -3,7 +3,10 @@ using Npgsql;
 
 namespace Omnia.Infrastructure;
 
-public sealed class PostgresMigrator(NpgsqlDataSource db)
+/// <summary>
+/// Schema owner/migration credentials only, never the runtime API connection.
+/// </summary>
+public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = null)
 {
     public async Task MigrateAsync(CancellationToken ct = default)
     {
@@ -35,6 +38,30 @@ public sealed class PostgresMigrator(NpgsqlDataSource db)
                 "INSERT INTO omnia_schema_migrations(version) VALUES (@version)", conn, tx);
             record.Parameters.AddWithValue("version", version);
             await record.ExecuteNonQueryAsync(ct);
+        }
+
+        if (!string.IsNullOrWhiteSpace(runtimeRole))
+        {
+            // The role must be provisioned by the database administrator. Never
+            // create it implicitly with a default/static credential.
+            await using var lookup = new NpgsqlCommand("""
+                SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = @role
+                """, conn, tx);
+            lookup.Parameters.AddWithValue("role", runtimeRole);
+            await using (var reader = await lookup.ExecuteReaderAsync(ct))
+            {
+                if (!await reader.ReadAsync(ct) ||
+                    reader.GetBoolean(0) || reader.GetBoolean(1))
+                    throw new InvalidOperationException(
+                        "Runtime DB role is missing or has SUPERUSER/BYPASSRLS.");
+            }
+            var quoted = new NpgsqlCommandBuilder().QuoteIdentifier(runtimeRole);
+            await using var grant = new NpgsqlCommand($"""
+                GRANT USAGE ON SCHEMA public TO {quoted};
+                GRANT SELECT, INSERT, UPDATE, DELETE
+                    ON TABLE public.memory_entries, public.consent_grants TO {quoted};
+                """, conn, tx);
+            await grant.ExecuteNonQueryAsync(ct);
         }
         await tx.CommitAsync(ct);
     }

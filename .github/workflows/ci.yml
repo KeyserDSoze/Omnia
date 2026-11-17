@@ -22,18 +22,27 @@ jobs:
         run: |
           set -euo pipefail
           password="$(openssl rand -hex 24)"
+          app_password="$(openssl rand -hex 24)"
           echo "::add-mask::$password"
+          echo "::add-mask::$app_password"
           echo "OMNIA_TEST_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia;Password=$password" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_APP_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_app;Password=$app_password" >> "$GITHUB_ENV"
           docker run -d --rm --name omnia-ci-pg \
             -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_test \
             -e "POSTGRES_PASSWORD=$password" \
             -p 127.0.0.1:15432:5432 pgvector/pgvector:pg17
           for i in $(seq 1 60); do
-            if docker exec omnia-ci-pg pg_isready -U omnia -d omnia_test; then exit 0; fi
+            if docker exec omnia-ci-pg pg_isready -U omnia -d omnia_test; then break; fi
             sleep 2
           done
-          docker logs omnia-ci-pg
-          exit 1
+          docker exec omnia-ci-pg pg_isready -U omnia -d omnia_test
+          docker exec -i omnia-ci-pg psql -v ON_ERROR_STOP=1 \
+            -U omnia -d omnia_test -v app_password="$app_password" <<'SQL'
+          SELECT format(
+            'CREATE ROLE omnia_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
+            :'app_password'
+          ) \gexec
+          SQL
       - name: xUnit real PostgreSQL integration
         run: dotnet test tests/Omnia.Integration.Tests/Omnia.Integration.Tests.csproj -c Release
       - name: Stop disposable database

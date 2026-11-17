@@ -12,8 +12,13 @@ public sealed class ConsentPersistenceTests
     {
         var connection = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
         Assert.False(string.IsNullOrWhiteSpace(connection), "Disposable OMNIA_TEST_DB required.");
-        var db = NpgsqlDataSource.Create(connection!);
-        await new PostgresMigrator(db).MigrateAsync();
+        var runtimeConnection = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
+        Assert.False(string.IsNullOrWhiteSpace(runtimeConnection),
+            "OMNIA_TEST_APP_DB must be a restricted PostgreSQL login.");
+        await using (var admin = NpgsqlDataSource.Create(connection!))
+            await new PostgresMigrator(admin, "omnia_app").MigrateAsync();
+        var db = NpgsqlDataSource.Create(runtimeConnection!);
+        await PostgresRuntimeGuard.VerifyAsync(db);
         return db;
     }
 
@@ -76,12 +81,16 @@ public sealed class ConsentPersistenceTests
         Assert.Contains(grants, x => x.Id == second.Id && x.RevokedAt is null);
 
         // Expire directly to simulate the passage of time without long sleeps.
-        await using (var cmd = db.CreateCommand(
-            "UPDATE consent_grants SET granted_at = now() - interval '2 days', " +
-            "expires_at = now() - interval '1 day' WHERE id = @id"))
+        await using (var scope = await PostgresActorScope.OpenAsync(
+            db, tenant, "u", CancellationToken.None))
         {
+            await using var cmd = new NpgsqlCommand(
+                "UPDATE consent_grants SET granted_at = now() - interval '2 days', " +
+                "expires_at = now() - interval '1 day' WHERE id = @id",
+                scope.Connection, scope.Transaction);
             cmd.Parameters.AddWithValue("id", second.Id);
-            await cmd.ExecuteNonQueryAsync();
+            Assert.Equal(1, await cmd.ExecuteNonQueryAsync());
+            await scope.CommitAsync(CancellationToken.None);
         }
         await Assert.ThrowsAsync<ConsentRequiredException>(() => memory.UpsertAsync(
             MemoryEntry.Capture(tenant, "u", source, "expired", "text/plain",

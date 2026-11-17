@@ -13,8 +13,13 @@ public sealed class PersistenceTests
         var connection = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
         Assert.False(string.IsNullOrWhiteSpace(connection),
             "OMNIA_TEST_DB must point to a disposable pgvector PostgreSQL test database.");
-        await using var db = NpgsqlDataSource.Create(connection!);
-        await new PostgresMigrator(db).MigrateAsync();
+        var runtimeConnection = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
+        Assert.False(string.IsNullOrWhiteSpace(runtimeConnection),
+            "OMNIA_TEST_APP_DB must be a restricted PostgreSQL login, never owner/superuser.");
+        await using (var admin = NpgsqlDataSource.Create(connection!))
+            await new PostgresMigrator(admin, "omnia_app").MigrateAsync();
+        await using var db = NpgsqlDataSource.Create(runtimeConnection!);
+        await PostgresRuntimeGuard.VerifyAsync(db);
         var repo = new PostgresMemoryRepository(db);
         var now = DateTimeOffset.UtcNow;
         var tenant = "tenant-" + Guid.NewGuid().ToString("N");

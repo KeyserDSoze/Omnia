@@ -13,6 +13,14 @@ var builder = WebApplication.CreateBuilder(args);
 var connection = builder.Configuration["Database:ConnectionString"];
 if (string.IsNullOrWhiteSpace(connection))
     throw new InvalidOperationException("Database:ConnectionString is required (no in-memory production fallback).");
+var migrationConnection = builder.Configuration["Database:MigrationConnectionString"];
+if (string.IsNullOrWhiteSpace(migrationConnection))
+    throw new InvalidOperationException("Database:MigrationConnectionString is required for schema migrations.");
+var runtimeUser = new NpgsqlConnectionStringBuilder(connection).Username;
+var migrationUser = new NpgsqlConnectionStringBuilder(migrationConnection).Username;
+if (string.IsNullOrWhiteSpace(runtimeUser) || string.IsNullOrWhiteSpace(migrationUser) ||
+    string.Equals(runtimeUser, migrationUser, StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("Runtime and migration PostgreSQL identities must be distinct.");
 var issuer = builder.Configuration["Auth:Issuer"];
 var audience = builder.Configuration["Auth:Audience"];
 if (!Uri.TryCreate(issuer, UriKind.Absolute, out var authority) ||
@@ -75,6 +83,8 @@ builder.Services.AddCors(options => options.AddPolicy("browser", policy =>
         policy.WithOrigins(allowedOrigins).AllowAnyHeader().WithMethods("GET", "POST", "DELETE");
 }));
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connection));
+builder.Services.AddKeyedSingleton<NpgsqlDataSource>("migrations",
+    (_, _) => NpgsqlDataSource.Create(migrationConnection));
 builder.Services.AddScoped<IMemoryRepository, PostgresMemoryRepository>();
 builder.Services.AddScoped<PostgresConsentRepository>();
 builder.Services.AddScoped<IConsentRepository>(sp => sp.GetRequiredService<PostgresConsentRepository>());
@@ -82,7 +92,8 @@ builder.Services.AddScoped<IConsentGuard>(sp => sp.GetRequiredService<PostgresCo
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddScoped<IConsentService, ConsentService>();
 builder.Services.AddScoped<IMemoryCatalog, MemoryCatalog>();
-builder.Services.AddSingleton<PostgresMigrator>();
+builder.Services.AddSingleton(sp => new PostgresMigrator(
+    sp.GetRequiredKeyedService<NpgsqlDataSource>("migrations"), runtimeUser));
 var provider = (builder.Configuration["Embeddings:Provider"] ?? "none").ToLowerInvariant();
 var model = builder.Configuration["Embeddings:Model"] ??
     (provider == "ollama" ? "nomic-embed-text" : "text-embedding-3-small");
@@ -196,7 +207,11 @@ memories.MapGet("", async (IMemoryCatalog catalog, ClaimsPrincipal user, int? li
         limit ?? 25, ct));
 });
 using (var scope = app.Services.CreateScope())
+{
     await scope.ServiceProvider.GetRequiredService<PostgresMigrator>().MigrateAsync();
+    await PostgresRuntimeGuard.VerifyAsync(
+        scope.ServiceProvider.GetRequiredService<NpgsqlDataSource>());
+}
 await app.RunAsync();
 
 static (string Tenant, string Subject)? Identity(ClaimsPrincipal principal)

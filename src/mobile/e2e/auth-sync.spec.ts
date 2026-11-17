@@ -101,7 +101,10 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
   // The denied draft correctly stays in the text editor. Assert against
   // the persisted timeline only, then reload it from PostgreSQL to prove
   // that revocation blocked a write instead of merely hiding an item.
+  const reloadedFromApi = page.waitForResponse(response =>
+    response.url().includes('/api/v1/memories?') && response.status() === 200);
   await page.getByTestId('sync-reload').click();
+  await reloadedFromApi;
   await expect(page.getByTestId('memory-timeline').getByText(
     'Questo evento non deve apparire', { exact: true })).toHaveCount(0);
   await expect(page.getByText(memoText, { exact: true })).toBeVisible();

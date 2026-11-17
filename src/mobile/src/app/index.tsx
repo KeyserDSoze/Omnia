@@ -290,7 +290,7 @@ export default function Home() {
           {audioUri && <Text testID="audio-result" style={[styles.hint, heading]}>Memo audio creato sul dispositivo.</Text>}
           {!!notice && <Text accessibilityRole="alert" testID="notice" style={[styles.notice, { color: p.text }]}>{notice}</Text>}
         </View>
-        <View style={[styles.card, cardStyle, styles.sideCard]}>
+        <View testID="memory-timeline" style={[styles.card, cardStyle, styles.sideCard]}>
           <Text style={[styles.kicker, { color: p.subtle }]}>LA TUA MEMORIA</Text>
           <Text style={[styles.cardTitle, heading]}>I tuoi momenti</Text>
           {memos.length === 0 ? (

@@ -29,16 +29,21 @@ public interface IMemoryCatalog
         int limit, CancellationToken cancellationToken);
 }
 
-public sealed class MemoryCatalog(IMemoryRepository repository, IEmbeddingProvider embeddings) : IMemoryCatalog
+public sealed class MemoryCatalog(
+    IMemoryRepository repository, IEmbeddingProvider embeddings, IConsentGuard consent) : IMemoryCatalog
 {
     public async Task<MemoryEntry> CaptureAsync(string tenantId, string subject,
         CaptureMemoryCommand command, CancellationToken cancellationToken)
     {
-        if (command is null) throw new ArgumentNullException(nameof(command));
-        var kind = command.ContentType.Trim().ToLowerInvariant();
+        ArgumentNullException.ThrowIfNull(command);
+        var kind = command.ContentType?.Trim().ToLowerInvariant()
+            ?? throw new ArgumentException("ContentType is required.", nameof(command));
         if (kind is not ("text/plain" or "application/json" or "application/xml" or "text/xml"))
             throw new ArgumentException("Unsupported content type.", nameof(command));
-        // Invalid JSON is rejected rather than silently assigned a different format.
+        if (string.IsNullOrWhiteSpace(command.Content))
+            throw new ArgumentException("Content is required.", nameof(command));
+
+        // Fail invalid JSON before invoking any external embedding provider.
         if (kind == "application/json") using (JsonDocument.Parse(command.Content)) { }
         var plain = command.Content.Trim();
         var excerpt = plain.Length > 180 ? plain[..180] + "…" : plain;
@@ -48,12 +53,20 @@ public sealed class MemoryCatalog(IMemoryRepository repository, IEmbeddingProvid
             schemaVersion = 1, source = command.Source, contentType = kind,
             text = plain, tags, occurredAt = command.OccurredAt
         });
-        // Network-dependent enrichment is optional. Missing embeddings are explicit and searchable
-        // only by metadata until an asynchronous retry pipeline is implemented.
-        var vector = await embeddings.EmbedAsync(excerpt, cancellationToken);
+        // Validate all domain fields BEFORE transmitting any personal text to a model.
         var entry = MemoryEntry.Capture(tenantId, subject, command.Source, command.ExternalId,
             kind, command.Content, normalized, excerpt, tags,
-            command.OccurredAt ?? DateTimeOffset.UtcNow, vector?.Values, vector?.Model);
+            command.OccurredAt ?? DateTimeOffset.UtcNow);
+
+        // Consent is checked before any optional network AI call and again under a
+        // PostgreSQL row lock in UpsertAsync, so revocation prevents later writes.
+        await consent.EnsureActiveAsync(entry.TenantId, entry.OwnerSubject,
+            entry.Source, ConsentGrant.MemoryCapture, cancellationToken);
+
+        var vector = await embeddings.EmbedAsync(excerpt, cancellationToken);
+        if (vector is not null)
+            entry = entry.WithEmbedding(vector.Values, vector.Model);
+
         return await repository.UpsertAsync(entry, cancellationToken);
     }
 

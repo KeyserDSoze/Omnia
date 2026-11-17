@@ -73,3 +73,9 @@ Keycloak locale è disponibile su localhost:8081, realm `omnia`; creare un utent
 [Feature backlog (14 epics / 116 child)](docs/backlog.md) · [PRD](docs/product-requirements.md) · [Strategia TDD](docs/testing-strategy.md) · [Platform capability boundaries](docs/platform-capabilities.md).
 
 Tutti i nuovi requisiti vanno tracciati come issue `feature` con fase e acceptance; test-first è obbligatorio. La foundation web/API è uno scaffold, **non** un SaaS che tratta dati reali. Nessuna connessione dati/automation operativa senza auth, consenso, retention e security release gate.
+
+## Consent ledger v0.2 (feature #29, slice in corso)
+
+Le API ora richiedono un consenso utente **attivo e limitato per sorgente** per ogni nuovo salvataggio in `/api/v1/memories`. La registrazione è per tenant+subject dal JWT OIDC, sorgente e finalità `memory.capture`, con scadenza massima 90 giorni, `policyVersion`, timestamp e revoca; PostgreSQL verifica nuovamente il grant nella transazione d'ingestione. Senza consenso HTTP 403 `consent_required`, e non vengono invocati provider AI. `GET /api/v1/consents`, `POST /api/v1/consents`, `DELETE /api/v1/consents/{id}` sono protetti da autenticazione. Vedere [contratto e limiti](docs/consent-api.md).
+
+**Importante:** grant per l'account ≠ consenso di partecipanti terzi o base giuridica GDPR. La revoca interrompe ingest futuri ma non cancella dati già raccolti (#31). Il login UI/PKCE e un pannello per il consenso sono ancora da implementare: **non usare dati personali reali**.

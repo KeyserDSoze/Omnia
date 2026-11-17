@@ -8,7 +8,26 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
 {
     public async Task<MemoryEntry> UpsertAsync(MemoryEntry entry, CancellationToken ct)
     {
-        await using var command = db.CreateCommand("""
+        await using var conn = await db.OpenConnectionAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using (var gate = new NpgsqlCommand("""
+            SELECT id FROM consent_grants
+            WHERE tenant_id = @tenant AND owner_sub = @subject
+                AND source = @source AND purpose = 'memory.capture'
+                AND revoked_at IS NULL AND granted_at <= now() AND expires_at > now()
+            LIMIT 1 FOR SHARE
+            """, conn, tx))
+        {
+            gate.Parameters.AddWithValue("tenant", entry.TenantId);
+            gate.Parameters.AddWithValue("subject", entry.OwnerSubject);
+            gate.Parameters.AddWithValue("source", entry.Source);
+            if (await gate.ExecuteScalarAsync(ct) is not Guid)
+                throw new ConsentRequiredException();
+        }
+
+        // Both the active-grant row lock and the memory write live in ONE transaction.
+        // A concurrent revoke cannot commit between authorization and persistence.
+        await using var command = new NpgsqlCommand("""
             INSERT INTO memory_entries
               (id, tenant_id, owner_sub, source, external_id, content_type, raw_content,
                normalized_json, summary, tags, occurred_at, embedding, embedding_model)
@@ -22,7 +41,7 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
               tags = EXCLUDED.tags, occurred_at = EXCLUDED.occurred_at,
               embedding = EXCLUDED.embedding, embedding_model = EXCLUDED.embedding_model
             RETURNING id
-            """);
+            """, conn, tx);
         command.Parameters.AddWithValue("id", entry.Id);
         command.Parameters.AddWithValue("tenant", entry.TenantId);
         command.Parameters.AddWithValue("subject", entry.OwnerSubject);
@@ -40,6 +59,7 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
         command.Parameters.AddWithValue("model", (object?)entry.EmbeddingModel ?? DBNull.Value);
         var id = (Guid)(await command.ExecuteScalarAsync(ct)
             ?? throw new InvalidOperationException("Insert did not return a record ID."));
+        await tx.CommitAsync(ct);
         return entry.WithPersistedId(id);
     }
 

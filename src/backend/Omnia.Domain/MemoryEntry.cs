@@ -32,6 +32,16 @@ public sealed class MemoryEntry
         ExternalId, ContentType, RawContent, NormalizedJson, Summary, Tags,
         OccurredAt, Embedding, EmbeddingModel);
 
+    public MemoryEntry WithEmbedding(float[] values, string model)
+    {
+        if (values is not { Length: 768 } || values.Any(x => !float.IsFinite(x)) ||
+            string.IsNullOrWhiteSpace(model))
+            throw new ArgumentException("A valid 768-dimensional vector and model are required.", nameof(values));
+        return new MemoryEntry(Id, TenantId, OwnerSubject, Source, ExternalId,
+            ContentType, RawContent, NormalizedJson, Summary, Tags, OccurredAt,
+            values.ToArray(), model.Trim());
+    }
+
     public static MemoryEntry Capture(string tenantId, string ownerSubject, string source,
         string externalId, string contentType, string rawContent, string normalizedJson,
         string summary, IEnumerable<string> tags, DateTimeOffset occurredAt,
@@ -46,7 +56,7 @@ public sealed class MemoryEntry
 
         tenantId = Required(tenantId, 128, nameof(tenantId));
         ownerSubject = Required(ownerSubject, 255, nameof(ownerSubject));
-        source = Required(source, 120, nameof(source));
+        source = Required(source, 120, nameof(source)).ToLowerInvariant();
         externalId = Required(externalId, 255, nameof(externalId));
         contentType = Required(contentType, 120, nameof(contentType));
         rawContent = Required(rawContent, 65536, nameof(rawContent));

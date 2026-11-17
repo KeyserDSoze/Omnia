@@ -26,3 +26,9 @@
 ## Current foundation limitations
 
 The MVP stores raw text unencrypted by the application (transport and managed-disk protections must be configured separately), has no retention/delete or full audit, no API throttling, no RLS, no consent ledger, no PKCE client integration, no deployed Azure topology and no automated real OIDC browser E2E. **Use synthetic data only.**
+
+## Scoped consent gate (first vertical slice of #29, 2026-11-17)
+
+La tabella SQL `consent_grants` e i servizi DI permettono `memory.capture` solo dopo una richiesta autenticata contenente esplicita accettazione, policy version e scadenza limitata a 90 giorni; ogni grant è delimitato dal `tenant_id` e `sub` verificati. Una nuova concessione revoca l'eventuale grant precedente nello stesso scope (mantenendo la storia). La revoca è idempotente e filtrata per tenant/subject. La pipeline controlla il grant **prima** delle chiamate AI e nuovamente sotto `FOR SHARE` nella transazione SQL di scrittura. Le nuove acquisizioni senza grant o con grant scaduto/revocato falliscono con HTTP 403.
+
+**Rischi ancora aperti:** il booleano di accettazione API deve essere collegato a un'interfaccia OIDC/PKCE autenticata con testo informativo reale; non prova presenza fisica né consenso dei terzi; non esiste ancora un ledger dei consensi per destinazioni terze/OAuth, enforcement in job di sync/agent, cancellazione dei raw/derived, RLS, per-categoria consent, audit append-only o garanzie su AI in-flight prima della revoca. La sezione baseline sopra che descrive "no consent ledger" si riferisce allo stato precedente alla slice #29. Il progetto resta inadatto a contenuti reali fino agli altri gate privacy.

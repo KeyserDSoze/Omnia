@@ -88,3 +88,9 @@ Only PostgreSQL, JWT/OIDC validation and embedding adapters are actually impleme
 - Production requires private network, TLS, issuer, least privilege, tenant isolation tests, signed consent, content retention, deletion/export, rate limiting, threat model, secret rotation and observability before accepting real personal data.
 
 > **Parità non significa disponibilità corrente:** OpenBao/Valkey/SignalR sono contratti di progetto, non servizi avviati dal Docker Compose attuale. Ogni nuovo port richiede test contrattuali contro la variante OSS e staging Azure, prima di essere dichiarato supportato.
+
+## Consent-first ingest (vertical slice of #29)
+
+`ConsentGrant` è un'entità di dominio immutabile con `tenantId`, `ownerSubject`, `source`, `purpose`, `policyVersion`, `grantedAt`, `expiresAt` e `revokedAt`. `ConsentService` in Application ammette solo scopo `memory.capture` con acknowledgement esplicito e TTL massimo 90 giorni; `IConsentGuard` è controllato prima di `IEmbeddingProvider`. PostgreSQL usa migrazione `0002_consent_grants.sql`, index unico sul grant non revocato per scope, transaction advisory lock per re-grant; `PostgresMemoryRepository` fa un ulteriore controllo atomico `SELECT ... FOR SHARE` prima dell'UPSERT raw. La revoca dell'accesso e la persistenza non possono attraversarsi senza lock transaction.
+
+Il grant non conferisce automaticamente il permesso di registrare terzi, accedere a CRM/WhatsApp, effettuare profilazione oppure eseguire strumenti MCP. L'accesso ai dati storici rimane disponibile finché feature separate di export, retention e cancellazione non saranno implementate. Contratto: [docs/consent-api.md](consent-api.md). Release readiness: parziale, non per dati reali.

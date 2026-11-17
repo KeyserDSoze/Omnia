@@ -10,7 +10,7 @@ public class CatalogTests
     public async Task CapturePreservesRawAndCreatesNormalizedSummary()
     {
         var repo = new FakeRepository();
-        var catalog = new MemoryCatalog(repo, new NoVector());
+        var catalog = new MemoryCatalog(repo, new NoVector(), new AllowingConsentGuard());
         var saved = await catalog.CaptureAsync("t1", "u1",
             new CaptureMemoryCommand("crm", "ev-9", "application/json",
                 "{\"message\":\"Riunione cliente\"}", null), CancellationToken.None);
@@ -24,11 +24,17 @@ public class CatalogTests
     [Fact]
     public async Task CaptureRejectsBrokenJson()
     {
-        var catalog = new MemoryCatalog(new FakeRepository(), new NoVector());
+        var catalog = new MemoryCatalog(new FakeRepository(), new NoVector(), new AllowingConsentGuard());
         await Assert.ThrowsAnyAsync<System.Text.Json.JsonException>(() =>
             catalog.CaptureAsync("t", "u",
                 new CaptureMemoryCommand("crm", "1", "application/json", "{bad", null),
                 CancellationToken.None));
+    }
+
+    private sealed class AllowingConsentGuard : IConsentGuard
+    {
+        public Task EnsureActiveAsync(string tenant, string subject, string source,
+            string purpose, CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class NoVector : IEmbeddingProvider

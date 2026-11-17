@@ -43,10 +43,15 @@ var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string
 builder.Services.AddCors(options => options.AddPolicy("browser", policy =>
 {
     if (allowedOrigins.Length > 0)
-        policy.WithOrigins(allowedOrigins).AllowAnyHeader().WithMethods("GET", "POST");
+        policy.WithOrigins(allowedOrigins).AllowAnyHeader().WithMethods("GET", "POST", "DELETE");
 }));
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connection));
 builder.Services.AddScoped<IMemoryRepository, PostgresMemoryRepository>();
+builder.Services.AddScoped<PostgresConsentRepository>();
+builder.Services.AddScoped<IConsentRepository>(sp => sp.GetRequiredService<PostgresConsentRepository>());
+builder.Services.AddScoped<IConsentGuard>(sp => sp.GetRequiredService<PostgresConsentRepository>());
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.AddScoped<IConsentService, ConsentService>();
 builder.Services.AddScoped<IMemoryCatalog, MemoryCatalog>();
 builder.Services.AddSingleton<PostgresMigrator>();
 var provider = (builder.Configuration["Embeddings:Provider"] ?? "none").ToLowerInvariant();
@@ -90,6 +95,49 @@ app.MapGet("/ready", async (NpgsqlDataSource db, CancellationToken ct) =>
     return Results.Ok(new { status = "ready" });
 }).RequireAuthorization();
 
+// First-party user consent: scoped by signed JWT sub + tenant_id; the client never
+// submits its own tenant/owner. This does NOT prove consent from third parties.
+var consents = app.MapGroup("/api/v1/consents").RequireAuthorization();
+consents.MapPost("", async (GrantConsentCommand input, IConsentService service,
+    ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var identity = Identity(user);
+    if (identity is null) return Results.Forbid();
+    try
+    {
+        var grant = await service.GrantAsync(identity.Value.Tenant, identity.Value.Subject,
+            input, ct);
+        return Results.Created($"/api/v1/consents/{grant.Id}", new
+        {
+            grant.Id, grant.Source, grant.Purpose, grant.PolicyVersion,
+            grant.GrantedAt, grant.ExpiresAt, grant.RevokedAt
+        });
+    }
+    catch (ArgumentException) { return Results.BadRequest(new { error = "invalid_consent" }); }
+});
+consents.MapGet("", async (IConsentService service, TimeProvider time,
+    ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var identity = Identity(user);
+    if (identity is null) return Results.Forbid();
+    var grants = await service.ListAsync(identity.Value.Tenant, identity.Value.Subject, ct);
+    var now = time.GetUtcNow();
+    return Results.Ok(grants.Select(grant => new
+    {
+        grant.Id, grant.Source, grant.Purpose, grant.PolicyVersion,
+        grant.GrantedAt, grant.ExpiresAt, grant.RevokedAt,
+        active = grant.IsActiveAt(now)
+    }));
+});
+consents.MapDelete("/{id:guid}", async (Guid id, IConsentService service,
+    ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var identity = Identity(user);
+    if (identity is null) return Results.Forbid();
+    return await service.RevokeAsync(identity.Value.Tenant, identity.Value.Subject, id, ct)
+        ? Results.NoContent() : Results.NotFound();
+});
+
 var memories = app.MapGroup("/api/v1/memories").RequireAuthorization();
 memories.MapPost("", async (CaptureMemoryCommand input, IMemoryCatalog catalog,
     ClaimsPrincipal user, CancellationToken ct) =>
@@ -101,6 +149,10 @@ memories.MapPost("", async (CaptureMemoryCommand input, IMemoryCatalog catalog,
         var item = await catalog.CaptureAsync(identity.Value.Tenant, identity.Value.Subject, input, ct);
         return Results.Ok(new { item.Id, item.Source, item.Summary, item.Tags,
             item.OccurredAt, hasEmbedding = item.Embedding is not null });
+    }
+    catch (ConsentRequiredException)
+    {
+        return Results.Json(new { error = "consent_required" }, statusCode: StatusCodes.Status403Forbidden);
     }
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
     catch (JsonException) { return Results.BadRequest(new { error = "Invalid JSON content." }); }

@@ -1,0 +1,76 @@
+name: Omnia CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: xUnit domain and application
+        run: dotnet test tests/Omnia.Domain.Tests/Omnia.Domain.Tests.csproj -c Release
+      - name: Compile .NET 10 API
+        run: dotnet build src/backend/Omnia.Api/Omnia.Api.csproj -c Release
+      - name: Start disposable PostgreSQL 17 / pgvector
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          echo "OMNIA_TEST_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia;Password=$password" >> "$GITHUB_ENV"
+          docker run -d --rm --name omnia-ci-pg \
+            -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_test \
+            -e "POSTGRES_PASSWORD=$password" \
+            -p 127.0.0.1:15432:5432 pgvector/pgvector:pg17
+          for i in $(seq 1 60); do
+            if docker exec omnia-ci-pg pg_isready -U omnia -d omnia_test; then exit 0; fi
+            sleep 2
+          done
+          docker logs omnia-ci-pg
+          exit 1
+      - name: xUnit real PostgreSQL integration
+        run: dotnet test tests/Omnia.Integration.Tests/Omnia.Integration.Tests.csproj -c Release
+      - name: Stop disposable database
+        if: always()
+        run: docker rm -f omnia-ci-pg || true
+      - name: Validate Docker Compose
+        run: docker compose --env-file docker/.env.example -f docker/compose.yml config --quiet
+      - name: Build API container
+        run: docker build -f docker/Dockerfile.api -t omnia-api:ci .
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Expo dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck React Native
+        run: npm run typecheck
+      - name: Vitest domain
+        run: npm test
+      - name: Export Expo web
+        run: npm run build:web
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Playwright browser E2E
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: omnia-browser-diagnostics
+          path: |
+            src/mobile/test-results
+            src/mobile/playwright-report
+          retention-days: 5
+          if-no-files-found: ignore

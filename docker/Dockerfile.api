@@ -1,0 +1,14 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /workspace
+COPY src/backend/Omnia.Domain/ src/backend/Omnia.Domain/
+COPY src/backend/Omnia.Application/ src/backend/Omnia.Application/
+COPY src/backend/Omnia.Infrastructure/ src/backend/Omnia.Infrastructure/
+COPY src/backend/Omnia.Api/ src/backend/Omnia.Api/
+RUN dotnet publish src/backend/Omnia.Api/Omnia.Api.csproj -c Release -o /output
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+COPY --from=build /output .
+USER $APP_UID
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "Omnia.Api.dll"]

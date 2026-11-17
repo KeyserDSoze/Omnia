@@ -1,0 +1,27 @@
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# .NET
+**/bin/
+**/obj/
+**/TestResults/
+*.user
+
+# Local secrets / runtime
+.env
+.env.*
+!.env.example
+docker/.env
+*.pfx
+*.pem
+*.key
+coverage/
+.DS_Store
+.idea/
+.vscode/

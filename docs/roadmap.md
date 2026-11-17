@@ -1,0 +1,40 @@
+# Omnia — product & engineering roadmap
+
+## v0.1 — Foundation (code in main, validation pending)
+
+- [x] Monorepo conventions `src/`, `tests/`, `docs/`, `adr/`, `docker/`, `infra/`, `.github/`.
+- [x] Expo React Native cross-platform shell; light/dark, quick text notes held in session, local microphone capture.
+- [x] ASP.NET Core .NET 10 Domain/Application/Infrastructure/API with fail-closed OIDC bearer and tenant-scoped PostgreSQL API.
+- [x] Canonical text ingestion, provenance keys, initial summary/tags, pgvector column and optional Ollama/Azure OpenAI embedding providers.
+- [x] PostgreSQL versioned SQL migration, idempotent upsert; xUnit, Vitest, Playwright test sources, GitHub CI, web export and Pages workflow.
+- [ ] Verify CI green (must be checked on Actions; no claim before runs).
+- [ ] Configure GitHub Pages → Actions and verify URL live; native build credentials not yet configured.
+- [ ] Commit package-lock.json and NuGet packages.lock.json after reproducible install/restore, then switch CI to frozen restores.
+
+## v0.2 — Functional secure personal timeline (next)
+
+- [ ] Expo Web/Android/iOS OIDC PKCE auth & token refresh using platform-safe storage and logout.
+- [ ] UI actual GET/POST API integration, online/offline sync and clear error / retry UX.
+- [ ] Persist local audio safely with encryption and consent metadata; upload with authenticated streaming, quotas, object storage MinIO/Azure Blob and transcription pipeline.
+- [ ] Port IObjectStore/MinIO/Azure, outbox, RabbitMQ/Service Bus, background workers with retry + dead letter; DI parity tests.
+- [ ] PostgreSQL RLS defence-in-depth, schema evolutions, retention, export, user delete and audit log.
+- [ ] Integration E2E browser OIDC → API → PostgreSQL and separate mobile device smoke with native simulator.
+
+## v0.3 — Omnia Memory Graph
+
+- [ ] Connectors Microsoft Graph Outlook/Calendar, CRM adapter and consent registry with scoped OAuth.
+- [ ] MCP client and server gateway, capability sandbox, network egress policy and provenance.
+- [ ] Ingestion of JSON, XML, text, audio (binary in object store), documents with schema versioning and event dedupe.
+- [ ] Embedding retry/indexing, pgvector semantic search, temporal/thread stitching, evidence citations, taxonomy editable by users.
+- [ ] Daily recap with traceable origin links; AI insights as opt-in, non-diagnostic suggestions.
+
+## v0.4 — Delegated personal agency
+
+- [ ] Per-channel draft assistant with user-approved tone settings; send requires specific consent and preview.
+- [ ] Scoped automation policies, permission revocation, audit, escalation and limits.
+- [ ] Human feedback training, observation/correction workflow and prompt-injection controls.
+- [ ] SaaS onboarding, tenant quotas, subscription billing, privacy/security governance.
+
+## Release gates
+
+Azure deployment / App Store approval / real personal-data launch require threat model, privacy review (GDPR, recording laws), OIDC and tenant e2e gates, encrypted backup, deletion/export tests, PaaS networking and secret management, and real CI evidence. *No call interception promised.*

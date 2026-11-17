@@ -1,0 +1,130 @@
+using System.Security.Claims;
+using System.Text.Json;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Npgsql;
+using Omnia.Application;
+using Omnia.Infrastructure;
+
+var builder = WebApplication.CreateBuilder(args);
+var connection = builder.Configuration["Database:ConnectionString"];
+if (string.IsNullOrWhiteSpace(connection))
+    throw new InvalidOperationException("Database:ConnectionString is required (no in-memory production fallback).");
+var issuer = builder.Configuration["Auth:Issuer"];
+var audience = builder.Configuration["Auth:Audience"];
+if (!Uri.TryCreate(issuer, UriKind.Absolute, out var authority) ||
+    (authority.Scheme != Uri.UriSchemeHttps && !builder.Environment.IsDevelopment()) ||
+    string.IsNullOrWhiteSpace(audience))
+    throw new InvalidOperationException("Auth:Issuer (HTTPS outside Development) and Auth:Audience are mandatory.");
+var metadata = builder.Configuration["Auth:MetadataAddress"];
+if (!string.IsNullOrWhiteSpace(metadata) &&
+    (!builder.Environment.IsDevelopment() || !Uri.TryCreate(metadata, UriKind.Absolute, out _)))
+    throw new InvalidOperationException("Custom metadata endpoints are allowed only in Development.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.Authority = issuer;
+        options.Audience = audience;
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+        if (!string.IsNullOrWhiteSpace(metadata)) options.MetadataAddress = metadata;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true, ValidIssuer = issuer,
+            ValidateAudience = true, ValidAudience = audience,
+            ValidateIssuerSigningKey = true, ValidateLifetime = true,
+            RequireSignedTokens = true, RequireExpirationTime = true,
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    });
+builder.Services.AddAuthorization();
+var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [];
+builder.Services.AddCors(options => options.AddPolicy("browser", policy =>
+{
+    if (allowedOrigins.Length > 0)
+        policy.WithOrigins(allowedOrigins).AllowAnyHeader().WithMethods("GET", "POST");
+}));
+builder.Services.AddSingleton(NpgsqlDataSource.Create(connection));
+builder.Services.AddScoped<IMemoryRepository, PostgresMemoryRepository>();
+builder.Services.AddScoped<IMemoryCatalog, MemoryCatalog>();
+builder.Services.AddSingleton<PostgresMigrator>();
+var provider = (builder.Configuration["Embeddings:Provider"] ?? "none").ToLowerInvariant();
+var model = builder.Configuration["Embeddings:Model"] ??
+    (provider == "ollama" ? "nomic-embed-text" : "text-embedding-3-small");
+builder.Services.AddSingleton<IConfigurationAdapter>(
+    new EmbeddingSettings(model, builder.Configuration["Embeddings:ApiKey"]));
+switch (provider)
+{
+    case "none": builder.Services.AddSingleton<IEmbeddingProvider, NoEmbeddingProvider>(); break;
+    case "ollama":
+    case "azure":
+        var endpoint = builder.Configuration["Embeddings:Endpoint"];
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var baseUri) ||
+            (provider == "azure" && baseUri.Scheme != Uri.UriSchemeHttps))
+            throw new InvalidOperationException("A valid Embeddings:Endpoint is required.");
+        if (provider == "azure" && string.IsNullOrWhiteSpace(builder.Configuration["Embeddings:ApiKey"]))
+            throw new InvalidOperationException("Embeddings:ApiKey is required in Azure mode.");
+        if (provider == "ollama" && !builder.Environment.IsDevelopment() &&
+            baseUri.Scheme != Uri.UriSchemeHttps)
+            throw new InvalidOperationException("HTTP Ollama endpoint is Development-only.");
+        if (provider == "ollama")
+            builder.Services.AddHttpClient<IEmbeddingProvider, OllamaEmbeddingProvider>(
+                client => client.BaseAddress = baseUri);
+        else
+            builder.Services.AddHttpClient<IEmbeddingProvider, AzureOpenAiEmbeddingProvider>(
+                client => client.BaseAddress = baseUri);
+        break;
+    default: throw new InvalidOperationException($"Unsupported Embeddings:Provider: {provider}");
+}
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 70 * 1024);
+var app = builder.Build();
+app.UseCors("browser");
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapGet("/health", () => Results.Ok(new { status = "ok", product = "Omnia" }));
+app.MapGet("/ready", async (NpgsqlDataSource db, CancellationToken ct) =>
+{
+    await using var cmd = db.CreateCommand("SELECT 1");
+    await cmd.ExecuteScalarAsync(ct);
+    return Results.Ok(new { status = "ready" });
+}).RequireAuthorization();
+
+var memories = app.MapGroup("/api/v1/memories").RequireAuthorization();
+memories.MapPost("", async (CaptureMemoryCommand input, IMemoryCatalog catalog,
+    ClaimsPrincipal user, CancellationToken ct) =>
+{
+    var identity = Identity(user);
+    if (identity is null) return Results.Forbid();
+    try
+    {
+        var item = await catalog.CaptureAsync(identity.Value.Tenant, identity.Value.Subject, input, ct);
+        return Results.Ok(new { item.Id, item.Source, item.Summary, item.Tags,
+            item.OccurredAt, hasEmbedding = item.Embedding is not null });
+    }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    catch (JsonException) { return Results.BadRequest(new { error = "Invalid JSON content." }); }
+});
+memories.MapGet("", async (IMemoryCatalog catalog, ClaimsPrincipal user, int? limit, CancellationToken ct) =>
+{
+    var identity = Identity(user);
+    if (identity is null) return Results.Forbid();
+    return Results.Ok(await catalog.RecentAsync(identity.Value.Tenant, identity.Value.Subject,
+        limit ?? 25, ct));
+});
+using (var scope = app.Services.CreateScope())
+    await scope.ServiceProvider.GetRequiredService<PostgresMigrator>().MigrateAsync();
+await app.RunAsync();
+
+static (string Tenant, string Subject)? Identity(ClaimsPrincipal principal)
+{
+    var subjects = principal.FindAll("sub").Select(c => c.Value).ToArray();
+    var tenants = principal.FindAll("tenant_id").Select(c => c.Value).ToArray();
+    if (subjects.Length != 1 || tenants.Length != 1 ||
+        string.IsNullOrWhiteSpace(subjects[0]) || string.IsNullOrWhiteSpace(tenants[0]) ||
+        subjects[0].Length > 255 || tenants[0].Length > 128)
+        return null;
+    return (tenants[0], subjects[0]);
+}
+
+public partial class Program { }

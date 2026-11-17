@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Omnia",
+    "slug": "omnia",
+    "scheme": "omnia",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.omnia.personalintelligence",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Omnia registra audio soltanto dopo il tuo consenso esplicito."
+      }
+    },
+    "android": {
+      "package": "com.omnia.personalintelligence",
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "name": "Omnia"
+    },
+    "experiments": {
+      "baseUrl": "/Omnia"
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Consenti a Omnia di registrare un memo audio su tua richiesta.",
+          "enableBackgroundRecording": false
+        }
+      ]
+    ]
+  }
+}

@@ -36,6 +36,7 @@
         }
       ],
       "defaultClientScopes": [
+        "basic",
         "web-origins",
         "acr",
         "profile",

@@ -33,6 +33,16 @@
             "jsonType.label": "String",
             "access.token.claim": "true"
           }
+        },
+        {
+          "name": "Subject (sub) for authenticated API",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
         }
       ],
       "defaultClientScopes": [

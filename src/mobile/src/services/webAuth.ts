@@ -55,7 +55,7 @@ export function createBrowserAuth(config: WebCloudConfig): BrowserAuth {
       if (user.expires_in !== undefined && user.expires_in < 45) {
         try {
           const refreshed = await manager.signinSilent();
-          if (!refreshed.access_token || refreshed.expired) throw new Error('Sessione scaduta.');
+          if (!refreshed?.access_token || refreshed.expired) throw new Error('Sessione scaduta.');
           return refreshed.access_token;
         } catch {
           await manager.removeUser();

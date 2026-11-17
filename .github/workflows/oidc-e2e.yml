@@ -77,7 +77,7 @@ jobs:
 
           for username in "$OMNIA_E2E_USER1" "$OMNIA_E2E_USER2"; do
             body="$(jq -nc --arg username "$username" --arg password "$OMNIA_E2E_PASSWORD" \
-              '{username: $username, enabled: true, credentials: [{type:"password", value:$password, temporary:false}]}')"
+              '{username: $username, firstName: "Omnia", lastName: "Synthetic", email: ($username + "@example.test"), emailVerified: true, requiredActions: [], enabled: true, credentials: [{type:"password", value:$password, temporary:false}]}')"
             curl -fsS -X POST http://localhost:8081/admin/realms/omnia/users \
               -H "Authorization: Bearer $admin_token" \
               -H "Content-Type: application/json" \

@@ -25,7 +25,7 @@ public class CatalogTests
     public async Task CaptureRejectsBrokenJson()
     {
         var catalog = new MemoryCatalog(new FakeRepository(), new NoVector());
-        await Assert.ThrowsAsync<System.Text.Json.JsonException>(() =>
+        await Assert.ThrowsAnyAsync<System.Text.Json.JsonException>(() =>
             catalog.CaptureAsync("t", "u",
                 new CaptureMemoryCommand("crm", "1", "application/json", "{bad", null),
                 CancellationToken.None));

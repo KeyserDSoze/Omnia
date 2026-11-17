@@ -1,5 +1,8 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
+using Omnia.Api;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
@@ -39,6 +42,32 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+// Per-tenant/user limits are enforced *after* OIDC authentication so a valid
+// signed identity cannot escape a quota by changing IP or forged headers.
+// Anonymous requests are partitioned by their network peer, not X-Forwarded-For.
+var requestsPerMinute = builder.Configuration.GetValue<int?>("RateLimit:RequestsPerMinute") ?? 120;
+if (requestsPerMinute is < 1 or > 1000)
+    throw new InvalidOperationException("RateLimit:RequestsPerMinute must be between 1 and 1000.");
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("omnia-api", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ApiRateLimitPolicy.PartitionKey(context), _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = requestsPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+    options.OnRejected = async (context, ct) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.Headers["Retry-After"] = "60";
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new { error = "rate_limited" }, cancellationToken: ct);
+    };
+});
 var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [];
 builder.Services.AddCors(options => options.AddPolicy("browser", policy =>
 {
@@ -84,8 +113,10 @@ switch (provider)
 }
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 70 * 1024);
 var app = builder.Build();
+app.UseRouting();
 app.UseCors("browser");
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok", product = "Omnia" }));
 app.MapGet("/ready", async (NpgsqlDataSource db, CancellationToken ct) =>
@@ -97,7 +128,7 @@ app.MapGet("/ready", async (NpgsqlDataSource db, CancellationToken ct) =>
 
 // First-party user consent: scoped by signed JWT sub + tenant_id; the client never
 // submits its own tenant/owner. This does NOT prove consent from third parties.
-var consents = app.MapGroup("/api/v1/consents").RequireAuthorization();
+var consents = app.MapGroup("/api/v1/consents").RequireAuthorization().RequireRateLimiting("omnia-api");
 consents.MapPost("", async (GrantConsentCommand input, IConsentService service,
     ClaimsPrincipal user, CancellationToken ct) =>
 {
@@ -138,7 +169,7 @@ consents.MapDelete("/{id:guid}", async (Guid id, IConsentService service,
         ? Results.NoContent() : Results.NotFound();
 });
 
-var memories = app.MapGroup("/api/v1/memories").RequireAuthorization();
+var memories = app.MapGroup("/api/v1/memories").RequireAuthorization().RequireRateLimiting("omnia-api");
 memories.MapPost("", async (CaptureMemoryCommand input, IMemoryCatalog catalog,
     ClaimsPrincipal user, CancellationToken ct) =>
 {

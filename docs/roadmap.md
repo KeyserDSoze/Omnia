@@ -48,3 +48,9 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Vertical slice server di **scoped memory.capture consent**: entità Domain, use case/port Application, migrazione PostgreSQL/adapter e API JWT, revoca, gate prima dell'AI e gate transazionale durante l'UPSERT.
 - [x] Aggiunti test xUnit Domain e integrazione PostgreSQL per approvazione, rifiuto, revoca, isolamento, scadenza e idempotenza (verifica reale tramite CI da allegare).
 - [ ] UI per consenso informato e OAuth PKCE (#39), scopes per media/connector/azioni, audit append-only, cancellazione/export (#31), retention (#32), RLS (#30). Issue epic #2 / feature #29 resta **aperta** fino al completamento dei criteri.
+
+## Avanzamento #37 (2026-11-17)
+
+- [x] Prima slice: limiter HTTP per tenant/sub derivati dal bearer JWT autenticato, 429 senza queue e Retry-After; fallback peer-IP per anonimi.
+- [x] API integration test TestServer con identità sintetiche per lo stato 429/isolamento, reale PostgreSQL nel test host (vedere CI run).
+- [ ] Limiti media / connector, distributed cluster-wide limiter, WAF/rate at edge, load test/metrics; feature #37 rimane **aperta**.

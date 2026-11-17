@@ -20,6 +20,16 @@ public sealed class ApiRateLimitTests
     {
         var database = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
         Assert.False(string.IsNullOrWhiteSpace(database), "Disposable PostgreSQL is required.");
+        // Minimal-host Program reads configuration at startup before test-host
+        // callbacks; temporary environment values model the same secrets/flags
+        // supplied to the production entrypoint, without hardcoding test creds.
+        using var runtime = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["Database__ConnectionString"] = database,
+            ["Auth__Issuer"] = "http://localhost:8081/realms/omnia",
+            ["Auth__Audience"] = "omnia-api",
+            ["RateLimit__RequestsPerMinute"] = "3"
+        });
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
@@ -72,6 +82,26 @@ public sealed class ApiRateLimitTests
             Assert.Equal(HttpStatusCode.OK, otherTenant.StatusCode);
         using (var health = await client.GetAsync("/health"))
             Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+    }
+
+    private sealed class TestEnvironment : IDisposable
+    {
+        private readonly Dictionary<string, string?> _previous = new();
+
+        public TestEnvironment(IReadOnlyDictionary<string, string?> values)
+        {
+            foreach (var (key, value) in values)
+            {
+                _previous[key] = Environment.GetEnvironmentVariable(key);
+                Environment.SetEnvironmentVariable(key, value);
+            }
+        }
+
+        public void Dispose()
+        {
+            foreach (var (key, value) in _previous)
+                Environment.SetEnvironmentVariable(key, value);
+        }
     }
 
     private sealed class HeaderTestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>

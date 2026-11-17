@@ -24,7 +24,7 @@ export function createBrowserAuth(config: WebCloudConfig): BrowserAuth {
     redirect_uri: uri,
     post_logout_redirect_uri: uri,
     response_type: 'code',
-    scope: 'openid profile',
+    scope: 'openid',
     loadUserInfo: false,
     automaticSilentRenew: false,
     monitorSession: false,

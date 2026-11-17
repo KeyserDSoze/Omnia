@@ -70,6 +70,6 @@ Keycloak locale è disponibile su localhost:8081, realm `omnia`; creare un utent
 
 ## Feature backlog e disciplina di sviluppo
 
-[Feature backlog (14 epics / 115 child)](docs/backlog.md) · [PRD](docs/product-requirements.md) · [Strategia TDD](docs/testing-strategy.md) · [Platform capability boundaries](docs/platform-capabilities.md).
+[Feature backlog (14 epics / 116 child)](docs/backlog.md) · [PRD](docs/product-requirements.md) · [Strategia TDD](docs/testing-strategy.md) · [Platform capability boundaries](docs/platform-capabilities.md).
 
 Tutti i nuovi requisiti vanno tracciati come issue `feature` con fase e acceptance; test-first è obbligatorio. La foundation web/API è uno scaffold, **non** un SaaS che tratta dati reali. Nessuna connessione dati/automation operativa senza auth, consenso, retention e security release gate.

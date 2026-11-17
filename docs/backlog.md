@@ -59,3 +59,7 @@ M4  #91 policy engine ─ #93 approval ─ #94 executor ─ #95 draft/send ─ #
 ## Spaziatura delle milestone
 
 Le fasi sono **dipendenze funzionali**, non date promesse. M1 è il primo obiettivo user-facing, ma è subordinato ai gate M0. M2–M5 possono avere ricerche/spike paralleli senza attivare funzionalità per utenti reali.
+
+## Provider parity (Azure SaaS ↔ Docker OSS)
+
+Le feature #19 (contract DI), #33 (vault/rotation), #62 (object storage), #63 (queue) e #64 (AI) coprono anche la necessità di poter provare una soluzione tutta OSS: PostgreSQL/pgvector, Keycloak, MinIO, RabbitMQ, Ollama/Whisper, OpenBao (secrets) e, solo quando serve, Valkey (cache) e SignalR (feedback realtime). Questi sono **target**; la disponibilità corrente è descritta in README/architecture e non deve essere confusa con un ambiente completo. Nessun adapter deve introdurre una dipendenza Azure nel layer Domain/Application.

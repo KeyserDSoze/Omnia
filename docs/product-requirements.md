@@ -47,9 +47,9 @@ Il raw rimane immutabile: trasformazioni sono append-only con version e trace, s
 | Queue | Service Bus | RabbitMQ | port non implementato |
 | LLM/embeddings/STT | Azure OpenAI/Azure Speech | Ollama/Whisper | solo embedding adapter, STT no |
 | Telemetry | Azure Monitor/Application Insights | OpenTelemetry/Jaeger | non implementato |
-| Secrets | Key Vault/Managed Identity | dev secrets (no production parity) | target |
+| Secrets | Azure Key Vault/Managed Identity | OpenBao open-source | target, not implemented |
 | OAuth connectors | Graph, CRM e API provider ufficiali | mock contract/server locale | non implementato |
-| MCP | remote authorized MCP gateway | local sandbox server | non implementato |
+| MCP | remote authorized MCP gateway | local sandbox server (HTTP e stdio confinato) | non implementato |\n| Cache (opzionale) | Azure Managed Redis | Valkey open source | non implementato |\n| Feedback real-time (opzionale) | Azure Web PubSub | ASP.NET Core SignalR self-hosted | non implementato |
 
 ## Nonfunctional quality targets (obiettivi, non SLA correnti)
 
@@ -68,3 +68,5 @@ Accesso illimitato alle chat personali WhatsApp, intercettazione audio di qualsi
 ## Roadmap e feature
 
 Fonte di verità per pianificazione: [backlog](backlog.md) e [GitHub Issues](https://github.com/KeyserDSoze/Omnia/issues). La validazione business richiede review di utenti e consulenza GDPR; il PRD è una specifica di progetto, non evidenza che ogni servizio esista.
+
+**Provider parity gate:** i servizi opzionali non vanno introdotti prima di un reale caso d'uso e di una suite di contract test Azure↔Docker. Il codice di dominio deve restare indipendente dai servizi cloud. OpenBao, Valkey e SignalR sono **proposte architetturali**, non componenti già configurati.

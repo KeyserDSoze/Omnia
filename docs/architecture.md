@@ -74,8 +74,8 @@ Actions are **read-only by default**. For sending messages, require user-approve
 | IObjectStore (planned) | Azure Blob Storage | MinIO |
 | IEventBus (planned) | Azure Service Bus | RabbitMQ |
 | Identity/OIDC | Entra External ID (planned) | Keycloak |
-| Secrets | Key Vault (planned) | env / local secret |
-| Observability | Azure Monitor / Application Insights (planned) | OpenTelemetry Collector + Jaeger (planned) |
+| ISecretStore (planned) | Azure Key Vault | OpenBao (open source, planned) |
+| Observability | Azure Monitor / Application Insights (planned) | OpenTelemetry Collector + Jaeger (planned) |\n| ICache (optional) | Azure Managed Redis (planned) | Valkey OSS (planned) |\n| Realtime notifications (optional) | Azure Web PubSub (planned) | Self-hosted SignalR (planned) |
 | Images/runtime | ACR + Azure Container Apps | Docker Compose |
 
 Only PostgreSQL, JWT/OIDC validation and embedding adapters are actually implemented. All other mappings are design decisions, not production-ready integrations.
@@ -86,3 +86,5 @@ Only PostgreSQL, JWT/OIDC validation and embedding adapters are actually impleme
 - Mobile/web UI is disconnected from the secured API until a real native/web PKCE flow exists; it must never fake cloud persistence.
 - Local audio capture requires explicit microphone permission and records locally only. Phone call capture remains platform/restriction dependent and is **not implemented**.
 - Production requires private network, TLS, issuer, least privilege, tenant isolation tests, signed consent, content retention, deletion/export, rate limiting, threat model, secret rotation and observability before accepting real personal data.
+
+> **Parità non significa disponibilità corrente:** OpenBao/Valkey/SignalR sono contratti di progetto, non servizi avviati dal Docker Compose attuale. Ogni nuovo port richiede test contrattuali contro la variante OSS e staging Azure, prima di essere dichiarato supportato.

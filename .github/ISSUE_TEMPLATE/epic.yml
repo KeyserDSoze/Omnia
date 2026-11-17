@@ -1,0 +1,30 @@
+name: "Epic · feature group"
+description: "A bounded area grouping individually testable feature issues"
+title: "[EPIC][P1][AREA] "
+labels: ["feature","epic"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: "Goal and user value"
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Boundaries and target architecture"
+    validations:
+      required: true
+  - type: textarea
+    id: children
+    attributes:
+      label: "Child feature issues and dependency graph"
+      placeholder: "- [ ] #..."
+    validations:
+      required: true
+  - type: textarea
+    id: release
+    attributes:
+      label: "Acceptance and release gates"
+    validations:
+      required: true

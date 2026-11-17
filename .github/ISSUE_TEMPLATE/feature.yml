@@ -1,0 +1,72 @@
+name: "Feature · TDD"
+description: "Implementable vertical feature with acceptance and tests-first"
+title: "[FEATURE][P1][AREA] "
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: "One vertical slice. Do not mark as done without a real test run and documented constraints. Never include secrets or personal data."
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "Priorità"
+      options: [P0, P1, P2]
+    validations:
+      required: true
+  - type: dropdown
+    id: phase
+    attributes:
+      label: "Milestone logica"
+      options: [M0, M1, M2, M3, M4, M5]
+    validations:
+      required: true
+  - type: input
+    id: epic
+    attributes:
+      label: "Epic parent"
+      placeholder: "#1"
+    validations:
+      required: true
+  - type: textarea
+    id: story
+    attributes:
+      label: "User story / risultato"
+      description: "Who benefits, why and boundaries?"
+      placeholder: "Come utente voglio... per..."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Scope, API/DDD, DI, platform limits"
+      placeholder: "domain/application/infrastructure/API/Expo..."
+    validations:
+      required: true
+  - type: textarea
+    id: accept
+    attributes:
+      label: "Acceptance criteria (positive and negative)"
+      placeholder: "- [ ] ...\n- [ ] ..."
+    validations:
+      required: true
+  - type: textarea
+    id: red
+    attributes:
+      label: "Test-first (RED → GREEN → REFACTOR)"
+      placeholder: "xUnit/Playwright/Testcontainers/device + negative security tests"
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: "Consent, privacy, security, third-party data"
+      placeholder: "grants/scopes/revocation and risk review; or N/A with reason"
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: "Dependencies and out-of-scope"
+      placeholder: "#2, #10; not implemented yet..."
+    validations:
+      required: true

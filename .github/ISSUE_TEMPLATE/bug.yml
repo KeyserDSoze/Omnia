@@ -1,0 +1,28 @@
+name: "Bug / regression"
+description: "Reproducible issue with a failing test"
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to reproduce with synthetic data"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected versus actual and impact"
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: "Failing regression test and environment"
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: "Security impact (do not disclose exploits publicly)"
+      description: "Report exploitable vulnerabilities privately instead of publishing details."

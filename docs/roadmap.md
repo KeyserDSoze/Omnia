@@ -38,3 +38,7 @@
 ## Release gates
 
 Azure deployment / App Store approval / real personal-data launch require threat model, privacy review (GDPR, recording laws), OIDC and tenant e2e gates, encrypted backup, deletion/export tests, PaaS networking and secret management, and real CI evidence. *No call interception promised.*
+
+## Piano feature tracciabile (2026-11-17)
+
+La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti privacy/TDD; M1 MVP secure timeline; M2 media + schema canonico/vector + Azure staging; M3 connectors/MCP + AI grounded; M4 agenti e SaaS; M5 enterprise/residency. 14 epics e 110 child aperte **non** sono feature implementate. La foundation web già rilasciata e la CI iniziale verde non dimostrano auth end-to-end, Azure production o native signed release.

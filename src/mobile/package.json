@@ -11,7 +11,7 @@
     "build:web": "expo export -p web",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "npm run build:web && playwright test"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.18",

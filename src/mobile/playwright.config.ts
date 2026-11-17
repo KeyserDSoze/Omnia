@@ -5,9 +5,9 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   use: { baseURL: 'http://127.0.0.1:19006', ...devices['Desktop Chrome'], trace: 'retain-on-failure' },
   webServer: {
-    command: 'npm run web -- --port 19006',
-    url: 'http://127.0.0.1:19006/Omnia',
-    timeout: 150_000,
+    command: 'node scripts/serve-static.mjs',
+    url: 'http://127.0.0.1:19006/Omnia/',
+    timeout: 30_000,
     reuseExistingServer: !process.env.CI
   }
 });

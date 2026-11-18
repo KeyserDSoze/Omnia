@@ -147,6 +147,30 @@ public sealed class LegacyBackfillInventoryTests
         }
     }
 
+    [Fact]
+    public async Task DataBackfillRoleMustNotBeTheApiOrGlobalAuditLogin()
+    {
+        var adminCs = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
+        var appCs = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
+        var workerCs = Environment.GetEnvironmentVariable("OMNIA_TEST_BACKFILL_DB");
+        var auditCs = Environment.GetEnvironmentVariable("OMNIA_TEST_AUDIT_DB");
+        Assert.False(string.IsNullOrWhiteSpace(adminCs));
+        Assert.False(string.IsNullOrWhiteSpace(appCs));
+        Assert.False(string.IsNullOrWhiteSpace(workerCs));
+        Assert.False(string.IsNullOrWhiteSpace(auditCs));
+        await using var admin = NpgsqlDataSource.Create(adminCs!);
+        await new PostgresMigrator(admin, "omnia_app", "omnia_retention", "omnia_backfill",
+            "omnia_backfill_audit").MigrateAsync();
+        await using var app = NpgsqlDataSource.Create(appCs!);
+        await using var worker = NpgsqlDataSource.Create(workerCs!);
+        await using var audit = NpgsqlDataSource.Create(auditCs!);
+        await PostgresBackfillRoleGuard.VerifyAsync(worker);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => PostgresBackfillRoleGuard.VerifyAsync(app));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => PostgresBackfillRoleGuard.VerifyAsync(audit));
+    }
+
     private sealed class TemporaryInventory : IDisposable
     {
         public string Path { get; } = System.IO.Path.Combine(

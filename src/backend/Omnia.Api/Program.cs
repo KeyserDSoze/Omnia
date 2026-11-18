@@ -115,7 +115,8 @@ builder.Services.AddScoped<IMemoryCatalog, MemoryCatalog>();
 builder.Services.AddScoped<IPersonalDataService, PostgresPersonalDataService>();
 builder.Services.AddSingleton(sp => new PostgresMigrator(
     sp.GetRequiredKeyedService<NpgsqlDataSource>("migrations"), runtimeUser, retentionUser,
-    builder.Configuration["Database:BackfillRole"]));
+    builder.Configuration["Database:BackfillRole"],
+    builder.Configuration["Database:BackfillAuditRole"]));
 var provider = (builder.Configuration["Embeddings:Provider"] ?? "none").ToLowerInvariant();
 var model = builder.Configuration["Embeddings:Model"] ??
     (provider == "ollama" ? "nomic-embed-text" : "text-embedding-3-small");

@@ -48,3 +48,21 @@ SELECT format(
 \gexec
 SQL
 fi
+
+
+# Dedicated COUNT-only role, disjoint from API, data backfill and retention.
+if [[ -n "${BACKFILL_AUDIT_DB_PASSWORD:-}" ]]; then
+  psql -v ON_ERROR_STOP=1 -v audit_password="$BACKFILL_AUDIT_DB_PASSWORD" <<'SQL'
+SELECT format(
+  'CREATE ROLE omnia_backfill_audit LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+  :'audit_password'
+)
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'omnia_backfill_audit')
+\gexec
+SELECT format(
+  'ALTER ROLE omnia_backfill_audit PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+  :'audit_password'
+)
+\gexec
+SQL
+fi

@@ -26,6 +26,7 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
       RETENTION_DB_PASSWORD: ${RETENTION_DB_PASSWORD:?Set RETENTION_DB_PASSWORD in .env}
       BACKFILL_DB_PASSWORD: ${BACKFILL_DB_PASSWORD:-}
+      BACKFILL_AUDIT_DB_PASSWORD: ${BACKFILL_AUDIT_DB_PASSWORD:-}
     volumes:
       - ./db/bootstrap.sh:/opt/omnia/bootstrap.sh:ro
     entrypoint: ["bash", "/opt/omnia/bootstrap.sh"]
@@ -59,6 +60,7 @@ services:
       Database__MigrationConnectionString: Host=db;Port=5432;Database=omnia;Username=omnia;Password=${POSTGRES_PASSWORD}
       Database__RetentionConnectionString: Host=db;Port=5432;Database=omnia;Username=omnia_retention;Password=${RETENTION_DB_PASSWORD}
       Database__BackfillRole: ${OMNIA_BACKFILL_ROLE:-}
+      Database__BackfillAuditRole: ${OMNIA_BACKFILL_AUDIT_ROLE:-}
       Crypto__KeyRingPath: /run/secrets/omnia-envelope.keyring.json
       Auth__Issuer: http://localhost:8081/realms/omnia
       Auth__MetadataAddress: http://keycloak:8080/realms/omnia/.well-known/openid-configuration

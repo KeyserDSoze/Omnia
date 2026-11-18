@@ -30,7 +30,7 @@ public sealed class RetentionTests
         await new PostgresConsentRepository(app).GrantAsync(ConsentGrant.Issue(
             tenant, subject, "manual", ConsentGrant.MemoryCapture,
             "privacy-v1", now, now.AddDays(7)), default);
-        var repo = new PostgresMemoryRepository(app);
+        var repo = new PostgresMemoryRepository(app, TestEnvelopeCrypto.Create());
         var entry = MemoryEntry.Capture(tenant, subject, "manual",
             Guid.NewGuid().ToString("N"), "text/plain", "synthetic raw",
             "{\"text\":\"synthetic\"}", "synthetic", [], now,
@@ -108,7 +108,7 @@ public sealed class RetentionTests
 
         var tenants = new[] { "ret-" + Guid.NewGuid().ToString("N"),
             "ret-" + Guid.NewGuid().ToString("N") };
-        var memories = new PostgresMemoryRepository(app);
+        var memories = new PostgresMemoryRepository(app, TestEnvelopeCrypto.Create());
         var consents = new PostgresConsentRepository(app);
         var now = DateTimeOffset.UtcNow;
         var items = new List<(string Tenant, string Owner, Guid Id)>();

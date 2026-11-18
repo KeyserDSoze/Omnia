@@ -92,3 +92,12 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Keyring letta da file esterno (senza chiavi di default) con fail-closed su chiavi malformate o mancanti; rotazione tramite `Rewrap` e recupero con nuova chiave.
 - [x] Test crittografici reali per roundtrip, randomizzazione, manomissione, cross-tenant/user, ID record/finalità, rotazione e reinizializzazione (link CI da riportare in #137).
 - [ ] **#33 OPEN:** integrazione con storage raw/normalized/summary/media/token e derivati pgvector, backfill senza plaintext, vault Azure/OpenBao, gestione chiavi per ambienti/tenant, disaster recovery, audit e scansione segreti; nessun trattamento dati reali in assenza dei gate.
+
+
+## #138 — fase 1 encryption-at-rest della memoria, sotto-issue #139 (2026-11-18)
+
+- [x] Migrazione 0005 con `sealed_payload`, constraint redaction e trigger a rifiuto di nuove scritture plaintext.
+- [x] Nuove note: raw/normalized/summary/tags dentro busta AES-256-GCM, AAD con UUID canonico, idempotent upsert e timeline decrittata sotto RLS.
+- [x] JSON export di tutte le righe con `storageProtection` per distinguere legacy e cifrate; erasure e retention già eliminano l'intera riga.
+- [x] Fail closed API senza key ring esterna, CI OIDC con file di chiave ephemeral random e Docker mount read-only (evidenze finali CI da registrare in #139).
+- [ ] Backfill completo di tutti i record legacy, cifratura dei vettori pgvector e metadata, versione di chiave per oggetto e rotazione persisted, AI privacy, vault OSS/Azure e backup restore verificati restano in #138/#33.

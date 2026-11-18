@@ -69,3 +69,8 @@ Le feature #19 (contract DI), #33 (vault/rotation), #62 (object storage), #63 (q
 ## Delta verificato — #137 (18 novembre 2026)
 
 Prima base crittografica per #33, con `IEnvelopeEncryption` e AEAD AES-256-GCM/DEK-KEK, load key ring esterno e rewrap per key rotation. Questo è un **componente di libreria**, non significa che le colonne PostgreSQL o i token esistenti siano già cifrati. Non chiudere parent #33 sino a migrazione+backfill cifrati, vault OSS/Azure, external storage e restore test. Il conteggio delle issue nell'intestazione è storico: per lo stato corrente usare sempre l'API GitHub.
+
+
+## Aggiornamento operativo #139 (2026-11-18)
+
+I nuovi body delle note vengono scritti come `sealed_payload` nel PostgreSQL primario solo quando la key ring esterna è caricata, mentre un trigger vieta il ritorno alle scritture plaintext. `#138` e `#33` **rimangono aperte**: backfill legacy, cifratura embedding/metadati, Key Vault/OpenBao, backup e verifica GDPR sono ancora da fare. Stato definitivo da evidenze GitHub Actions, non dalla sola presenza del codice.

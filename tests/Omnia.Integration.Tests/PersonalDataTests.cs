@@ -25,9 +25,9 @@ public sealed class PersonalDataTests
         await using var runtime = NpgsqlDataSource.Create(appConnection!);
         await PostgresRuntimeGuard.VerifyAsync(runtime);
 
-        var data = new PostgresPersonalDataService(runtime);
+        var data = new PostgresPersonalDataService(runtime, TestEnvelopeCrypto.Create());
         var consents = new PostgresConsentRepository(runtime);
-        var memories = new PostgresMemoryRepository(runtime);
+        var memories = new PostgresMemoryRepository(runtime, TestEnvelopeCrypto.Create());
         var tenant = "privacy-" + Guid.NewGuid().ToString("N");
         var otherTenant = tenant + "-other";
         var now = DateTimeOffset.UtcNow;
@@ -160,7 +160,7 @@ public sealed class PersonalDataTests
         var appConnection = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
         Assert.False(string.IsNullOrWhiteSpace(appConnection));
         await using var db = NpgsqlDataSource.Create(appConnection!);
-        var service = new PostgresPersonalDataService(db);
+        var service = new PostgresPersonalDataService(db, TestEnvelopeCrypto.Create());
         await using var output = new MemoryStream();
         await Assert.ThrowsAsync<ArgumentException>(() => service.WriteExportAsync("tenant", "", output, default));
         await Assert.ThrowsAsync<ArgumentException>(() => service.EraseAsync("", "subject", default));

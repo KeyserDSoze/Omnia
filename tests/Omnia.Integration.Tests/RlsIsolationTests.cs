@@ -75,7 +75,7 @@ public sealed class RlsIsolationTests
             await consents.GrantAsync(ConsentGrant.Issue(
                 tenant, "bob", source, ConsentGrant.MemoryCapture,
                 "privacy-v1", now, now.AddDays(1)), CancellationToken.None);
-            var memory = new PostgresMemoryRepository(app);
+            var memory = new PostgresMemoryRepository(app, TestEnvelopeCrypto.Create());
             var saved = await memory.UpsertAsync(MemoryEntry.Capture(
                 tenant, "alice", source, external, "text/plain",
                 "Alice private synthetic note", "{\"text\":\"Alice\"}",

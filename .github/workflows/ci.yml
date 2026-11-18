@@ -30,6 +30,13 @@ jobs:
           echo "OMNIA_TEST_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia;Password=$password" >> "$GITHUB_ENV"
           echo "OMNIA_TEST_APP_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_app;Password=$app_password" >> "$GITHUB_ENV"
           echo "OMNIA_TEST_RETENTION_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_retention;Password=$retention_password" >> "$GITHUB_ENV"
+          ring_file="$RUNNER_TEMP/omnia-test-envelope.keyring.json"
+          # Synthetic key lives only on this ephemeral runner; never in logs/artifacts.
+          ring_key="$(openssl rand -base64 32)"
+          jq -nc --arg secret "$ring_key" \
+            '{activeKeyId:"ci-v1", keys:{"ci-v1":$secret}}' > "$ring_file"
+          chmod 600 "$ring_file"
+          echo "OMNIA_TEST_KEYRING_FILE=$ring_file" >> "$GITHUB_ENV"
           docker run -d --rm --name omnia-ci-pg \
             -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_test \
             -e "POSTGRES_PASSWORD=$password" \

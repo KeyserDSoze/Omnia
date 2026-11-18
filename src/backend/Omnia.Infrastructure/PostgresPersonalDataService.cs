@@ -8,7 +8,7 @@ namespace Omnia.Infrastructure;
 /// RLS-scoped, streaming JSON export of current PostgreSQL personal data;
 /// atomic, repeatable deletion of memory (including vectors) and consent rows.
 /// </summary>
-public sealed class PostgresPersonalDataService(NpgsqlDataSource db) : IPersonalDataService
+public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEncryption crypto) : IPersonalDataService
 {
     public async Task WriteExportAsync(string tenantId, string ownerSubject,
         Stream destination, CancellationToken ct)
@@ -37,7 +37,8 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db) : IPersonal
         await using (var command = new NpgsqlCommand("""
             SELECT id, source, external_id, content_type, raw_content,
                    normalized_json::text, summary, tags, occurred_at,
-                   received_at, expires_at, embedding::text, embedding_model
+                   received_at, expires_at, embedding::text, embedding_model,
+                   sealed_payload
             FROM memory_entries
             WHERE tenant_id = @tenant AND owner_sub = @owner
             ORDER BY occurred_at, id
@@ -54,14 +55,22 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db) : IPersonal
                 writer.WriteString("source", reader.GetString(1));
                 writer.WriteString("externalId", reader.GetString(2));
                 writer.WriteString("contentType", reader.GetString(3));
-                writer.WriteString("rawContent", reader.GetString(4));
+                var content = reader.IsDBNull(13)
+                    ? new SealedMemoryPayload.Content(reader.GetString(4),
+                        reader.GetString(5), reader.GetString(6),
+                        reader.GetFieldValue<string[]>(7))
+                    : SealedMemoryPayload.Decrypt(crypto, reader.GetFieldValue<byte[]>(13),
+                        tenantId, ownerSubject, reader.GetGuid(0));
+                writer.WriteString("storageProtection",
+                    reader.IsDBNull(13) ? "legacy-plaintext" : "sealed-v1");
+                writer.WriteString("rawContent", content.RawContent);
                 writer.WritePropertyName("normalized");
-                using (var normalized = JsonDocument.Parse(reader.GetString(5)))
+                using (var normalized = JsonDocument.Parse(content.NormalizedJson))
                     normalized.RootElement.WriteTo(writer);
-                writer.WriteString("summary", reader.GetString(6));
+                writer.WriteString("summary", content.Summary);
                 writer.WritePropertyName("tags");
                 writer.WriteStartArray();
-                foreach (var tag in reader.GetFieldValue<string[]>(7))
+                foreach (var tag in content.Tags)
                     writer.WriteStringValue(tag);
                 writer.WriteEndArray();
                 writer.WriteString("occurredAt", reader.GetFieldValue<DateTimeOffset>(8));

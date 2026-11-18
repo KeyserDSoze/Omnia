@@ -97,6 +97,14 @@ builder.Services.AddKeyedSingleton<NpgsqlDataSource>("retention",
 builder.Services.AddHostedService(sp => new RetentionSweepService(
     sp.GetRequiredKeyedService<NpgsqlDataSource>("retention"),
     sp.GetRequiredService<ILogger<RetentionSweepService>>()));
+var keyRingPath = builder.Configuration["Crypto:KeyRingPath"];
+if (string.IsNullOrWhiteSpace(keyRingPath))
+    throw new InvalidOperationException("Crypto:KeyRingPath is required; unsealed memory writes are forbidden.");
+// The key ring is loaded at startup and is NEVER exposed by an HTTP endpoint.
+// This filesystem adapter is for development only; production needs Key Vault/OpenBao.
+builder.Services.AddSingleton(EnvelopeKeyRing.FromFile(keyRingPath));
+builder.Services.AddSingleton<IEnvelopeEncryption>(sp =>
+    new AesGcmEnvelopeEncryption(sp.GetRequiredService<EnvelopeKeyRing>()));
 builder.Services.AddScoped<IMemoryRepository, PostgresMemoryRepository>();
 builder.Services.AddScoped<PostgresConsentRepository>();
 builder.Services.AddScoped<IConsentRepository>(sp => sp.GetRequiredService<PostgresConsentRepository>());

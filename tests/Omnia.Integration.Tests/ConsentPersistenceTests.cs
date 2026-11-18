@@ -27,7 +27,7 @@ public sealed class ConsentPersistenceTests
     {
         await using var db = await OpenAsync();
         var consents = new PostgresConsentRepository(db);
-        var memory = new PostgresMemoryRepository(db);
+        var memory = new PostgresMemoryRepository(db, TestEnvelopeCrypto.Create());
         var source = "manual-" + Guid.NewGuid().ToString("N");
         var tenant = "tenant-" + Guid.NewGuid().ToString("N");
         var now = DateTimeOffset.UtcNow;
@@ -46,7 +46,7 @@ public sealed class ConsentPersistenceTests
         Assert.NotEqual(Guid.Empty, saved.Id);
 
         await Assert.ThrowsAsync<ConsentRequiredException>(() =>
-            new PostgresMemoryRepository(db).UpsertAsync(MemoryEntry.Capture(
+            new PostgresMemoryRepository(db, TestEnvelopeCrypto.Create()).UpsertAsync(MemoryEntry.Capture(
                 tenant, "owner-b", source, "other", "text/plain", "hello", "{}",
                 "hello", [], now), CancellationToken.None));
 
@@ -68,7 +68,7 @@ public sealed class ConsentPersistenceTests
     {
         await using var db = await OpenAsync();
         var repo = new PostgresConsentRepository(db);
-        var memory = new PostgresMemoryRepository(db);
+        var memory = new PostgresMemoryRepository(db, TestEnvelopeCrypto.Create());
         var tenant = "t-" + Guid.NewGuid().ToString("N");
         var source = "crm-" + Guid.NewGuid().ToString("N");
         var now = DateTimeOffset.UtcNow;

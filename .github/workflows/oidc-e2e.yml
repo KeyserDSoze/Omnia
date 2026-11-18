@@ -37,11 +37,17 @@ jobs:
             echo "OMNIA_E2E_PG_PASSWORD=$pgpass"
             echo "OMNIA_E2E_APP_PASSWORD=$apppass"
             echo "OMNIA_E2E_RETENTION_PASSWORD=$retentionpass"
+            echo "OMNIA_E2E_KEYRING_FILE=$RUNNER_TEMP/omnia-e2e-envelope.keyring.json"
             echo "OMNIA_E2E_KC_PASSWORD=$kcpass"
             echo "OMNIA_E2E_PASSWORD=$userpass"
             echo "OMNIA_E2E_USER1=omnia-ci-one"
             echo "OMNIA_E2E_USER2=omnia-ci-two"
           } >> "$GITHUB_ENV"
+          ring_key="$(openssl rand -base64 32)"
+          jq -nc --arg secret "$ring_key" \
+            '{activeKeyId:"e2e-v1", keys:{"e2e-v1":$secret}}' \
+            > "$RUNNER_TEMP/omnia-e2e-envelope.keyring.json"
+          chmod 600 "$RUNNER_TEMP/omnia-e2e-envelope.keyring.json"
 
           docker run -d --rm --name omnia-oidc-pg \
             -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_test \
@@ -108,6 +114,7 @@ jobs:
           export Database__ConnectionString="Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_app;Password=$OMNIA_E2E_APP_PASSWORD"
           export Database__MigrationConnectionString="Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia;Password=$OMNIA_E2E_PG_PASSWORD"
           export Database__RetentionConnectionString="Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_retention;Password=$OMNIA_E2E_RETENTION_PASSWORD"
+          export Crypto__KeyRingPath="$OMNIA_E2E_KEYRING_FILE"
           export Auth__Issuer=http://localhost:8081/realms/omnia
           export Auth__Audience=omnia-api
           export Embeddings__Provider=none

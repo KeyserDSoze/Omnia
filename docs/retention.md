@@ -31,3 +31,8 @@ NON sono ancora implementati: policy per fonte, finalità, categoria, età, tena
 ## Test di accettazione
 
 `tests/Omnia.Integration.Tests/RetentionTests.cs` con PostgreSQL reale, ruolo owner/test-fixture, app RLS e retention-only; `.github/workflows/ci.yml` esegue xUnit. `.github/workflows/oidc-e2e.yml` continua a verificare il browser Keycloak→API con worker avviato. Documentare URL e commit verdi nella sotto-issue #136; il parent #32 rimane aperto.
+
+
+## Retention note sealed (#139)
+
+La funzione di purge esistente cancella l'intera riga, incluso `sealed_payload`; nessuna seconda coda di cancellazione per il payload è necessaria nel PostgreSQL primario. Il TTL di 30 giorni decorre sempre da `received_at`, non dalla data di re-encryption, e un retry di una nota viva non deve alterarlo. Embedding pgvector, metadata e note storiche non cifrate rimangono rischi privacy autonomi.

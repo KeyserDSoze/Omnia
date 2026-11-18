@@ -4,7 +4,7 @@ using Omnia.Domain;
 
 namespace Omnia.Infrastructure;
 
-public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepository
+public sealed class PostgresMemoryRepository(NpgsqlDataSource db, IEnvelopeEncryption crypto) : IMemoryRepository
 {
     public async Task<MemoryEntry> UpsertAsync(MemoryEntry entry, CancellationToken ct)
     {
@@ -29,17 +29,35 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
                 throw new ConsentRequiredException();
         }
 
+        // Canonical ID must remain stable across retries, otherwise the AAD
+        // would bind a new envelope to a transient client-generated UUID.
+        await using var existing = new NpgsqlCommand("""
+            SELECT id FROM memory_entries
+            WHERE tenant_id = @tenant AND owner_sub = @subject
+              AND source = @source AND external_id = @external
+            FOR UPDATE
+            """, conn, tx);
+        existing.Parameters.AddWithValue("tenant", entry.TenantId);
+        existing.Parameters.AddWithValue("subject", entry.OwnerSubject);
+        existing.Parameters.AddWithValue("source", entry.Source);
+        existing.Parameters.AddWithValue("external", entry.ExternalId);
+        var previous = await existing.ExecuteScalarAsync(ct);
+        var canonicalId = previous is Guid id ? id : entry.Id;
+        var sealedPayload = SealedMemoryPayload.Encrypt(crypto, entry, canonicalId);
+
         // Both the active-grant row lock and the memory write live in ONE transaction.
         // A concurrent revoke cannot commit between authorization and persistence.
         await using var command = new NpgsqlCommand("""
             INSERT INTO memory_entries
               (id, tenant_id, owner_sub, source, external_id, content_type, raw_content,
-               normalized_json, summary, tags, occurred_at, embedding, embedding_model)
-            VALUES (@id, @tenant, @subject, @source, @external, @mime, @raw,
-               CAST(@normalized AS jsonb), @summary, @tags, @occurred,
-               CAST(@embedding AS vector), @model)
+               normalized_json, summary, tags, occurred_at, embedding, embedding_model,
+               sealed_payload)
+            VALUES (@id, @tenant, @subject, @source, @external, @mime, '[sealed]',
+               '{}'::jsonb, '[sealed]', ARRAY[]::text[], @occurred,
+               CAST(@embedding AS vector), @model, @sealed)
             ON CONFLICT (tenant_id, owner_sub, source, external_id)
-            DO UPDATE SET raw_content = EXCLUDED.raw_content,
+            DO UPDATE SET sealed_payload = EXCLUDED.sealed_payload,
+              raw_content = EXCLUDED.raw_content,
               normalized_json = EXCLUDED.normalized_json,
               summary = EXCLUDED.summary,
               tags = EXCLUDED.tags, occurred_at = EXCLUDED.occurred_at,
@@ -51,17 +69,14 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
                   ELSE memory_entries.expires_at END
             RETURNING id
             """, conn, tx);
-        command.Parameters.AddWithValue("id", entry.Id);
+        command.Parameters.AddWithValue("id", canonicalId);
         command.Parameters.AddWithValue("tenant", entry.TenantId);
         command.Parameters.AddWithValue("subject", entry.OwnerSubject);
         command.Parameters.AddWithValue("source", entry.Source);
         command.Parameters.AddWithValue("external", entry.ExternalId);
         command.Parameters.AddWithValue("mime", entry.ContentType);
-        command.Parameters.AddWithValue("raw", entry.RawContent);
-        command.Parameters.AddWithValue("normalized", entry.NormalizedJson);
-        command.Parameters.AddWithValue("summary", entry.Summary);
-        command.Parameters.AddWithValue("tags", entry.Tags.ToArray());
         command.Parameters.AddWithValue("occurred", entry.OccurredAt);
+        command.Parameters.AddWithValue("sealed", sealedPayload);
         command.Parameters.AddWithValue("embedding", (object?) (entry.Embedding is null
             ? DBNull.Value : "[" + string.Join(",", entry.Embedding.Select(
                 n => n.ToString("R", System.Globalization.CultureInfo.InvariantCulture))) + "]"));
@@ -77,7 +92,7 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
     {
         await using var scope = await PostgresActorScope.OpenAsync(db, tenantId, ownerSubject, ct);
         await using var command = new NpgsqlCommand("""
-            SELECT id, source, summary, tags, occurred_at, embedding IS NOT NULL
+            SELECT id, source, summary, tags, occurred_at, embedding IS NOT NULL, sealed_payload
             FROM memory_entries
             WHERE tenant_id = @tenant AND owner_sub = @subject
               AND expires_at > now()
@@ -89,9 +104,21 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
         var output = new List<MemorySummary>();
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-            output.Add(new MemorySummary(reader.GetGuid(0), reader.GetString(1),
-                reader.GetString(2), reader.GetFieldValue<string[]>(3),
+        {
+            var id = reader.GetGuid(0);
+            var summary = reader.GetString(2);
+            var tags = reader.GetFieldValue<string[]>(3);
+            if (!reader.IsDBNull(6))
+            {
+                // Never accept a corrupted envelope as redacted/empty content.
+                var sealedContent = SealedMemoryPayload.Decrypt(crypto,
+                    reader.GetFieldValue<byte[]>(6), tenantId, ownerSubject, id);
+                summary = sealedContent.Summary;
+                tags = sealedContent.Tags;
+            }
+            output.Add(new MemorySummary(id, reader.GetString(1), summary, tags,
                 reader.GetFieldValue<DateTimeOffset>(4), reader.GetBoolean(5)));
+        }
         return output;
     }
 }

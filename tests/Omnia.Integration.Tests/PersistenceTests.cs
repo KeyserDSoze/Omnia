@@ -20,7 +20,7 @@ public sealed class PersistenceTests
             await new PostgresMigrator(admin, "omnia_app").MigrateAsync();
         await using var db = NpgsqlDataSource.Create(runtimeConnection!);
         await PostgresRuntimeGuard.VerifyAsync(db);
-        var repo = new PostgresMemoryRepository(db);
+        var repo = new PostgresMemoryRepository(db, TestEnvelopeCrypto.Create());
         var now = DateTimeOffset.UtcNow;
         var tenant = "tenant-" + Guid.NewGuid().ToString("N");
         await new PostgresConsentRepository(db).GrantAsync(ConsentGrant.Issue(

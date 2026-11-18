@@ -50,3 +50,8 @@ Riferimenti ufficiali: Regolamento UE 2016/679 artt. 15, 17, 19, 20, https://eur
 Le note hanno `expires_at` a 30 giorni da `received_at`. In timeline non si vedono oltre scadenza; il purge automatico cancella dal database principale raw, normalized, summary e vettori. Finché una riga non è stata fisicamente rimossa, l'export include anche i suoi dati e il timestamp di scadenza, a tutela della completezza dell'accesso. Se un utente elimina l'intero account dal DB via API, la cancellazione immediata #135 prevale senza attendere lo scheduler. Nessuna garanzia di cancellazione istantanea alla scadenza; i cicli sono ogni 15 minuti e si fermano durante outage, con backlog eventualmente limitato a 5.000 record per ciclo.
 
 Questo non determina il periodo adeguato per dati di origine diversa né elimina duplicati su device, backup, log o provider. I consent grants mantengono uno storico separato e non vengono eliminati dal purge note.
+
+
+## Export e cancellazione di note sealed (#139)
+
+Le note nuove salvano i campi `rawContent`, JSON normalizzato, summary e tags in un blob autenticato cifrato. L'export JSON decifra **solo dopo** verifica JWT e RLS e indica `storageProtection: "sealed-v1"`. Le vecchie note ancora non migrate sono esportate con `storageProtection: "legacy-plaintext"`. La cancellazione immediata e la retention eliminano la riga `memory_entries` completa, inclusi il blob cifrato e il vettore eventualmente presente. La cancellazione non rimuove backup, provider AI né altri sistemi esterni; vecchie note persistono in chiaro sino al backfill della #138.

@@ -20,6 +20,7 @@ jobs:
           dotnet build src/backend/Omnia.Api/Omnia.Api.csproj -c Release
           dotnet build src/backend/Omnia.Backfill/Omnia.Backfill.csproj -c Release
           dotnet build src/backend/Omnia.BackfillAudit/Omnia.BackfillAudit.csproj -c Release
+          dotnet build tests/Omnia.RestoreRehearsal/Omnia.RestoreRehearsal.csproj -c Release
       - name: Start disposable PostgreSQL 17 / pgvector
         shell: bash
         run: |
@@ -76,6 +77,9 @@ jobs:
           SQL
       - name: xUnit real PostgreSQL integration
         run: dotnet test tests/Omnia.Integration.Tests/Omnia.Integration.Tests.csproj -c Release
+      - name: Restore rehearsal — real PostgreSQL dump/restore, retained and missing KEKs
+        shell: bash
+        run: bash tests/restore/restore-rehearsal.sh
       - name: Stop disposable database
         if: always()
         run: docker rm -f omnia-ci-pg || true

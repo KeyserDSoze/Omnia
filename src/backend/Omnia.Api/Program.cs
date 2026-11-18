@@ -92,6 +92,7 @@ builder.Services.AddScoped<IConsentGuard>(sp => sp.GetRequiredService<PostgresCo
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddScoped<IConsentService, ConsentService>();
 builder.Services.AddScoped<IMemoryCatalog, MemoryCatalog>();
+builder.Services.AddScoped<IPersonalDataService, PostgresPersonalDataService>();
 builder.Services.AddSingleton(sp => new PostgresMigrator(
     sp.GetRequiredKeyedService<NpgsqlDataSource>("migrations"), runtimeUser));
 var provider = (builder.Configuration["Embeddings:Provider"] ?? "none").ToLowerInvariant();
@@ -206,6 +207,41 @@ memories.MapGet("", async (IMemoryCatalog catalog, ClaimsPrincipal user, int? li
     return Results.Ok(await catalog.RecentAsync(identity.Value.Tenant, identity.Value.Subject,
         limit ?? 25, ct));
 });
+
+var privacy = app.MapGroup("/api/v1/privacy")
+    .RequireAuthorization().RequireRateLimiting("omnia-api");
+privacy.MapGet("/export", (IPersonalDataService service, ClaimsPrincipal user,
+    HttpContext context) =>
+{
+    var identity = Identity(user);
+    if (identity is null) return Results.Forbid();
+    context.Response.Headers.CacheControl = "no-store";
+    context.Response.Headers.Pragma = "no-cache";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    return Results.Stream(
+        stream => service.WriteExportAsync(identity.Value.Tenant, identity.Value.Subject,
+            stream, context.RequestAborted),
+        "application/json", "omnia-personal-data.json");
+});
+
+privacy.MapPost("/erase", async (EraseMyDataCommand input,
+    IPersonalDataService service, ClaimsPrincipal user, HttpContext context,
+    CancellationToken ct) =>
+{
+    var identity = Identity(user);
+    if (identity is null) return Results.Forbid();
+    if (input.Confirmation != "ERASE_MY_DATA")
+        return Results.BadRequest(new { error = "explicit_confirmation_required" });
+    var result = await service.EraseAsync(identity.Value.Tenant, identity.Value.Subject, ct);
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Ok(new
+    {
+        result.DeletedMemories, result.DeletedConsents, result.CompletedAt,
+        scope = "omnia-postgresql-primary",
+        backupAndExternalPropagation = "not_included"
+    });
+});
+
 using (var scope = app.Services.CreateScope())
 {
     await scope.ServiceProvider.GetRequiredService<PostgresMigrator>().MigrateAsync();
@@ -226,3 +262,5 @@ static (string Tenant, string Subject)? Identity(ClaimsPrincipal principal)
 }
 
 public partial class Program { }
+
+public sealed record EraseMyDataCommand(string Confirmation);

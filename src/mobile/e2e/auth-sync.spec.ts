@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 // This suite must only run against the real OIDC provider, ASP.NET Core API and
 // disposable pgvector PostgreSQL, never mocked network routes or test-only JWTs.
@@ -55,6 +56,9 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
 
   const unauthenticated = await request.get('http://127.0.0.1:8080/api/v1/memories');
   expect(unauthenticated.status()).toBe(401);
+  expect((await request.get('http://127.0.0.1:8080/api/v1/privacy/export')).status()).toBe(401);
+  expect((await request.post('http://127.0.0.1:8080/api/v1/privacy/erase',
+    { data: { confirmation: 'ERASE_MY_DATA' } })).status()).toBe(401);
 
   await page.goto('/Omnia/');
   await browserLogin(page, user1);
@@ -82,6 +86,7 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
 
   // Separate Keycloak user in a new browser context cannot read this user's notes
   // (tenant claim may be shared locally; owner sub must remain isolated).
+  const otherMemo = 'Second account E2E ' + Date.now();
   const second = await browser.newContext();
   try {
     const other = await second.newPage();
@@ -89,6 +94,13 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
     await browserLogin(other, user2);
     await expect(other.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
     await expect(other.getByText(memoText, { exact: true })).toHaveCount(0);
+    await other.getByTestId('consent-accept').click();
+    await other.getByTestId('grant-consent').click();
+    await expect(other.getByTestId('consent-state')).toContainText('Autorizzazione attiva');
+    await other.getByTestId('memo-input').fill(otherMemo);
+    await other.getByTestId('save-memo').click();
+    await expect(other.getByTestId('notice')).toContainText('Nota salvata');
+    await expect(other.getByTestId('memory-timeline').getByText(otherMemo)).toBeVisible();
   } finally {
     await second.close();
   }
@@ -108,4 +120,57 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
   await expect(page.getByTestId('memory-timeline').getByText(
     'Questo evento non deve apparire', { exact: true })).toHaveCount(0);
   await expect(page.getByText(memoText, { exact: true })).toBeVisible();
+
+  // Export after revocation must still include historical note, its raw and
+  // normalized content and all first-party grants, never another owner's data.
+  const [firstDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByTestId('export-data').click()
+  ]);
+  expect(firstDownload.suggestedFilename()).toBe('omnia-personal-data.json');
+  const firstExport = JSON.parse(await readFile(await firstDownload.path(), 'utf8'));
+  expect(firstExport.scope).toBe('omnia-postgresql-primary');
+  expect(firstExport.memoryEntries.some((row: { rawContent: string }) =>
+    row.rawContent === memoText)).toBe(true);
+  expect(firstExport.memoryEntries.some((row: { rawContent: string }) =>
+    row.rawContent === otherMemo)).toBe(false);
+  expect(firstExport.consentGrants.length).toBeGreaterThanOrEqual(1);
+
+  // Deliberate two-action erasure acknowledgement. A wrong phrase remains disabled.
+  await expect(page.getByTestId('erase-data')).toBeDisabled();
+  await page.getByTestId('erase-acknowledge').click();
+  await page.getByTestId('erase-confirmation').fill('elimina');
+  await expect(page.getByTestId('erase-data')).toBeDisabled();
+  await page.getByTestId('erase-confirmation').fill('ELIMINA');
+  await page.getByTestId('erase-data').click();
+  await expect(page.getByTestId('notice')).toContainText('database principale confermata', {
+    timeout: 15_000
+  });
+  await expect(page.getByTestId('memory-timeline').getByText(memoText)).toHaveCount(0);
+  await expect(page.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
+
+  const afterErasure = page.waitForResponse(response =>
+    response.url().includes('/api/v1/memories?') && response.status() === 200);
+  await page.getByTestId('sync-reload').click();
+  await afterErasure;
+  await expect(page.getByTestId('memory-timeline').getByText(memoText)).toHaveCount(0);
+
+  const [secondDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByTestId('export-data').click()
+  ]);
+  const emptyExport = JSON.parse(await readFile(await secondDownload.path(), 'utf8'));
+  expect(emptyExport.memoryEntries).toEqual([]);
+  expect(emptyExport.consentGrants).toEqual([]);
+
+  // Erasing alice must never affect bob's original PostgreSQL rows.
+  const after = await browser.newContext();
+  try {
+    const other = await after.newPage();
+    await other.goto('http://127.0.0.1:19006/Omnia/');
+    await browserLogin(other, user2);
+    await expect(other.getByTestId('memory-timeline').getByText(otherMemo)).toBeVisible();
+  } finally {
+    await after.close();
+  }
 });

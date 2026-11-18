@@ -28,6 +28,38 @@ describe('OIDC public client config', () => {
   });
 });
 
+describe('privacy export and erasure', () => {
+  it('exports a blob only with bearer token and without credentials or redirects', async () => {
+    const fakeBlob = new Blob(['{"schemaVersion":1}'], { type: 'application/json' });
+    const request = vi.fn().mockResolvedValue({
+      ok: true, status: 200, blob: async () => fakeBlob
+    });
+    vi.stubGlobal('fetch', request);
+    const api = new MemoryApi(cloud, async () => 'synthetic-access-token');
+    expect(await api.exportPersonalData()).toBe(fakeBlob);
+    expect(request).toHaveBeenCalledWith('http://localhost:8080/api/v1/privacy/export',
+      expect.objectContaining({
+        credentials: 'omit', redirect: 'error', cache: 'no-store',
+        headers: expect.objectContaining({ Authorization: 'Bearer synthetic-access-token' })
+      }));
+  });
+
+  it('requires explicit erasure confirmation and refuses to fake a success', async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: false, status: 400
+    });
+    vi.stubGlobal('fetch', request);
+    const api = new MemoryApi(cloud, async () => 'synthetic-access-token');
+    await expect(api.erasePersonalData('wrong')).rejects.toMatchObject({ status: 400 });
+    expect(request).toHaveBeenCalledWith('http://localhost:8080/api/v1/privacy/erase',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ confirmation: 'wrong' }),
+        credentials: 'omit', redirect: 'error'
+      }));
+  });
+});
+
 describe('cloud API', () => {
   it('sends bearer token and scope only, never a client-controlled tenant ID', async () => {
     const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [] });

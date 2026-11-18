@@ -17,6 +17,8 @@ public sealed class PostgresConsentRepository(NpgsqlDataSource db)
             grant.TenantId, grant.OwnerSubject, ct);
         var conn = scope.Connection;
         var tx = scope.Transaction;
+        await PostgresActorLock.AcquireAsync(conn, tx,
+            grant.TenantId, grant.OwnerSubject, ct);
         var scopeKey = $"{grant.TenantId}|{grant.OwnerSubject}|{grant.Source}|{grant.Purpose}";
 
         // Scope-specific lock serializes concurrent re-grants. Index still enforces uniqueness.
@@ -66,6 +68,8 @@ public sealed class PostgresConsentRepository(NpgsqlDataSource db)
         Guid id, DateTimeOffset now, CancellationToken ct)
     {
         await using var scope = await PostgresActorScope.OpenAsync(db, tenantId, ownerSubject, ct);
+        await PostgresActorLock.AcquireAsync(scope.Connection, scope.Transaction,
+            tenantId, ownerSubject, ct);
         await using var command = new NpgsqlCommand("""
             UPDATE consent_grants SET revoked_at = COALESCE(revoked_at, @now)
             WHERE id = @id AND tenant_id = @tenant AND owner_sub = @owner

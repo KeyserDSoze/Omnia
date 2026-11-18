@@ -69,3 +69,11 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Ruolo DB runtime distinto e non privilegiato con bootstrap locale, migration role separato e validazione fail-closed in API.
 - [x] Session actor scope transaction-local e test PostgreSQL reali per SELECT senza WHERE, INSERT/UPDATE fuori scope, ruolo amministrativo non consentito come runtime e pool reuse (run CI da confermare prima di dichiarare green).
 - [ ] Azure managed identity/DB role provisioning robusto, IAM e secret rotation, security review injection e portabilità su pgvector Flexible Server; aspetti da validare prima di release con dati reali.
+
+## Privacy #31 — export ed erasure primi confini (2026-11-18)
+
+- [x] JSON streaming server-side con tutte le righe `memory_entries` e `consent_grants`, campi raw/normalizzati e vettori, no truncation, actor scope RLS.
+- [x] Erasure atomica e idempotente nel PostgreSQL primario, con blocco concorrente su capture/consent e receipt con conteggi.
+- [x] UI Web autenticata per export e cancellazione con conferma esplicita; tests PostgreSQL e browser Keycloak reali (evidenze CI da riportare nelle issue).
+- [ ] Erasure/export degli object store, allegati/audio, cache, code, connettori, servizi AI e backup; job con prova di propagazione, tombstones, audit minimizzato e policy per eccezioni; resta #31 aperta.
+- [ ] Gestione retention (#32), cifratura (#33), Azure production/procedure e audit legale prima di dati reali.

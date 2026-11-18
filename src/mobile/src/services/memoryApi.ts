@@ -21,6 +21,14 @@ export type RemoteMemory = {
   hasEmbedding: boolean;
 };
 
+export type ErasureReceipt = {
+  deletedMemories: number;
+  deletedConsents: number;
+  completedAt: string;
+  scope: string;
+  backupAndExternalPropagation: string;
+};
+
 export class CloudApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
 }
@@ -76,6 +84,33 @@ export class MemoryApi {
   recent(): Promise<RemoteMemory[]> {
     return this.request('GET', '/api/v1/memories?limit=30');
   }
+
+  async exportPersonalData(): Promise<Blob> {
+    const bearer = await this.token();
+    let response: Response;
+    try {
+      response = await fetch(this.config.apiBaseUrl + '/api/v1/privacy/export', {
+        method: 'GET',
+        redirect: 'error',
+        cache: 'no-store',
+        credentials: 'omit',
+        headers: { Authorization: 'Bearer ' + bearer, Accept: 'application/json' }
+      });
+    } catch {
+      throw new CloudApiError('Esportazione non disponibile: verifica connessione e accesso.', 0);
+    }
+    if (!response.ok) {
+      if (response.status === 401) throw new CloudApiError('Sessione scaduta. Accedi di nuovo.', 401);
+      if (response.status === 429) throw new CloudApiError('Troppe richieste. Riprova.', 429);
+      throw new CloudApiError('Esportazione non riuscita (' + response.status + ').', response.status);
+    }
+    return response.blob();
+  }
+
+  erasePersonalData(confirmation: string): Promise<ErasureReceipt> {
+    return this.request('POST', '/api/v1/privacy/erase', { confirmation });
+  }
+
   save(entry: ReturnTypeMemo): Promise<RemoteMemory> {
     return this.request('POST', '/api/v1/memories', {
       source: entry.source,

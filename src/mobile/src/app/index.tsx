@@ -32,6 +32,8 @@ export default function Home() {
   const [grant, setGrant] = useState<ConsentDto | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [erasePhrase, setErasePhrase] = useState('');
+  const [eraseAcknowledged, setEraseAcknowledged] = useState(false);
   const authRef = useRef<BrowserAuth | null>(null);
   const apiRef = useRef<MemoryApi | null>(null);
   const retryRef = useRef<{ raw: string; entry: ReturnType<typeof normalizeMemo> } | null>(null);
@@ -89,6 +91,8 @@ export default function Home() {
       setMemos([]);
       setGrant(null);
       setAccepted(false);
+      setErasePhrase('');
+      setEraseAcknowledged(false);
       setDraft('');
       retryRef.current = null;
       setBusy(false);
@@ -120,6 +124,51 @@ export default function Home() {
       setNotice('Consenso revocato: niente nuove note. I dati precedenti restano finché non saranno cancellati.');
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Impossibile revocare il consenso.');
+    } finally { setBusy(false); }
+  }
+
+  async function exportPersonalData() {
+    if (webMode.kind !== 'cloud' || authState !== 'signed-in' || !apiRef.current || busy) return;
+    setBusy(true);
+    try {
+      const archive = await apiRef.current.exportPersonalData();
+      if (archive.size === 0) throw new Error('Il server ha restituito un file vuoto.');
+      const objectUrl = URL.createObjectURL(archive);
+      try {
+        const element = document.createElement('a');
+        element.href = objectUrl;
+        element.download = 'omnia-personal-data.json';
+        document.body.appendChild(element);
+        element.click();
+        element.remove();
+      } finally {
+        // Browser downloads may still be initializing immediately after click.
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+      }
+      setNotice('Esportazione JSON avviata. Contiene dati riservati: conserva il file al sicuro.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Esportazione non riuscita.');
+    } finally { setBusy(false); }
+  }
+
+  async function erasePersonalData() {
+    if (webMode.kind !== 'cloud' || authState !== 'signed-in' || !apiRef.current ||
+        busy || erasePhrase !== 'ELIMINA' || !eraseAcknowledged) return;
+    setBusy(true);
+    try {
+      const receipt = await apiRef.current.erasePersonalData('ERASE_MY_DATA');
+      setGrant(null);
+      setMemos([]);
+      setDraft('');
+      retryRef.current = null;
+      setAccepted(false);
+      setErasePhrase('');
+      setEraseAcknowledged(false);
+      setNotice('Cancellazione sul database principale confermata: ' +
+        receipt.deletedMemories + ' note e ' + receipt.deletedConsents +
+        ' consensi. Backup e sistemi esterni non inclusi.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Cancellazione non confermata. Riprova.');
     } finally { setBusy(false); }
   }
 
@@ -267,6 +316,51 @@ export default function Home() {
                 </Pressable>
               </>
             )}
+          </View>
+        )}
+        {webMode.kind === 'cloud' && authState === 'signed-in' && (
+          <View testID="privacy-actions" style={{ marginTop: 20, borderTopWidth: 1,
+            borderTopColor: p.border, paddingTop: 15 }}>
+            <Text style={[styles.kicker, { color: p.subtle }]}>I TUOI DATI</Text>
+            <Text style={[styles.hint, heading]}>
+              Puoi esportare in JSON note, originali, dati elaborati e consensi dal database principale.
+              Il file contiene dati personali: custodiscilo in un luogo sicuro.
+            </Text>
+            <Pressable testID="export-data" accessibilityRole="button"
+              disabled={busy} onPress={() => { void exportPersonalData(); }}
+              style={[styles.secondaryButton, { backgroundColor: p.card2,
+                paddingHorizontal: 16, alignSelf: 'flex-start', marginTop: 12 }]}>
+              <Text style={[styles.buttonText, heading]}>Esporta i miei dati (JSON)</Text>
+            </Pressable>
+            <Text style={[styles.hint, { color: p.subtle, marginTop: 19 }]}>
+              La cancellazione elimina definitivamente note, embedding e cronologia
+              dei consensi dal database PostgreSQL principale. Non elimina backup,
+              copie dei provider AI o account presso il gestore dell'identità.
+            </Text>
+            <Pressable testID="erase-acknowledge" accessibilityRole="checkbox"
+              accessibilityState={{ checked: eraseAcknowledged }}
+              onPress={() => setEraseAcknowledged(value => !value)}
+              style={{ flexDirection: 'row', marginTop: 12, gap: 9 }}>
+              <Text style={heading}>{eraseAcknowledged ? '☑' : '☐'}</Text>
+              <Text style={[styles.hint, heading, { flex: 1, marginTop: 0 }]}>
+                Comprendo che la cancellazione sul database principale è irreversibile
+                e che i backup o servizi esterni richiedono procedure separate.
+              </Text>
+            </Pressable>
+            <TextInput testID="erase-confirmation" accessibilityLabel="Digita ELIMINA per confermare"
+              placeholder="Digita ELIMINA per confermare"
+              placeholderTextColor={p.subtle} value={erasePhrase}
+              onChangeText={setErasePhrase}
+              style={[styles.input, { minHeight: 42, marginTop: 9, color: p.text,
+                backgroundColor: p.bg, borderColor: p.border }]} />
+            <Pressable testID="erase-data" accessibilityRole="button"
+              disabled={busy || !eraseAcknowledged || erasePhrase !== 'ELIMINA'}
+              onPress={() => { void erasePersonalData(); }}
+              style={[styles.secondaryButton, { backgroundColor: p.card2,
+                alignSelf: 'flex-start', paddingHorizontal: 16, marginTop: 9,
+                opacity: !busy && eraseAcknowledged && erasePhrase === 'ELIMINA' ? 1 : 0.45 }]}>
+              <Text style={[styles.buttonText, heading]}>Cancella tutti i miei dati dal database</Text>
+            </Pressable>
           </View>
         )}
       </View>

@@ -12,6 +12,8 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
             entry.TenantId, entry.OwnerSubject, ct);
         var conn = scope.Connection;
         var tx = scope.Transaction;
+        await PostgresActorLock.AcquireAsync(conn, tx,
+            entry.TenantId, entry.OwnerSubject, ct);
         await using (var gate = new NpgsqlCommand("""
             SELECT id FROM consent_grants
             WHERE tenant_id = @tenant AND owner_sub = @subject

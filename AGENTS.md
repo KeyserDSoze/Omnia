@@ -72,3 +72,17 @@ All newly persisted memory **must** receive a server-generated expiry based on i
 ## Sealed memory write-path (#139 / #138)
 
 Every new memory capture MUST use `SealedMemoryPayload.Encrypt` with a **stable canonical row UUID** and validated tenant/subject as AEAD associated data. The SQL columns `raw_content`, `normalized_json`, `summary`, `tags` are redacted in new rows; `sealed_payload` is mandatory for new INSERT. Never introduce a plaintext fallback for new writes, including key-ring errors or disabled configuration. `omnia_enforce_memory_sealed_writes` and `ck_memory_sealed_content_redacted` must remain effective after schema changes. Timeline and export MAY decode historical legacy rows only until an audited backfill/cutover replaces them; no bypass of JWT RLS or leak in log. New payloads remain within #31 export/erasure and #32 TTL. Crypto key ring is mandatory for API boot and sourced externally, not browser/Expo/GitHub sources. The actual encryption-at-rest gate remains OPEN while legacy rows, vector embeddings, metadata, backup, Key Vault/OpenBao are unresolved.
+
+
+## Offline actor-scoped legacy memory backfill (#140 first slice)
+
+The `Omnia.Backfill` executable must NOT be registered as an HTTP API or accept
+untrusted browser-supplied actor selectors. Its operator uses the separately
+provisioned, non-owner, no-BYPASSRLS `omnia_backfill` identity plus external KEK.
+Only SELECT/UPDATE of memory_entries are granted. Acquire
+`PostgresActorLock` **before** `FOR UPDATE SKIP LOCKED` and commit the new
+sealed_payload and four redacted legacy fields atomically. Never change
+canonical UUID, received_at/TTL, occurred_at, provenance, embedding or consent.
+Never log plaintext, account identifiers or keys. Keep legacy reads intact
+until a verified GLOBAL zero-legacy gate, restore rehearsal and schema cutover;
+per-actor count zero is not global completion. #140/#138/#33 remain open.

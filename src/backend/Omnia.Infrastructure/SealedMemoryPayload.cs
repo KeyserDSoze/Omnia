@@ -21,13 +21,20 @@ public static class SealedMemoryPayload
 
     public static byte[] Encrypt(IEnvelopeEncryption crypto, MemoryEntry memory, Guid canonicalId)
     {
+        return Encrypt(crypto, new Content(memory.RawContent, memory.NormalizedJson,
+            memory.Summary, memory.Tags.ToArray()), memory.TenantId,
+            memory.OwnerSubject, canonicalId);
+    }
+
+    public static byte[] Encrypt(IEnvelopeEncryption crypto, Content content,
+        string tenantId, string ownerSubject, Guid canonicalId)
+    {
         ArgumentNullException.ThrowIfNull(crypto);
-        var encoded = JsonSerializer.SerializeToUtf8Bytes(new Content(
-            memory.RawContent, memory.NormalizedJson, memory.Summary,
-            memory.Tags.ToArray()));
+        ArgumentNullException.ThrowIfNull(content);
+        var encoded = JsonSerializer.SerializeToUtf8Bytes(content);
         try
         {
-            return crypto.Seal(encoded, Scope(memory.TenantId, memory.OwnerSubject, canonicalId));
+            return crypto.Seal(encoded, Scope(tenantId, ownerSubject, canonicalId));
         }
         finally { CryptographicOperations.ZeroMemory(encoded); }
     }

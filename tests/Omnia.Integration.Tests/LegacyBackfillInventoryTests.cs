@@ -137,6 +137,22 @@ public sealed class LegacyBackfillInventoryTests
             Assert.Equal(0, resumed.IncompleteActors);
             Assert.Equal(0L, await worker.CountLegacyAsync(tenant, "alice", default));
             Assert.Equal(1L, await worker.CountLegacyAsync(tenant, "bob", default));
+
+            // Only an UPDATED explicit manifest authorizes touching Bob's row.
+            manifest.Write(new
+            {
+                schemaVersion = 1, operatorApproved = true,
+                actors = new[]
+                {
+                    new { tenantId = tenant, ownerSubject = "alice" },
+                    new { tenantId = tenant, ownerSubject = "bob" }
+                }
+            });
+            var authorized = await LegacyBackfillRunner.RunAsync(worker,
+                LegacyBackfillInventory.Load(manifest.Path), 1, 5, default);
+            Assert.Equal(1, authorized.SealedRows);
+            Assert.Equal(0, authorized.IncompleteActors);
+            Assert.Equal(0L, await worker.CountLegacyAsync(tenant, "bob", default));
         }
         finally
         {

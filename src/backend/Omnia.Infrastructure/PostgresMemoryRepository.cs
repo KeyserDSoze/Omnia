@@ -42,7 +42,7 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db, IEnvelopeEncry
         existing.Parameters.AddWithValue("source", entry.Source);
         existing.Parameters.AddWithValue("external", entry.ExternalId);
         var previous = await existing.ExecuteScalarAsync(ct);
-        var canonicalId = previous is Guid id ? id : entry.Id;
+        var canonicalId = previous is Guid storedId ? storedId : entry.Id;
         var sealedPayload = SealedMemoryPayload.Encrypt(crypto, entry, canonicalId);
 
         // Both the active-grant row lock and the memory write live in ONE transaction.

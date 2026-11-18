@@ -100,3 +100,17 @@ The migration owner is explicitly allowed RLS SELECT only to support the
 fixed SECURITY DEFINER function under FORCE RLS in Azure non-superuser mode.
 A global zero count is NOT proof that the system can remove the legacy
 fallback; restore, backups/WAL, concurrency and signed release gates remain.
+
+## Approved legacy backfill inventory (#140 / ADR 0014)
+
+The offline backfill may accept an operator-provided private JSON inventory
+via `OMNIA_BACKFILL_INVENTORY_PATH`, instead of a single tenant/subject.
+This is NOT identity discovery or user consent. Require exact schema v1,
+explicit operatorApproved=true, strict nonduplicate tenant+owner pairs,
+max 1000 actors / 256KiB, absolute private file, no symlinks, no extra
+fields or group/world Unix permissions. Never log actor IDs, file paths,
+payloads, keys or DB exceptions. Reject API/audit/owner DB roles in the
+CLI via `PostgresBackfillRoleGuard`. Every actor remains scoped by RLS
+and advisory actor locks with bounded batches and retry-safe progress.
+No plaintext fallback or automatic NOT NULL schema cutover. A manifest
+result of zero applies ONLY to enumerated actors, not globally.

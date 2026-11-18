@@ -113,3 +113,49 @@ recovery KEK e test su Azure. La SELECT policy aggiuntiva vale solo per
 il proprietario di schema, che rimane un'identità DDL privilegiata.
 
 Decisione: [ADR 0013](../adr/0013-global-legacy-count-audit.md).
+## #140 — Inventario attori per backfill offline (ADR 0014)
+
+La CLI `src/backend/Omnia.Backfill` supporta ora **due modalità alternative**.
+La modalità per singolo attore conserva `OMNIA_BACKFILL_TENANT` e
+`OMNIA_BACKFILL_SUBJECT`. La nuova modalità multi-attore richiede invece
+`OMNIA_BACKFILL_INVENTORY_PATH`, percorso **assoluto** di un file JSON
+locale approvato dall'operatore. Non impostare i selettori singoli quando
+si utilizza l'inventario. Il file deve essere privato (Unix `chmod 600`
+o `chmod 400`, no symlink) e NON va committato, allegato ad issue o
+inserito negli artifact CI. Esempio esclusivamente sintetico:
+
+```json
+{
+  "schemaVersion": 1,
+  "operatorApproved": true,
+  "actors": [
+    { "tenantId": "tenant-sintetico", "ownerSubject": "alice-test" },
+    { "tenantId": "tenant-sintetico", "ownerSubject": "bob-test" }
+  ]
+}
+```
+
+Questo flag è soltanto un'attestazione operativa **non verificata**; l'operatore
+deve assicurare fuori banda la legittimità e completezza dell'inventario e
+l'autorizzazione alla manutenzione. L'utility rifiuta manifest non conformi,
+duplicati, proprietà impreviste, più di 1000 attori e file oltre 256 KiB.
+La connessione `OMNIA_BACKFILL_DB` resta quella del ruolo dedicato
+`omnia_backfill`, con key ring in `OMNIA_BACKFILL_KEYRING_PATH`.
+Non usare le credenziali API, audit o schema-owner: il nuovo
+`PostgresBackfillRoleGuard` rifiuta quei privilegi.
+
+In ambiente isolato impostare la variabile `OMNIA_BACKFILL_INVENTORY_PATH`
+e lanciare la stessa CLI offline documentata sopra. Il processo esegue per
+ogni attore al massimo 100 batch (1–500 righe per batch), nel rispetto di
+RLS e dei lock condivisi con ingest/erasure. Stampa solo le somme aggregate.
+Exit 0 significa che **tutti gli attori elencati** non avevano più righe
+legacy all'ultima verifica; exit 2 segnala attori con residue; exit 1
+un errore, con rollback del batch corrente. Ripetere in sicurezza dopo
+un arresto, mantenendo tutte le versioni KEK necessarie.
+
+**Non** interpretare exit 0 come completamento globale del backfill:
+occorre controllare separatamente `Omnia.BackfillAudit` con ruolo count-only,
+completare restore drill, verificare backup, WAL, metadata e embeddings.
+La utility non elenca automaticamente soggetti e non attiva il cutover.
+
+Decisione: [ADR 0014](../adr/0014-approved-actor-manifest-backfill.md).

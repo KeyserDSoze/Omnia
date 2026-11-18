@@ -91,3 +91,15 @@ identity for FORCE RLS portability; never use schema-owner credentials
 for regular HTTP requests. The operator-visible count is sensitive
 operational metadata and must not be published. Zero is a point-in-time
 check, not a release sign-off or a backup erasure receipt.
+## Offline multi-actor backfill inventory boundary (#140 / ADR 0014)
+
+An offline maintenance operator can provide an explicit local approved
+actor manifest to the backfill CLI. The file contains sensitive tenant/
+subject identifiers: use private permissions, keep it out of Git/logs,
+audit access, and dispose of it under a defined policy after the task.
+The `operatorApproved` boolean does not prove consent, lawful basis,
+completeness or operator identity. Strict parsing and bounded processing
+prevent accidental extra actors and unbounded processing. The CLI's
+role guard denies API (INSERT/DELETE) and count-only auditor credentials.
+The per-manifest zero count remains separate from the privileged global
+audit: neither constitutes GDPR certification or backup erasure.

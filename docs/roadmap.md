@@ -112,3 +112,13 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   cutover con `sealed_payload NOT NULL` non ancora effettuati.
 - [ ] Il numero globale zero non certifica la protezione di embedding,
   metadata e backup, né la conformità GDPR.
+## #140 — Batch retry-safe per inventario di soggetti approvati (2026-11-18)
+
+- [x] Slice implementativo con parser di manifest amministrativo JSON
+  strettamente validato, file privato e zero identificatori nei log.
+- [x] Worker per ciascun attore autorizzato con limiti su batch ed exit
+  code di incompletezza; stesso Postgres RLS/actor-lock/crypto esistente.
+- [x] Guard dedicato al ruolo data-backfill che rifiuta credenziali API e audit.
+- [ ] Verificare stato verde dell'ultimo commit su Actions e collegare a #140.
+- [ ] Non ancora effettuati inventario completo, restore drill, cutover schema,
+  validazione Azure, vault/rotazione persisted, backup/WAL, embedding e legal gate.

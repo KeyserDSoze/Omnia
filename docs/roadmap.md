@@ -85,3 +85,10 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Worker schedulato 15 minuti, batch limitati, delete raw/normalized/embedding e ruolo DB dedicato senza accesso diretto alle tabelle.
 - [x] Test PostgreSQL di expiry, isolamento utenti e privilegi, batch/idempotenza (CI finale da associare alla sotto-issue #136).
 - [ ] #32 resta aperta: policy differenziate per finalità/source/categoria/tenant, consenso/audit, backup/WAL e provider esterni, worker isolato con identità di workload e osservabilità/SLO, parità Azure verificata, review GDPR specifica.
+
+## Privacy #33 — primo componente crittografico (#137, 2026-11-18)
+
+- [x] Porta `IEnvelopeEncryption` senza SDK cloud e codec Infra AES-256-GCM con per-payload DEK, KEK versionata, associated data tenant/subject/purpose/record e formato binario esplicito.
+- [x] Keyring letta da file esterno (senza chiavi di default) con fail-closed su chiavi malformate o mancanti; rotazione tramite `Rewrap` e recupero con nuova chiave.
+- [x] Test crittografici reali per roundtrip, randomizzazione, manomissione, cross-tenant/user, ID record/finalità, rotazione e reinizializzazione (link CI da riportare in #137).
+- [ ] **#33 OPEN:** integrazione con storage raw/normalized/summary/media/token e derivati pgvector, backfill senza plaintext, vault Azure/OpenBao, gestione chiavi per ambienti/tenant, disaster recovery, audit e scansione segreti; nessun trattamento dati reali in assenza dei gate.

@@ -65,3 +65,7 @@ Le fasi sono **dipendenze funzionali**, non date promesse. M1 è il primo obiett
 Le feature #19 (contract DI), #33 (vault/rotation), #62 (object storage), #63 (queue) e #64 (AI) coprono anche la necessità di poter provare una soluzione tutta OSS: PostgreSQL/pgvector, Keycloak, MinIO, RabbitMQ, Ollama/Whisper, OpenBao (secrets) e, solo quando serve, Valkey (cache) e SignalR (feedback realtime). Questi sono **target**; la disponibilità corrente è descritta in README/architecture e non deve essere confusa con un ambiente completo. Nessun adapter deve introdurre una dipendenza Azure nel layer Domain/Application.
 
 **Decisione bloccante esterna:** #131 richiede una scelta esplicita del proprietario su licensing e policy legali prima del lancio. Nessuna licenza è stata selezionata automaticamente.
+
+## Delta verificato — #137 (18 novembre 2026)
+
+Prima base crittografica per #33, con `IEnvelopeEncryption` e AEAD AES-256-GCM/DEK-KEK, load key ring esterno e rewrap per key rotation. Questo è un **componente di libreria**, non significa che le colonne PostgreSQL o i token esistenti siano già cifrati. Non chiudere parent #33 sino a migrazione+backfill cifrati, vault OSS/Azure, external storage e restore test. Il conteggio delle issue nell'intestazione è storico: per lo stato corrente usare sempre l'API GitHub.

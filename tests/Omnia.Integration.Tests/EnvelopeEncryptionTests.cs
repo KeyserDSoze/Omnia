@@ -94,7 +94,7 @@ public sealed class EnvelopeEncryptionTests
 
         // After full rewrap, a restarted app with only the new KEK restores payload.
         var afterRestart = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64(
-            "new", new() { ["new"] = newKey }));
+            "new", new Dictionary<string, string>() { ["new"] = newKey }));
         Assert.Equal(plaintext, afterRestart.Open(rewrapped, scope));
         Assert.Equal(existing.Length, rewrapped.Length); // IDs have equal length.
         Assert.Equal(existing.AsSpan(existing.Length - plaintext.Length).ToArray(),

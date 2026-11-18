@@ -25,3 +25,9 @@ coverage/
 .DS_Store
 .idea/
 .vscode/
+
+# Local envelope key material — NEVER commit secrets
+*.keyring.json
+*.keys.json
+docker/secrets/
+**/.secrets/

@@ -45,6 +45,10 @@ public sealed class LegacyBackfillInventoryTests
             actors = new[] { new { tenantId = "tenant-a ", ownerSubject = "alice" } } });
         Assert.Throws<InvalidDataException>(() => LegacyBackfillInventory.Load(manifest.Path));
 
+        // Duplicate root properties must not bypass the required actors list.
+        manifest.WriteRaw("""{"schemaVersion":1,"operatorApproved":true,"operatorApproved":true}""");
+        Assert.Throws<InvalidDataException>(() => LegacyBackfillInventory.Load(manifest.Path));
+
         manifest.WriteRaw("""{"schemaVersion":1,"operatorApproved":true,"actors":[{"tenantId":"t","ownerSubject":"s","tenantId":"u"}]}""");
         Assert.Throws<InvalidDataException>(() => LegacyBackfillInventory.Load(manifest.Path));
     }

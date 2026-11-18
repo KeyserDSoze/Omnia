@@ -18,18 +18,28 @@ public sealed class LegacyMemoryBackfillTests
     {
         var adminCs = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
         var appCs = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
+        var backfillCs = Environment.GetEnvironmentVariable("OMNIA_TEST_BACKFILL_DB");
         Assert.False(string.IsNullOrWhiteSpace(adminCs));
         Assert.False(string.IsNullOrWhiteSpace(appCs));
+        Assert.False(string.IsNullOrWhiteSpace(backfillCs));
         await using var admin = NpgsqlDataSource.Create(adminCs!);
-        await new PostgresMigrator(admin, "omnia_app").MigrateAsync();
+        await new PostgresMigrator(admin, "omnia_app", "omnia_retention", "omnia_backfill").MigrateAsync();
         await using var app = NpgsqlDataSource.Create(appCs!);
         await PostgresRuntimeGuard.VerifyAsync(app);
         var crypto = TestEnvelopeCrypto.Create();
-        var worker = new PostgresLegacyMemoryBackfill(app, crypto);
+        await using var backfillDb = NpgsqlDataSource.Create(backfillCs!);
+        await PostgresRuntimeGuard.VerifyAsync(backfillDb);
+        var worker = new PostgresLegacyMemoryBackfill(backfillDb, crypto);
+        await using (var denied = backfillDb.CreateCommand("DELETE FROM memory_entries WHERE false"))
+        {
+            var error = await Assert.ThrowsAsync<PostgresException>(() => denied.ExecuteNonQueryAsync());
+            Assert.Equal("42501", error.SqlState);
+        }
         var tenant = "legacy-" + Guid.NewGuid().ToString("N");
         var otherTenant = "legacy-" + Guid.NewGuid().ToString("N");
         var marker = "LEGACY_SYNTHETIC_" + Guid.NewGuid().ToString("N");
-        var now = DateTimeOffset.UtcNow;
+        var clock = DateTimeOffset.UtcNow;
+        var now = new DateTimeOffset(clock.Ticks - (clock.Ticks % 10), TimeSpan.Zero);
         var oldReceived = now.AddDays(-31);
         var source = "manual";
         var aliceOne = Guid.NewGuid();
@@ -81,8 +91,8 @@ public sealed class LegacyMemoryBackfillTests
                 Assert.Equal(source, reader.GetString(8));
                 Assert.Equal(id == aliceOne ? marker + "-1" : marker + "-2",
                     reader.GetString(9));
-                Assert.Equal(null, reader.IsDBNull(10) ? null : reader.GetString(10));
-                Assert.Equal(now, reader.GetFieldValue<DateTimeOffset>(11));
+                Assert.True(reader.IsDBNull(10));
+                Assert.Equal(originalReceived, reader.GetFieldValue<DateTimeOffset>(11));
             }
             Assert.Equal(2, count);
         }
@@ -114,7 +124,7 @@ public sealed class LegacyMemoryBackfillTests
     [Fact]
     public async Task InvalidBatchSizeIsRejectedWithoutTouchingData()
     {
-        var cs = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
+        var cs = Environment.GetEnvironmentVariable("OMNIA_TEST_BACKFILL_DB");
         Assert.False(string.IsNullOrWhiteSpace(cs));
         await using var app = NpgsqlDataSource.Create(cs!);
         var worker = new PostgresLegacyMemoryBackfill(app, TestEnvelopeCrypto.Create());
@@ -152,7 +162,7 @@ public sealed class LegacyMemoryBackfillTests
             insert.Parameters.AddWithValue("content", fixture.Content);
             insert.Parameters.AddWithValue("json", JsonSerializer.Serialize(
                 new { text = fixture.Content }));
-            insert.Parameters.AddWithValue("occurred", DateTimeOffset.UtcNow);
+            insert.Parameters.AddWithValue("occurred", fixture.Received);
             insert.Parameters.AddWithValue("received", fixture.Received);
             await insert.ExecuteNonQueryAsync();
         }

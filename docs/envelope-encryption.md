@@ -1,6 +1,6 @@
 # Omnia — Envelope encryption v1 (base crittografica #137)
 
-**Stato:** codec indipendente e testato. **Non è attualmente collegato a PostgreSQL, API, mobile, audio o token.** La parent #33 è aperta; il trattamento di dati veri è vietato finché non vengono completati i controlli privacy e security.
+**Stato aggiornato al 2026-11-18:** codec testato e integrato per i **nuovi raw/normalized/summary/tags** su PostgreSQL (#139); il backfill per attori approvati è disponibile ma **non è stato eseguito sull'intero database** (#140). Restano scoperti vettori, metadati sensibili, media, token, backup/WAL e vault. La parent #33 è aperta e l'uso di dati veri resta vietato fino ai gate privacy e security.
 
 ## Contratto di libreria
 
@@ -23,7 +23,7 @@ Non esistono chiavi predefinite o segreti in Git. Il formato di un file JSON mon
 }
 ```
 
-Generare una chiave crittograficamente casuale, p.es. `openssl rand -base64 32`, e conservare il file con permessi stretti in un secret mount o vault, non nel bundle Web/Expo, issue, Actions artifact o log. Invocare `EnvelopeKeyRing.FromFile(absolutePath)` da un processo autorizzato, oppure `FromBase64(activeId, keysFromTrustedKms)` dopo l'acquisizione da provider fidato. Il loader rifiuta path relativi, file troppo grandi, JSON malformato, ID fuori whitelist e KEK non esattamente 32 byte; non include chiavi nei messaggi di errore. Nessuna configurazione API/DI usa ancora queste funzioni.
+Generare una chiave crittograficamente casuale, p.es. `openssl rand -base64 32`, e conservare il file con permessi stretti in un secret mount o vault, non nel bundle Web/Expo, issue, Actions artifact o log. Invocare `EnvelopeKeyRing.FromFile(absolutePath)` da un processo autorizzato, oppure `FromBase64(activeId, keysFromTrustedKms)` dopo l'acquisizione da provider fidato. Il loader rifiuta path relativi, file troppo grandi, JSON malformato, ID fuori whitelist e KEK non esattamente 32 byte; non include chiavi nei messaggi di errore. L'API ora carica obbligatoriamente il file esterno tramite `Crypto:KeyRingPath`; in sua assenza fallisce all'avvio. Nessuna KEK entra nel bundle mobile/browser. L'uso della keyring su file rimane solo un adapter di sviluppo/test, non un vault production-ready.
 
 ## Rotazione e recovery
 
@@ -34,10 +34,15 @@ Generare una chiave crittograficamente casuale, p.es. `openssl rand -base64 32`,
 
 ## Restante lavoro obbligatorio di #33
 
-Inventario campi sensibili `raw_content`, `normalized_json`, `summary`, `tags`, `embedding` (pgvector ricerca vs ciphertext), consensi, audio device, credenziali connettori, token OAuth, log e backup. Per ogni store progettare cifratura autentificata, backfill transazionale non espositivo, RLS, esporto portabile, cancellazione e TTL; integrazione Key Vault/OpenBao e workload identity; test di migrazione e recovery, controllo delle chiavi, scansione CI di segreti e sicurezza endpoint. Fino ad allora i dati del PostgreSQL primario **sono ancora archiviati nelle colonne attuali in chiaro applicativo** e non va dichiarata la soluzione `encrypted at rest`.
+Inventario campi sensibili `raw_content`, `normalized_json`, `summary`, `tags`, `embedding` (pgvector ricerca vs ciphertext), consensi, audio device, credenziali connettori, token OAuth, log e backup. Per ogni store progettare cifratura autentificata, backfill transazionale non espositivo, RLS, esporto portabile, cancellazione e TTL; integrazione Key Vault/OpenBao e workload identity; test di migrazione e recovery, controllo delle chiavi, scansione CI di segreti e sicurezza endpoint. Le nuove note redigono i quattro campi e salvano la busta cifrata; **le righe legacy non ancora migrate possono restare in chiaro**. Anche le colonne `embedding`, `source`, `external_id`, i timestamp e altri metadati, così come i backup precedenti, non sono protetti da questo codec. Non dichiarare che tutti i dati siano `encrypted at rest`.
 
 ## Riferimenti
 
 - OWASP [Cryptographic Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
 - OWASP [Key Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html)
 - Microsoft [.NET 10 AesGcm constructors/tag size](https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.aesgcm.-ctor?view=net-10.0)
+
+
+## Evidence di ripristino sintetico (#140, ADR 0015)
+
+La CI esegue ora `pg_dump -Fc` e `pg_restore` PostgreSQL reale verso un secondo database nello **stesso cluster usa-e-getta**, prova l'apertura della busta con vecchia KEK mantenuta nel ring e il fallimento se la KEK storica manca. Verifica anche export, RLS, retention e cancellazione nel clone. Per dettagli e limiti consultare [docs/restore-rehearsal.md](restore-rehearsal.md). Questa prova non include PITR/WAL, cluster Azure separato, gestione di chiavi in vault o cancellazione da backup reali.

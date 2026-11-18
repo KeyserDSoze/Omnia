@@ -43,7 +43,12 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
               normalized_json = EXCLUDED.normalized_json,
               summary = EXCLUDED.summary,
               tags = EXCLUDED.tags, occurred_at = EXCLUDED.occurred_at,
-              embedding = EXCLUDED.embedding, embedding_model = EXCLUDED.embedding_model
+              embedding = EXCLUDED.embedding, embedding_model = EXCLUDED.embedding_model,
+              -- A retry of a live key MUST NOT extend retention.
+              -- A new explicit capture of an already expired key starts a fresh TTL.
+              expires_at = CASE
+                  WHEN memory_entries.expires_at <= now() THEN now() + interval '30 days'
+                  ELSE memory_entries.expires_at END
             RETURNING id
             """, conn, tx);
         command.Parameters.AddWithValue("id", entry.Id);
@@ -75,6 +80,7 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db) : IMemoryRepos
             SELECT id, source, summary, tags, occurred_at, embedding IS NOT NULL
             FROM memory_entries
             WHERE tenant_id = @tenant AND owner_sub = @subject
+              AND expires_at > now()
             ORDER BY occurred_at DESC, id DESC LIMIT @limit
             """, scope.Connection, scope.Transaction);
         command.Parameters.AddWithValue("tenant", tenantId);

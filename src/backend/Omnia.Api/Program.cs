@@ -16,11 +16,18 @@ if (string.IsNullOrWhiteSpace(connection))
 var migrationConnection = builder.Configuration["Database:MigrationConnectionString"];
 if (string.IsNullOrWhiteSpace(migrationConnection))
     throw new InvalidOperationException("Database:MigrationConnectionString is required for schema migrations.");
+var retentionConnection = builder.Configuration["Database:RetentionConnectionString"];
+if (string.IsNullOrWhiteSpace(retentionConnection))
+    throw new InvalidOperationException("Database:RetentionConnectionString is required for automated expiry.");
+var retentionUser = new NpgsqlConnectionStringBuilder(retentionConnection).Username;
 var runtimeUser = new NpgsqlConnectionStringBuilder(connection).Username;
 var migrationUser = new NpgsqlConnectionStringBuilder(migrationConnection).Username;
 if (string.IsNullOrWhiteSpace(runtimeUser) || string.IsNullOrWhiteSpace(migrationUser) ||
-    string.Equals(runtimeUser, migrationUser, StringComparison.OrdinalIgnoreCase))
-    throw new InvalidOperationException("Runtime and migration PostgreSQL identities must be distinct.");
+    string.IsNullOrWhiteSpace(retentionUser) ||
+    string.Equals(runtimeUser, migrationUser, StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(retentionUser, migrationUser, StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(runtimeUser, retentionUser, StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("Runtime, retention and migration PostgreSQL identities must be distinct.");
 var issuer = builder.Configuration["Auth:Issuer"];
 var audience = builder.Configuration["Auth:Audience"];
 if (!Uri.TryCreate(issuer, UriKind.Absolute, out var authority) ||
@@ -85,6 +92,11 @@ builder.Services.AddCors(options => options.AddPolicy("browser", policy =>
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connection));
 builder.Services.AddKeyedSingleton<NpgsqlDataSource>("migrations",
     (_, _) => NpgsqlDataSource.Create(migrationConnection));
+builder.Services.AddKeyedSingleton<NpgsqlDataSource>("retention",
+    (_, _) => NpgsqlDataSource.Create(retentionConnection));
+builder.Services.AddHostedService(sp => new RetentionSweepService(
+    sp.GetRequiredKeyedService<NpgsqlDataSource>("retention"),
+    sp.GetRequiredService<ILogger<RetentionSweepService>>()));
 builder.Services.AddScoped<IMemoryRepository, PostgresMemoryRepository>();
 builder.Services.AddScoped<PostgresConsentRepository>();
 builder.Services.AddScoped<IConsentRepository>(sp => sp.GetRequiredService<PostgresConsentRepository>());
@@ -94,7 +106,7 @@ builder.Services.AddScoped<IConsentService, ConsentService>();
 builder.Services.AddScoped<IMemoryCatalog, MemoryCatalog>();
 builder.Services.AddScoped<IPersonalDataService, PostgresPersonalDataService>();
 builder.Services.AddSingleton(sp => new PostgresMigrator(
-    sp.GetRequiredKeyedService<NpgsqlDataSource>("migrations"), runtimeUser));
+    sp.GetRequiredKeyedService<NpgsqlDataSource>("migrations"), runtimeUser, retentionUser));
 var provider = (builder.Configuration["Embeddings:Provider"] ?? "none").ToLowerInvariant();
 var model = builder.Configuration["Embeddings:Model"] ??
     (provider == "ollama" ? "nomic-embed-text" : "text-embedding-3-small");
@@ -247,6 +259,8 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<PostgresMigrator>().MigrateAsync();
     await PostgresRuntimeGuard.VerifyAsync(
         scope.ServiceProvider.GetRequiredService<NpgsqlDataSource>());
+    await PostgresRetentionRepository.VerifyWorkerRoleAsync(
+        scope.ServiceProvider.GetRequiredKeyedService<NpgsqlDataSource>("retention"));
 }
 await app.RunAsync();
 

@@ -77,3 +77,11 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] UI Web autenticata per export e cancellazione con conferma esplicita; tests PostgreSQL e browser Keycloak reali (evidenze CI da riportare nelle issue).
 - [ ] Erasure/export degli object store, allegati/audio, cache, code, connettori, servizi AI e backup; job con prova di propagazione, tombstones, audit minimizzato e policy per eccezioni; resta #31 aperta.
 - [ ] Gestione retention (#32), cifratura (#33), Azure production/procedure e audit legale prima di dati reali.
+
+## Privacy #32 — prima retention server-side delle note (#136, 2026-11-18)
+
+- [x] TTL 30 giorni da `received_at`, fissato dal server, backfill storico basato sulla data originale, niente estensione con retry idempotente.
+- [x] Timeline senza note scadute, export con `expiresAt` e UI con informativa trasparente; consenso mantiene scadenze separate.
+- [x] Worker schedulato 15 minuti, batch limitati, delete raw/normalized/embedding e ruolo DB dedicato senza accesso diretto alle tabelle.
+- [x] Test PostgreSQL di expiry, isolamento utenti e privilegi, batch/idempotenza (CI finale da associare alla sotto-issue #136).
+- [ ] #32 resta aperta: policy differenziate per finalità/source/categoria/tenant, consenso/audit, backup/WAL e provider esterni, worker isolato con identità di workload e osservabilità/SLO, parità Azure verificata, review GDPR specifica.

@@ -23,10 +23,13 @@ jobs:
           set -euo pipefail
           password="$(openssl rand -hex 24)"
           app_password="$(openssl rand -hex 24)"
+          retention_password="$(openssl rand -hex 24)"
           echo "::add-mask::$password"
           echo "::add-mask::$app_password"
+          echo "::add-mask::$retention_password"
           echo "OMNIA_TEST_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia;Password=$password" >> "$GITHUB_ENV"
           echo "OMNIA_TEST_APP_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_app;Password=$app_password" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_RETENTION_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_retention;Password=$retention_password" >> "$GITHUB_ENV"
           docker run -d --rm --name omnia-ci-pg \
             -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_test \
             -e "POSTGRES_PASSWORD=$password" \
@@ -37,10 +40,14 @@ jobs:
           done
           docker exec omnia-ci-pg pg_isready -U omnia -d omnia_test
           docker exec -i omnia-ci-pg psql -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_test -v app_password="$app_password" <<'SQL'
+            -U omnia -d omnia_test -v app_password="$app_password" -v retention_password="$retention_password" <<'SQL'
           SELECT format(
             'CREATE ROLE omnia_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
             :'app_password'
+          ) \gexec
+          SELECT format(
+            'CREATE ROLE omnia_retention LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            :'retention_password'
           ) \gexec
           SQL
       - name: xUnit real PostgreSQL integration

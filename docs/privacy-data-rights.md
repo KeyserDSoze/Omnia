@@ -44,3 +44,9 @@ Riferimenti ufficiali: Regolamento UE 2016/679 artt. 15, 17, 19, 20, https://eur
 - `tests/Omnia.Integration.Tests/PersonalDataTests.cs`: pgvector PostgreSQL reale con runtime non owner, export con embedding e grant history, isolamento same-tenant/cross-tenant, erasure idempotente, nessuna riacquisizione senza nuovo grant.
 - `src/mobile/e2e/auth-sync.spec.ts`: provider Keycloak reale, JWT autentico, UI conferma e download, verifica di cancellazione e persistenza delle note dell'altro utente.
 - `tests/mobile-unit/web-cloud.test.ts`: no cookies/redirects nella fetch, error handling e body di conferma.
+
+## Retention primaria delle note (#136)
+
+Le note hanno `expires_at` a 30 giorni da `received_at`. In timeline non si vedono oltre scadenza; il purge automatico cancella dal database principale raw, normalized, summary e vettori. Finché una riga non è stata fisicamente rimossa, l'export include anche i suoi dati e il timestamp di scadenza, a tutela della completezza dell'accesso. Se un utente elimina l'intero account dal DB via API, la cancellazione immediata #135 prevale senza attendere lo scheduler. Nessuna garanzia di cancellazione istantanea alla scadenza; i cicli sono ogni 15 minuti e si fermano durante outage, con backlog eventualmente limitato a 5.000 record per ciclo.
+
+Questo non determina il periodo adeguato per dati di origine diversa né elimina duplicati su device, backup, log o provider. I consent grants mantengono uno storico separato e non vengono eliminati dal purge note.

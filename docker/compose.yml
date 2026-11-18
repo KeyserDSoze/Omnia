@@ -24,6 +24,7 @@ services:
       PGUSER: omnia
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
+      RETENTION_DB_PASSWORD: ${RETENTION_DB_PASSWORD:?Set RETENTION_DB_PASSWORD in .env}
     volumes:
       - ./db/bootstrap.sh:/opt/omnia/bootstrap.sh:ro
     entrypoint: ["bash", "/opt/omnia/bootstrap.sh"]
@@ -55,6 +56,7 @@ services:
       ASPNETCORE_URLS: http://+:8080
       Database__ConnectionString: Host=db;Port=5432;Database=omnia;Username=omnia_app;Password=${APP_DB_PASSWORD}
       Database__MigrationConnectionString: Host=db;Port=5432;Database=omnia;Username=omnia;Password=${POSTGRES_PASSWORD}
+      Database__RetentionConnectionString: Host=db;Port=5432;Database=omnia;Username=omnia_retention;Password=${RETENTION_DB_PASSWORD}
       Auth__Issuer: http://localhost:8081/realms/omnia
       Auth__MetadataAddress: http://keycloak:8080/realms/omnia/.well-known/openid-configuration
       Auth__Audience: omnia-api

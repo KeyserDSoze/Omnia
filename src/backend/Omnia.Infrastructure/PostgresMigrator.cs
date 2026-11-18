@@ -6,7 +6,7 @@ namespace Omnia.Infrastructure;
 /// <summary>
 /// Schema owner/migration credentials only, never the runtime API connection.
 /// </summary>
-public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = null)
+public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = null, string? retentionRole = null)
 {
     public async Task MigrateAsync(CancellationToken ct = default)
     {
@@ -60,6 +60,29 @@ public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = 
                 GRANT USAGE ON SCHEMA public TO {quoted};
                 GRANT SELECT, INSERT, UPDATE, DELETE
                     ON TABLE public.memory_entries, public.consent_grants TO {quoted};
+                """, conn, tx);
+            await grant.ExecuteNonQueryAsync(ct);
+        }
+        if (!string.IsNullOrWhiteSpace(retentionRole))
+        {
+            if (string.Equals(retentionRole, runtimeRole, StringComparison.Ordinal))
+                throw new InvalidOperationException("Retention and API roles must be distinct.");
+            await using var lookup = new NpgsqlCommand("""
+                SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = @role
+                """, conn, tx);
+            lookup.Parameters.AddWithValue("role", retentionRole);
+            await using (var reader = await lookup.ExecuteReaderAsync(ct))
+            {
+                if (!await reader.ReadAsync(ct) ||
+                    reader.GetBoolean(0) || reader.GetBoolean(1))
+                    throw new InvalidOperationException(
+                        "Retention role is missing or has SUPERUSER/BYPASSRLS.");
+            }
+            var quoted = new NpgsqlCommandBuilder().QuoteIdentifier(retentionRole);
+            await using var grant = new NpgsqlCommand($"""
+                GRANT USAGE ON SCHEMA public TO {quoted};
+                GRANT EXECUTE ON FUNCTION public.omnia_purge_expired_memories(integer)
+                    TO {quoted};
                 """, conn, tx);
             await grant.ExecuteNonQueryAsync(ct);
         }

@@ -325,6 +325,8 @@ export default function Home() {
             <Text style={[styles.hint, heading]}>
               Puoi esportare in JSON note, originali, dati elaborati e consensi dal database principale.
               Il file contiene dati personali: custodiscilo in un luogo sicuro.
+              Le note scadono 30 giorni dopo la ricezione nel database; la pulizia
+              automatica avviene periodicamente e non riguarda backup o servizi esterni.
             </Text>
             <Pressable testID="export-data" accessibilityRole="button"
               disabled={busy} onPress={() => { void exportPersonalData(); }}

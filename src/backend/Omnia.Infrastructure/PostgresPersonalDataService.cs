@@ -37,7 +37,7 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db) : IPersonal
         await using (var command = new NpgsqlCommand("""
             SELECT id, source, external_id, content_type, raw_content,
                    normalized_json::text, summary, tags, occurred_at,
-                   received_at, embedding::text, embedding_model
+                   received_at, expires_at, embedding::text, embedding_model
             FROM memory_entries
             WHERE tenant_id = @tenant AND owner_sub = @owner
             ORDER BY occurred_at, id
@@ -66,18 +66,19 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db) : IPersonal
                 writer.WriteEndArray();
                 writer.WriteString("occurredAt", reader.GetFieldValue<DateTimeOffset>(8));
                 writer.WriteString("receivedAt", reader.GetFieldValue<DateTimeOffset>(9));
+                writer.WriteString("expiresAt", reader.GetFieldValue<DateTimeOffset>(10));
                 writer.WritePropertyName("embedding");
-                if (reader.IsDBNull(10))
+                if (reader.IsDBNull(11))
                     writer.WriteNullValue();
                 else
                 {
                     // pgvector's text representation is a valid JSON numeric array.
                     // Export derived data too; not just the note's summary.
-                    using var vector = JsonDocument.Parse(reader.GetString(10));
+                    using var vector = JsonDocument.Parse(reader.GetString(11));
                     vector.RootElement.WriteTo(writer);
                 }
-                if (reader.IsDBNull(11)) writer.WriteNull("embeddingModel");
-                else writer.WriteString("embeddingModel", reader.GetString(11));
+                if (reader.IsDBNull(12)) writer.WriteNull("embeddingModel");
+                else writer.WriteString("embeddingModel", reader.GetString(12));
                 writer.WriteEndObject();
                 if (++rows % 25 == 0) await writer.FlushAsync(ct);
             }

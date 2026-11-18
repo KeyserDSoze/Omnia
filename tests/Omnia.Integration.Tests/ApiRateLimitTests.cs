@@ -23,6 +23,9 @@ public sealed class ApiRateLimitTests
         var runtimeDatabase = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
         Assert.False(string.IsNullOrWhiteSpace(runtimeDatabase),
             "A non-owner PostgreSQL test role is required.");
+        var retentionDatabase = Environment.GetEnvironmentVariable("OMNIA_TEST_RETENTION_DB");
+        Assert.False(string.IsNullOrWhiteSpace(retentionDatabase),
+            "A separate retention PostgreSQL test role is required.");
         // Minimal-host Program reads configuration at startup before test-host
         // callbacks; temporary environment values model the same secrets/flags
         // supplied to the production entrypoint, without hardcoding test creds.
@@ -30,6 +33,7 @@ public sealed class ApiRateLimitTests
         {
             ["Database__ConnectionString"] = runtimeDatabase,
             ["Database__MigrationConnectionString"] = database,
+            ["Database__RetentionConnectionString"] = retentionDatabase,
             ["Auth__Issuer"] = "http://localhost:8081/realms/omnia",
             ["Auth__Audience"] = "omnia-api",
             ["RateLimit__RequestsPerMinute"] = "3"
@@ -42,6 +46,7 @@ public sealed class ApiRateLimitTests
                 {
                     ["Database:ConnectionString"] = runtimeDatabase,
                     ["Database:MigrationConnectionString"] = database,
+                    ["Database:RetentionConnectionString"] = retentionDatabase,
                     ["Auth:Issuer"] = "http://localhost:8081/realms/omnia",
                     ["Auth:Audience"] = "omnia-api",
                     ["Embeddings:Provider"] = "none",

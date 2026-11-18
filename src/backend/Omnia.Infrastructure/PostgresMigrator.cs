@@ -6,7 +6,7 @@ namespace Omnia.Infrastructure;
 /// <summary>
 /// Schema owner/migration credentials only, never the runtime API connection.
 /// </summary>
-public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = null, string? retentionRole = null)
+public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = null, string? retentionRole = null, string? backfillRole = null)
 {
     public async Task MigrateAsync(CancellationToken ct = default)
     {
@@ -83,6 +83,32 @@ public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = 
                 GRANT USAGE ON SCHEMA public TO {quoted};
                 GRANT EXECUTE ON FUNCTION public.omnia_purge_expired_memories(integer)
                     TO {quoted};
+                """, conn, tx);
+            await grant.ExecuteNonQueryAsync(ct);
+        }
+        if (!string.IsNullOrWhiteSpace(backfillRole))
+        {
+            if (string.Equals(backfillRole, runtimeRole, StringComparison.Ordinal) ||
+                string.Equals(backfillRole, retentionRole, StringComparison.Ordinal))
+                throw new InvalidOperationException("Backfill role must be distinct.");
+            await using var lookup = new NpgsqlCommand("""
+                SELECT r.rolsuper, r.rolbypassrls,
+                    pg_has_role(r.oid, (SELECT relowner FROM pg_class
+                        WHERE oid = 'public.memory_entries'::regclass), 'MEMBER')
+                FROM pg_roles r WHERE r.rolname = @role
+                """, conn, tx);
+            lookup.Parameters.AddWithValue("role", backfillRole);
+            await using (var reader = await lookup.ExecuteReaderAsync(ct))
+            {
+                if (!await reader.ReadAsync(ct) || reader.GetBoolean(0) ||
+                    reader.GetBoolean(1) || reader.GetBoolean(2))
+                    throw new InvalidOperationException(
+                        "Backfill role must be non-owner without SUPERUSER/BYPASSRLS.");
+            }
+            var quoted = new NpgsqlCommandBuilder().QuoteIdentifier(backfillRole);
+            await using var grant = new NpgsqlCommand($"""
+                GRANT USAGE ON SCHEMA public TO {quoted};
+                GRANT SELECT, UPDATE ON TABLE public.memory_entries TO {quoted};
                 """, conn, tx);
             await grant.ExecuteNonQueryAsync(ct);
         }

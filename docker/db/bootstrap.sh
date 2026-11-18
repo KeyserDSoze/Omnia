@@ -31,3 +31,20 @@ SELECT format(
 )
 \gexec
 SQL
+
+# Backfill is opt-in and never borrows the API or migration identity.
+if [[ -n "${BACKFILL_DB_PASSWORD:-}" ]]; then
+  psql -v ON_ERROR_STOP=1 -v backfill_password="$BACKFILL_DB_PASSWORD" <<'SQL'
+SELECT format(
+  'CREATE ROLE omnia_backfill LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+  :'backfill_password'
+)
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'omnia_backfill')
+\gexec
+SELECT format(
+  'ALTER ROLE omnia_backfill PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+  :'backfill_password'
+)
+\gexec
+SQL
+fi

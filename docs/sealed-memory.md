@@ -80,3 +80,36 @@ count(sealed_payload IS NULL)=0, failure-injection e race test erase/capture,
 restore/backup, Azure managed PostgreSQL e cutover schema/fallback.
 L'esistenza dell'utility non consente l'uso di dati reali.
 Vedere [ADR 0012](../adr/0012-actor-scoped-offline-legacy-backfill.md).
+
+## #140 — Contatore globale riservato (ADR 0013)
+
+La nuova migrazione `0006_legacy_global_audit.sql` introduce un conteggio
+**esatto** delle righe `sealed_payload IS NULL` in tutto il PostgreSQL
+primario, incluse quelle scadute non ancora eliminate dalla retention.
+La funzione non restituisce ID di utenti, tenant né contenuti. Non è un
+endpoint API e non espone la lista di soggetti da migrare.
+
+L'account `omnia_backfill_audit` deve essere provisionato separatamente
+dalle identità API, schema owner, retention e backfill. La grant `EXECUTE`
+è opt-in da `PostgresMigrator`; nessuna credenziale o chiave in Git.
+Per Docker locale impostare password casuale in
+`BACKFILL_AUDIT_DB_PASSWORD` dentro `docker/.env`, eseguire `db-bootstrap`,
+quindi impostare `OMNIA_BACKFILL_AUDIT_ROLE=omnia_backfill_audit` prima
+del migrator. In Azure il provisioning e la prova con owner non-superuser
+devono essere verificati separatamente.
+
+Con sola credenziale audit in `OMNIA_BACKFILL_AUDIT_DB` eseguire offline:
+
+```sh
+dotnet run --project src/backend/Omnia.BackfillAudit/Omnia.BackfillAudit.csproj -c Release
+```
+
+Exit code 0 = zero legacy nella fotografia transazionale del conteggio;
+2 = righe legacy ancora presenti; 1 = configurazione/privilegi/DB errati.
+L'utility non può leggere le righe né cifrarle. Non esportare conteggi
+in log pubblici. Zero non autorizza automatic cutover; prima occorrono
+inventario e piano di arresto scritture, restore drill, verifica backup/WAL,
+recovery KEK e test su Azure. La SELECT policy aggiuntiva vale solo per
+il proprietario di schema, che rimane un'identità DDL privilegiata.
+
+Decisione: [ADR 0013](../adr/0013-global-legacy-count-audit.md).

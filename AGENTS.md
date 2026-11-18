@@ -86,3 +86,17 @@ canonical UUID, received_at/TTL, occurred_at, provenance, embedding or consent.
 Never log plaintext, account identifiers or keys. Keep legacy reads intact
 until a verified GLOBAL zero-legacy gate, restore rehearsal and schema cutover;
 per-actor count zero is not global completion. #140/#138/#33 remain open.
+
+
+## Count-only global legacy audit (#140 / ADR 0013)
+
+The new offline `Omnia.BackfillAudit` executable, unlike the actor-scoped
+backfill worker, obtains an exact GLOBAL legacy row count via the fixed SQL
+function `public.omnia_count_legacy_memories()` only. NEVER register it in
+HTTP DI or grant EXECUTE to the runtime, retention or backfill role. Its
+separate `omnia_backfill_audit` identity has no direct SELECT/UPDATE/DELETE
+on any personal table and does not inherit schema ownership or BYPASSRLS.
+The migration owner is explicitly allowed RLS SELECT only to support the
+fixed SECURITY DEFINER function under FORCE RLS in Azure non-superuser mode.
+A global zero count is NOT proof that the system can remove the legacy
+fallback; restore, backups/WAL, concurrency and signed release gates remain.

@@ -79,3 +79,15 @@ The new note body (raw, normalized JSON, summary and tags) uses the #137 `AesGcm
 This **does not** encrypt embeddings, external identifiers, source/type, timestamps, old legacy rows, consents, backup/WAL, AI provider copies, audio nor logs. The SQL owner and privileged migration identity can still read old data and metadata. The file KEK adapter is not an HSM/vault and must have restricted mount access. Avoid interpreting this work as complete GDPR compliance or blanket encryption-at-rest.
 
 References: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html ; https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html ; https://www.postgresql.org/docs/17/sql-altertable.html .
+
+## Global legacy backfill audit boundary (#140 / ADR 0013)
+
+`omnia_count_legacy_memories()` is an exact, count-only SECURITY DEFINER
+function with a controlled search path and revoked public EXECUTE.
+Only a dedicated, non-owner, no-table-permission auditor can invoke it;
+the API and data backfill worker are denied. The schema owner is
+intentionally allowed RLS SELECT exclusively as a privileged migration
+identity for FORCE RLS portability; never use schema-owner credentials
+for regular HTTP requests. The operator-visible count is sensitive
+operational metadata and must not be published. Zero is a point-in-time
+check, not a release sign-off or a backup erasure receipt.

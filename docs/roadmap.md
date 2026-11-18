@@ -101,3 +101,14 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] JSON export di tutte le righe con `storageProtection` per distinguere legacy e cifrate; erasure e retention già eliminano l'intera riga.
 - [x] Fail closed API senza key ring esterna, CI OIDC con file di chiave ephemeral random e Docker mount read-only (evidenze finali CI da registrare in #139).
 - [ ] Backfill completo di tutti i record legacy, cifratura dei vettori pgvector e metadata, versione di chiave per oggetto e rotazione persisted, AI privacy, vault OSS/Azure e backup restore verificati restano in #138/#33.
+
+## #140 — Read-only global legacy audit (2026-11-18)
+
+- [x] Nuova slice implementativa: funzione SECURITY DEFINER a output solo
+  `count(*)`, ruolo audit non-owner indipendente e CLI offline.
+- [x] Strategia FORCE RLS owner non-superuser documentata in ADR 0013.
+- [ ] Criteri di commit/Actions da allegare a #140 dopo GREEN verificato.
+- [ ] Inventario soggetti completo, rollback/restore, test Azure e schema
+  cutover con `sealed_payload NOT NULL` non ancora effettuati.
+- [ ] Il numero globale zero non certifica la protezione di embedding,
+  metadata e backup, né la conformità GDPR.

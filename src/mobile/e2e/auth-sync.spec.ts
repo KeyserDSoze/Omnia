@@ -124,7 +124,7 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
   // Export after revocation must still include historical note, its raw and
   // normalized content and all first-party grants, never another owner's data.
   const [firstDownload] = await Promise.all([
-    page.waitForEvent('download'),
+    page.waitForEvent('download', { timeout: 20_000 }),
     page.getByTestId('export-data').click()
   ]);
   expect(firstDownload.suggestedFilename()).toBe('omnia-personal-data.json');
@@ -156,7 +156,7 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
   await expect(page.getByTestId('memory-timeline').getByText(memoText)).toHaveCount(0);
 
   const [secondDownload] = await Promise.all([
-    page.waitForEvent('download'),
+    page.waitForEvent('download', { timeout: 20_000 }),
     page.getByTestId('export-data').click()
   ]);
   const emptyExport = JSON.parse(await readFile(await secondDownload.path(), 'utf8'));

@@ -136,7 +136,7 @@ jobs:
         working-directory: src/mobile
         env:
           OMNIA_REAL_OIDC_E2E: '1'
-        run: npx playwright test e2e/auth-sync.spec.ts --reporter=line
+        run: npx playwright test e2e/auth-sync.spec.ts --reporter=line --retries=0
 
       - name: Capture safe diagnostics on failure
         if: failure()

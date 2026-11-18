@@ -78,6 +78,15 @@ public sealed class PersonalDataTests
             Assert.Equal(2, root.GetProperty("consentGrants").GetArrayLength());
         }
 
+        // Kestrel forbids synchronous I/O. The export contract must never call
+        // Stream.Write or Stream.Flush synchronously, even during writer disposal.
+        await using (var asyncOnly = new AsyncWriteOnlyStream())
+        {
+            await data.WriteExportAsync(tenant, "alice", asyncOnly, default);
+            using var snapshot = JsonDocument.Parse(asyncOnly.Snapshot());
+            Assert.Single(snapshot.RootElement.GetProperty("memoryEntries").EnumerateArray());
+        }
+
         using (var bob = await ExportAsync(tenant, "bob"))
         {
             Assert.Single(bob.RootElement.GetProperty("memoryEntries").EnumerateArray());
@@ -111,6 +120,38 @@ public sealed class PersonalDataTests
         // Unscoped SQL sees nothing (no leaked actor GUC in a pooled connection).
         await using var unscoped = runtime.CreateCommand("SELECT count(*) FROM memory_entries");
         Assert.Equal(0L, (long)(await unscoped.ExecuteScalarAsync() ?? -1L));
+    }
+
+    private sealed class AsyncWriteOnlyStream : Stream
+    {
+        private readonly MemoryStream _data = new();
+        public byte[] Snapshot() => _data.ToArray();
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() => throw new InvalidOperationException("Sync flush is forbidden.");
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new InvalidOperationException("Sync write is forbidden.");
+        public override void Write(ReadOnlySpan<byte> buffer) =>
+            throw new InvalidOperationException("Sync write is forbidden.");
+        public override Task FlushAsync(CancellationToken ct) => Task.CompletedTask;
+        public override Task WriteAsync(byte[] buffer, int offset, int count,
+            CancellationToken ct) => _data.WriteAsync(buffer, offset, count, ct);
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
+            CancellationToken ct = default) => _data.WriteAsync(buffer, ct);
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override ValueTask DisposeAsync() => _data.DisposeAsync();
     }
 
     [Fact]

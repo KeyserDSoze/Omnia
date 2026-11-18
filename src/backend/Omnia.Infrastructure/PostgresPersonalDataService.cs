@@ -20,7 +20,7 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db) : IPersonal
         await PostgresActorLock.AcquireAsync(
             actor.Connection, actor.Transaction, tenantId, ownerSubject, ct);
 
-        using var writer = new Utf8JsonWriter(destination, new JsonWriterOptions
+        await using var writer = new Utf8JsonWriter(destination, new JsonWriterOptions
         {
             Indented = false,
             SkipValidation = false

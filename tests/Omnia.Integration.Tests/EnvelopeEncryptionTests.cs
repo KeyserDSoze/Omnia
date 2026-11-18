@@ -70,15 +70,15 @@ public sealed class EnvelopeEncryptionTests
     {
         var oldKey = FreshKey();
         var newKey = FreshKey();
-        var oldOnly = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64("old", new()
+        var oldOnly = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64("old", new Dictionary<string, string>()
         {
             ["old"] = oldKey
         }));
-        var oldAndNew = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64("new", new()
+        var oldAndNew = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64("new", new Dictionary<string, string>()
         {
             ["old"] = oldKey, ["new"] = newKey
         }));
-        var newOnly = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64("new", new()
+        var newOnly = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64("new", new Dictionary<string, string>()
         {
             ["new"] = newKey
         }));
@@ -143,15 +143,15 @@ public sealed class EnvelopeEncryptionTests
     [Fact]
     public void InvalidKeysScopesAndUnknownDecryptionKeysAreRejected()
     {
-        Assert.Throws<ArgumentException>(() => EnvelopeKeyRing.FromBase64("v1", new()
+        Assert.Throws<ArgumentException>(() => EnvelopeKeyRing.FromBase64("v1", new Dictionary<string, string>()
         { ["v1"] = Convert.ToBase64String(new byte[24]) }));
-        Assert.Throws<ArgumentException>(() => EnvelopeKeyRing.FromBase64("unknown", new()
+        Assert.Throws<ArgumentException>(() => EnvelopeKeyRing.FromBase64("unknown", new Dictionary<string, string>()
         { ["v1"] = FreshKey() }));
-        Assert.Throws<ArgumentException>(() => EnvelopeKeyRing.FromBase64("../escape", new()
+        Assert.Throws<ArgumentException>(() => EnvelopeKeyRing.FromBase64("../escape", new Dictionary<string, string>()
         { ["../escape"] = FreshKey() }));
-        var first = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64("v1", new()
+        var first = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64("v1", new Dictionary<string, string>()
         { ["v1"] = FreshKey() }));
-        var second = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64("v2", new()
+        var second = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromBase64("v2", new Dictionary<string, string>()
         { ["v2"] = FreshKey() }));
         var sealedBytes = first.Seal([1, 2, 3], Scope());
         Assert.ThrowsAny<CryptographicException>(() => second.Open(sealedBytes, Scope()));

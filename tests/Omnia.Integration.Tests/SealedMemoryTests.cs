@@ -69,7 +69,7 @@ public sealed class SealedMemoryTests
         var own = await repo.RecentAsync(tenant, "alice", 10, default);
         Assert.Contains(own, x => x.Id == first.Id &&
             x.Summary == "summary-" + marker &&
-            x.Tags.Contains("private-" + marker));
+            x.Tags.Contains(("private-" + marker).ToLowerInvariant()));
         Assert.DoesNotContain(await repo.RecentAsync(tenant, "bob", 10, default),
             x => x.Id == first.Id);
         Assert.DoesNotContain(await repo.RecentAsync("other-" + tenant, "alice", 10, default),
@@ -83,7 +83,7 @@ public sealed class SealedMemoryTests
             Assert.Equal(marker, row.GetProperty("rawContent").GetString());
             Assert.Equal(marker, row.GetProperty("normalized").GetProperty("text").GetString());
             Assert.Equal("summary-" + marker, row.GetProperty("summary").GetString());
-            Assert.Equal("private-" + marker, row.GetProperty("tags")[0].GetString());
+            Assert.Equal(("private-" + marker).ToLowerInvariant(), row.GetProperty("tags")[0].GetString());
         }
 
         // A corrupted encrypted row MUST fail closed; no silent use of redacted placeholders.

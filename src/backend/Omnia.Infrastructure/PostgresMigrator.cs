@@ -6,7 +6,7 @@ namespace Omnia.Infrastructure;
 /// <summary>
 /// Schema owner/migration credentials only, never the runtime API connection.
 /// </summary>
-public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = null, string? retentionRole = null, string? backfillRole = null)
+public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = null, string? retentionRole = null, string? backfillRole = null, string? auditRole = null)
 {
     public async Task MigrateAsync(CancellationToken ct = default)
     {
@@ -109,6 +109,40 @@ public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = 
             await using var grant = new NpgsqlCommand($"""
                 GRANT USAGE ON SCHEMA public TO {quoted};
                 GRANT SELECT, UPDATE ON TABLE public.memory_entries TO {quoted};
+                """, conn, tx);
+            await grant.ExecuteNonQueryAsync(ct);
+        }
+        if (!string.IsNullOrWhiteSpace(auditRole))
+        {
+            if (string.Equals(auditRole, runtimeRole, StringComparison.Ordinal) ||
+                string.Equals(auditRole, retentionRole, StringComparison.Ordinal) ||
+                string.Equals(auditRole, backfillRole, StringComparison.Ordinal))
+                throw new InvalidOperationException("Global audit role must be separate.");
+            await using var lookup = new NpgsqlCommand("""
+                SELECT r.rolsuper, r.rolbypassrls,
+                    pg_has_role(r.oid, (SELECT relowner FROM pg_class
+                       WHERE oid = 'public.memory_entries'::regclass), 'MEMBER'),
+                    has_table_privilege(r.oid, 'public.memory_entries',
+                       'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'),
+                    has_table_privilege(r.oid, 'public.consent_grants',
+                       'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+                FROM pg_roles r WHERE r.rolname = @role
+                """, conn, tx);
+            lookup.Parameters.AddWithValue("role", auditRole);
+            await using (var reader = await lookup.ExecuteReaderAsync(ct))
+            {
+                if (!await reader.ReadAsync(ct) ||
+                    reader.GetBoolean(0) || reader.GetBoolean(1) ||
+                    reader.GetBoolean(2) || reader.GetBoolean(3) ||
+                    reader.GetBoolean(4))
+                    throw new InvalidOperationException(
+                        "Audit role must have no bypass, ownership or personal-table privileges.");
+            }
+            var quoted = new NpgsqlCommandBuilder().QuoteIdentifier(auditRole);
+            await using var grant = new NpgsqlCommand($"""
+                GRANT USAGE ON SCHEMA public TO {quoted};
+                GRANT EXECUTE ON FUNCTION public.omnia_count_legacy_memories()
+                    TO {quoted};
                 """, conn, tx);
             await grant.ExecuteNonQueryAsync(ct);
         }

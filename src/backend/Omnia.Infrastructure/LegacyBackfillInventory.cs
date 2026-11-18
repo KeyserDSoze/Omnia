@@ -92,7 +92,8 @@ public static class LegacyBackfillInventory
         value == value.Trim() && !value.Any(char.IsControl);
 
     private static bool HasExactly(JsonElement obj, params string[] names) =>
-        obj.EnumerateObject().All(p => names.Contains(p.Name, Comparer));
+        obj.EnumerateObject().All(p => names.Contains(p.Name, Comparer)) &&
+        names.All(name => obj.TryGetProperty(name, out _));
 
     private static InvalidDataException Invalid() =>
         new("Invalid or unauthorized legacy backfill inventory.");

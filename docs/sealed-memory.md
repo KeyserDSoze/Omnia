@@ -32,3 +32,51 @@ La API **richiede** `Crypto:KeyRingPath` come percorso file assoluto leggibile a
 - OWASP Cryptographic Storage: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
 - OWASP Key Management: https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html
 - PostgreSQL ALTER TABLE: https://www.postgresql.org/docs/17/sql-altertable.html
+
+
+## #140 — Backfill offline per singolo attore (prima slice, non cutover globale)
+
+Un'utility separata da Omnia.Api è disponibile in src/backend/Omnia.Backfill.
+Non espone endpoint HTTP: accetta solo configurazione tramite environment e
+secret mounts protetti, mai dal client browser. Il ruolo PostgreSQL opzionale
+omnia_backfill è separato da API, migrazioni e retention, senza BYPASSRLS/
+ownership, con SELECT/UPDATE sulla sola tabella memory_entries. L'utility
+verifica FORCE RLS, seleziona un tenant e subject esplicitamente autorizzati,
+acquisisce PostgresActorLock prima di FOR UPDATE SKIP LOCKED, elabora batch
+fino a 500 righe e fa commit solo dopo sealing AES-GCM e redazione atomica.
+
+### Setup manuale sicuro (Docker locale)
+
+Nel file gitignored docker/.env generare una password casuale distinta per
+BACKFILL_DB_PASSWORD, avviare db-bootstrap e poi impostare
+OMNIA_BACKFILL_ROLE=omnia_backfill prima di avviare la API/migrator che
+concede i privilegi minimali. NON inserire il valore della password in Git.
+In staging e produzione provisionare il ruolo con DBA e secret vault;
+non usare il login API o owner per l'utility.
+
+Nel terminale amministrativo isolato esportare OMNIA_BACKFILL_DB come stringa
+Npgsql dell'identità omnia_backfill, OMNIA_BACKFILL_KEYRING_PATH come percorso
+assoluto alla keyring esistente (incluso vecchio key ID), OMNIA_BACKFILL_TENANT,
+OMNIA_BACKFILL_SUBJECT, e facoltativamente OMNIA_BACKFILL_BATCH_SIZE (1–500,
+default 100). Poi eseguire:
+
+```sh
+dotnet run --project src/backend/Omnia.Backfill/Omnia.Backfill.csproj -c Release
+```
+
+Output: solo numero di righe sigillate e rimanenti per l'attore.
+Exit 0 = nessun legacy per quell'attore al momento della verifica;
+exit 2 = esecuzione incompleta (limite 100 batch/concorrenza);
+exit 1 = errore, con rollback del batch corrente e messaggio sanificato.
+Rieseguire per ogni attore autorizzato con inventario esterno verificato.
+
+La utility NON recupera note eliminate, non proroga TTL né ricrea consensi;
+mantiene inalterati UUID, provenance, embedding e timestamp. L'atomicità
+protegge da arresto tra cifra e redazione, ma non elimina il plaintext già
+presente in WAL, backup e repliche precedenti.
+
+**#140 resta aperta:** mancano censimento globale sicuro, prova globale
+count(sealed_payload IS NULL)=0, failure-injection e race test erase/capture,
+restore/backup, Azure managed PostgreSQL e cutover schema/fallback.
+L'esistenza dell'utility non consente l'uso di dati reali.
+Vedere [ADR 0012](../adr/0012-actor-scoped-offline-legacy-backfill.md).

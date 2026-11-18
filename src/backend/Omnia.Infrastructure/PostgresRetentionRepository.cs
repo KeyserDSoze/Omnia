@@ -26,10 +26,10 @@ public sealed class PostgresRetentionRepository(NpgsqlDataSource workerDb)
     {
         await using var command = workerDb.CreateCommand("""
             SELECT r.rolsuper, r.rolbypassrls,
-                   pg_has_table_privilege(current_user::text, 'public.memory_entries', 'SELECT'),
-                   pg_has_table_privilege(current_user::text, 'public.memory_entries', 'DELETE'),
-                   pg_has_table_privilege(current_user::text, 'public.consent_grants', 'SELECT'),
-                   pg_has_function_privilege(current_user::text,
+                   has_table_privilege(current_user::text, 'public.memory_entries', 'SELECT'),
+                   has_table_privilege(current_user::text, 'public.memory_entries', 'DELETE'),
+                   has_table_privilege(current_user::text, 'public.consent_grants', 'SELECT'),
+                   has_function_privilege(current_user::text,
                        'public.omnia_purge_expired_memories(integer)', 'EXECUTE'),
                    pg_has_role(
                        (SELECT oid FROM pg_roles WHERE rolname = current_user),

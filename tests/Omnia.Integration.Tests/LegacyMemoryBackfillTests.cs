@@ -1,6 +1,8 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using Npgsql;
 using Omnia.Domain;
+using Omnia.Application;
 using Omnia.Infrastructure;
 using Xunit;
 
@@ -132,6 +134,101 @@ public sealed class LegacyMemoryBackfillTests
             () => worker.BackfillBatchAsync("fixture", "owner", 0, default));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => worker.BackfillBatchAsync("fixture", "owner", 501, default));
+    }
+
+    [Fact]
+    public async Task FailedEncryptionRollsBackEntireBatchAndCanBeRetried()
+    {
+        var adminCs = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
+        var backfillCs = Environment.GetEnvironmentVariable("OMNIA_TEST_BACKFILL_DB");
+        Assert.False(string.IsNullOrWhiteSpace(adminCs));
+        Assert.False(string.IsNullOrWhiteSpace(backfillCs));
+        await using var admin = NpgsqlDataSource.Create(adminCs!);
+        await new PostgresMigrator(admin, "omnia_app", "omnia_retention", "omnia_backfill")
+            .MigrateAsync();
+        await using var db = NpgsqlDataSource.Create(backfillCs!);
+        var tenant = "legacy-failure-" + Guid.NewGuid().ToString("N");
+        var now = DateTimeOffset.UtcNow;
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        await InsertLegacyAsync(admin, ids.Select((id, index) =>
+            (id, tenant, "alice", "failure-" + index, now, "synthetic")));
+        var crypto = TestEnvelopeCrypto.Create();
+        var broken = new PostgresLegacyMemoryBackfill(db, new FailOnSecondSeal(crypto));
+        await Assert.ThrowsAsync<CryptographicException>(
+            () => broken.BackfillBatchAsync(tenant, "alice", 2, default));
+
+        // A successful first UPDATE in an uncommitted batch must not survive
+        // failure while encrypting the second row.
+        await using (var check = admin.CreateCommand("""
+            SELECT count(*) FROM memory_entries
+            WHERE id = ANY(@ids) AND sealed_payload IS NULL
+              AND raw_content = 'synthetic'
+            """))
+        {
+            check.Parameters.AddWithValue("ids", ids);
+            Assert.Equal(2L, (long)(await check.ExecuteScalarAsync() ?? -1L));
+        }
+        var recovered = new PostgresLegacyMemoryBackfill(db, crypto);
+        Assert.Equal(2, await recovered.BackfillBatchAsync(tenant, "alice", 2, default));
+        Assert.Equal(0, await recovered.BackfillBatchAsync(tenant, "alice", 2, default));
+    }
+
+    [Fact]
+    public async Task BackfillCannotRecreateRowAfterConcurrentErasure()
+    {
+        var adminCs = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
+        var appCs = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
+        var backfillCs = Environment.GetEnvironmentVariable("OMNIA_TEST_BACKFILL_DB");
+        Assert.False(string.IsNullOrWhiteSpace(adminCs));
+        Assert.False(string.IsNullOrWhiteSpace(appCs));
+        Assert.False(string.IsNullOrWhiteSpace(backfillCs));
+        await using var admin = NpgsqlDataSource.Create(adminCs!);
+        await new PostgresMigrator(admin, "omnia_app", "omnia_retention", "omnia_backfill")
+            .MigrateAsync();
+        await using var app = NpgsqlDataSource.Create(appCs!);
+        await using var db = NpgsqlDataSource.Create(backfillCs!);
+        var tenant = "legacy-erase-" + Guid.NewGuid().ToString("N");
+        var id = Guid.NewGuid();
+        await InsertLegacyAsync(admin, [
+            (id, tenant, "alice", "concurrent", DateTimeOffset.UtcNow, "synthetic")
+        ]);
+        var worker = new PostgresLegacyMemoryBackfill(db, TestEnvelopeCrypto.Create());
+
+        // Simulate the API erasure transaction holding the same actor lock.
+        await using var erasure = await PostgresActorScope.OpenAsync(app, tenant, "alice", default);
+        await PostgresActorLock.AcquireAsync(erasure.Connection, erasure.Transaction,
+            tenant, "alice", default);
+        var inFlight = Task.Run(() => worker.BackfillBatchAsync(tenant, "alice", 10, default));
+        await Task.Delay(75);
+        await using (var delete = new NpgsqlCommand(
+            "DELETE FROM memory_entries WHERE id = @id",
+            erasure.Connection, erasure.Transaction))
+        {
+            delete.Parameters.AddWithValue("id", id);
+            Assert.Equal(1, await delete.ExecuteNonQueryAsync());
+        }
+        await erasure.CommitAsync();
+        Assert.Equal(0, await inFlight);
+        Assert.Equal(0L, await worker.CountLegacyAsync(tenant, "alice", default));
+        await using var check = admin.CreateCommand(
+            "SELECT count(*) FROM memory_entries WHERE id = @id");
+        check.Parameters.AddWithValue("id", id);
+        Assert.Equal(0L, (long)(await check.ExecuteScalarAsync() ?? -1L));
+    }
+
+    private sealed class FailOnSecondSeal(IEnvelopeEncryption inner) : IEnvelopeEncryption
+    {
+        private int _calls;
+        public byte[] Seal(ReadOnlySpan<byte> plaintext, EncryptionScope scope)
+        {
+            if (++_calls == 2)
+                throw new CryptographicException("Synthetic failure injection.");
+            return inner.Seal(plaintext, scope);
+        }
+        public byte[] Open(ReadOnlySpan<byte> envelope, EncryptionScope scope) =>
+            inner.Open(envelope, scope);
+        public byte[] Rewrap(ReadOnlySpan<byte> envelope, EncryptionScope scope) =>
+            inner.Rewrap(envelope, scope);
     }
 
     private static async Task InsertLegacyAsync(NpgsqlDataSource admin,

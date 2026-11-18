@@ -159,3 +159,15 @@ completare restore drill, verificare backup, WAL, metadata e embeddings.
 La utility non elenca automaticamente soggetti e non attiva il cutover.
 
 Decisione: [ADR 0014](../adr/0014-approved-actor-manifest-backfill.md).
+
+
+
+## #140 — PostgreSQL logical restore gate (ADR 0015)
+
+The synthetic CI rehearsal uses pg_dump -Fc and pg_restore into a
+second database in the same disposable PostgreSQL 17 cluster. It checks
+canonical AEAD AAD, raw/normalized/summary/tags, RLS timeline/export,
+original TTL/vector, key-version continuity, missing-old-key rejection
+and scope-limited erasure. This is not a real backup recovery or
+production readiness certificate. See
+[docs/restore-rehearsal.md](restore-rehearsal.md).

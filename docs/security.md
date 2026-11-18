@@ -103,3 +103,15 @@ prevent accidental extra actors and unbounded processing. The CLI's
 role guard denies API (INSERT/DELETE) and count-only auditor credentials.
 The per-manifest zero count remains separate from the privileged global
 audit: neither constitutes GDPR certification or backup erasure.
+
+
+
+## Restore rehearsal threat boundary (#140 / ADR 0015)
+
+Real pg_dump archives may contain legacy plaintext and unencrypted
+metadata/embeddings despite the sealed write path. The CI uses
+synthetic data only, temporary files, never artifacts, and a test-only
+CLI rejecting remote/prod database targets. A same-cluster logical
+restore does not prove cross-cluster roles, encrypted managed backups,
+physical WAL/PITR, vault recovery, or deletion from backup replicas.
+See [restore runbook](restore-rehearsal.md).

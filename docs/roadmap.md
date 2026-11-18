@@ -122,3 +122,15 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [ ] Verificare stato verde dell'ultimo commit su Actions e collegare a #140.
 - [ ] Non ancora effettuati inventario completo, restore drill, cutover schema,
   validazione Azure, vault/rotazione persisted, backup/WAL, embedding e legal gate.
+
+
+
+## #140 — Logical restore rehearsal (2026-11-18)
+
+- [x] Real synthetic PostgreSQL 17 pg_dump/pg_restore to a distinct
+  disposable database, with restored RLS, ciphertext and data rights.
+- [x] Retained old KEK allows recovery with a new active KEK; missing
+  historical KEK fails closed, and restored erasure leaves source intact.
+- [ ] Attach latest CI evidence to issue #140 after it actually finishes.
+- [ ] Physical/WAL/PITR, separate clusters, managed Azure backup, vault
+  restore, legacy global zero and sealed_payload cutover still missing.

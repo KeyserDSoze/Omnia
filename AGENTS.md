@@ -114,3 +114,16 @@ CLI via `PostgresBackfillRoleGuard`. Every actor remains scoped by RLS
 and advisory actor locks with bounded batches and retry-safe progress.
 No plaintext fallback or automatic NOT NULL schema cutover. A manifest
 result of zero applies ONLY to enumerated actors, not globally.
+
+
+
+## Synthetic PostgreSQL restore rehearsal (#140 / ADR 0015)
+
+The only supported restore-test harness runs in the disposable CI
+PostgreSQL 17 container. It MUST refuse non-test DB names, remote hosts,
+schema-owner credentials and production data. Real custom-format
+pg_dump/pg_restore tests are required in addition to codec tests.
+Retain historical KEKs to read restored ciphertext, prove missing KEKs
+fail closed, validate RLS, UUID/AAD, expiry, export and erasure isolation.
+Do not log/archive backup or keys. This does NOT prove cross-cluster
+recovery, encrypted backups, WAL/PITR, Azure vault, GDPR erasure or cutover.

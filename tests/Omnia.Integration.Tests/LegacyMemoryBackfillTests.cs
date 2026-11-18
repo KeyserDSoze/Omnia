@@ -207,7 +207,7 @@ public sealed class LegacyMemoryBackfillTests
             delete.Parameters.AddWithValue("id", id);
             Assert.Equal(1, await delete.ExecuteNonQueryAsync());
         }
-        await erasure.CommitAsync();
+        await erasure.CommitAsync(default);
         Assert.Equal(0, await inFlight);
         Assert.Equal(0L, await worker.CountLegacyAsync(tenant, "alice", default));
         await using var check = admin.CreateCommand(

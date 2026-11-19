@@ -41,6 +41,11 @@ OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- verify
 
+# A second, independently scoped synthetic actor must survive replay intact.
+OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- seed-peer
+
 # True physical basebackup: includes the database cluster, global roles,
 # extensions, RLS, and WAL up to the backup end. pg_verifybackup verifies
 # manifest/checksums before any restoration attempt.
@@ -65,6 +70,26 @@ docker exec "$source_container" psql -X -v ON_ERROR_STOP=1 -U omnia -d omnia_tes
 source_remaining="$(docker exec "$source_container" psql -U omnia -d omnia_test -Atqc \
   "SELECT count(*) FROM public.memory_entries WHERE tenant_id = 'omnia-restore-drill-synthetic' AND owner_sub = 'synthetic-owner-only'")"
 [[ "$source_remaining" == "0" ]] || { echo "Source destructive test action did not commit." >&2; exit 1; }
+
+# Outside-PGDATA synthetic deletion receipt. It is created only AFTER the
+# source DELETE commits, so restoring the earlier physical backup omits it.
+# The key and receipt never enter the PostgreSQL backup or CI artifacts.
+receipt_dir="$private_dir/reconciliation"
+mkdir -m 700 "$receipt_dir"
+receipt_file="$receipt_dir/receipt.json"
+receipt_key="$receipt_dir/hmac.key"
+receipt_mac="$receipt_dir/receipt.mac"
+jq -cn --arg id "$(openssl rand -hex 16)" \
+  '{schemaVersion:1,operation:"erase-actor",restorePoint:"omnia_ci_before_destructive_change",receiptId:$id,tenantId:"omnia-restore-drill-synthetic",ownerSubject:"synthetic-owner-only"}' > "$receipt_file"
+openssl rand -out "$receipt_key" 32
+chmod 600 "$receipt_file" "$receipt_key"
+OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+OMNIA_REHEARSAL_RECEIPT_PATH="$receipt_file" \
+OMNIA_REHEARSAL_RECEIPT_KEY_PATH="$receipt_key" \
+OMNIA_REHEARSAL_RECEIPT_MAC_PATH="$receipt_mac" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- sign-receipt
+chmod 600 "$receipt_mac"
 
 # Ensure the segment containing the named restore point and the later
 # destructive action is durable in the WAL archive before copying.
@@ -185,8 +210,41 @@ unset fresh_key
 OMNIA_REHEARSAL_DB="$target_cs" \
 OMNIA_REHEARSAL_KEYRING_PATH="$lost_ring" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- missing-old-key
+# RLS-scoped replay MUST be fail-closed for missing/tampered receipt,
+# then succeed with the out-of-backup authenticated deletion receipt.
+# Deliberately do not expose this recovered DB via the public API.
+reconcile() {
+  OMNIA_REHEARSAL_DB="$target_cs" \
+  OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  OMNIA_REHEARSAL_RECEIPT_PATH="$receipt_file" \
+  OMNIA_REHEARSAL_RECEIPT_KEY_PATH="$receipt_key" \
+  OMNIA_REHEARSAL_RECEIPT_MAC_PATH="$receipt_mac" \
+    dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- reconcile
+}
+mv "$receipt_mac" "$receipt_mac.held"
+if reconcile >/dev/null 2>&1; then
+  echo "Restore reconciliation accepted missing authentication." >&2; exit 1
+fi
+mv "$receipt_mac.held" "$receipt_mac"
+cp "$receipt_mac" "$receipt_mac.authentic"
+printf 'tampered' > "$receipt_mac"
+if reconcile >/dev/null 2>&1; then
+  echo "Restore reconciliation accepted a tampered receipt MAC." >&2; exit 1
+fi
+mv "$receipt_mac.authentic" "$receipt_mac"
+
+# Check the unauthorized attempt did not delete data or affect another actor.
 OMNIA_REHEARSAL_DB="$target_cs" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
-  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- erase
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- verify
+reconcile
+# Idempotent replay: an already-applied receipt is harmless to replay.
+reconcile
+OMNIA_REHEARSAL_DB="$target_cs" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- verify-erased
+OMNIA_REHEARSAL_DB="$target_cs" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- verify-peer
 
-echo "Physical basebackup + named WAL PITR recovered pre-deletion synthetic note."
+echo "Physical PITR plus authenticated out-of-backup erasure replay verified."

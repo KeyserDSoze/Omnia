@@ -96,9 +96,13 @@ builder.Services.AddKeyedSingleton<NpgsqlDataSource>("migrations",
     (_, _) => NpgsqlDataSource.Create(migrationConnection));
 builder.Services.AddKeyedSingleton<NpgsqlDataSource>("retention",
     (_, _) => NpgsqlDataSource.Create(retentionConnection));
+builder.Services.AddSingleton(sp => new RecoveryGuardedRetentionCycle(
+    sp.GetRequiredService<IConfiguration>(),
+    sp.GetRequiredService<IHostEnvironment>().IsDevelopment()));
 builder.Services.AddHostedService(sp => new RetentionSweepService(
     sp.GetRequiredKeyedService<NpgsqlDataSource>("retention"),
-    sp.GetRequiredService<ILogger<RetentionSweepService>>()));
+    sp.GetRequiredService<ILogger<RetentionSweepService>>(),
+    sp.GetRequiredService<RecoveryGuardedRetentionCycle>()));
 var keyRingPath = builder.Configuration["Crypto:KeyRingPath"];
 if (string.IsNullOrWhiteSpace(keyRingPath))
     throw new InvalidOperationException("Crypto:KeyRingPath is required; unsealed memory writes are forbidden.");

@@ -9,7 +9,8 @@ namespace Omnia.Api;
 /// Each SQL call uses SKIP LOCKED, so multiple API replicas cannot double-delete.
 /// </summary>
 public sealed class RetentionSweepService(
-    NpgsqlDataSource retentionDb, ILogger<RetentionSweepService> logger)
+    NpgsqlDataSource retentionDb, ILogger<RetentionSweepService> logger,
+    RecoveryGuardedRetentionCycle recoveryCycle)
     : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
@@ -36,13 +37,10 @@ public sealed class RetentionSweepService(
         try
         {
             var repository = new PostgresRetentionRepository(retentionDb);
-            var deleted = 0;
-            for (var i = 0; i < MaxBatchesPerCycle; i++)
-            {
-                var count = await repository.PurgeBatchAsync(BatchSize, ct);
-                deleted += count;
-                if (count < BatchSize) break;
-            }
+            // Recheck the operator-controlled recovery state before each
+            // SQL batch. Already-running SQL cannot be preempted by a marker.
+            var deleted = await recoveryCycle.RunAsync(
+                repository.PurgeBatchAsync, BatchSize, MaxBatchesPerCycle, ct);
             if (deleted > 0)
                 logger.LogInformation("Retention sweep removed {Count} expired database notes.", deleted);
         }

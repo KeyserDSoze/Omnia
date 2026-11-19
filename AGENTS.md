@@ -193,3 +193,17 @@ trust browser headers, or put this file in the DB/backup/container image.
 IMPORTANT: a `ready\n` marker is NOT an authenticated complete
 erasure journal. No automatic promotion, no end-to-end worker/ingress
 fencing, no signed high-watermark or full #141 closure.
+
+
+## Recovery-gated in-process retention worker (#141 / ADR 0020)
+
+`RetentionSweepService` MUST invoke `RecoveryGuardedRetentionCycle`
+instead of calling `PostgresRetentionRepository.PurgeBatchAsync`
+directly. Recheck the SAME external `RecoveryQuarantineGate.IsReady`
+BEFORE EVERY batch (max 10 x 500). Missing/quarantined/insecure
+marker blocks new retention SQL work; a changed marker between two
+batches MUST stop the second. Continue to use the restricted
+`omnia_retention` login. No direct table privileges or PII logs.
+Do not claim atomic cancellation of an already-running SQL query,
+DB-level fencing, control of offline CLI/workers, replicas or
+providers. The release marker remains unauthenticated; #141 OPEN.

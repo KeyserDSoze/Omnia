@@ -175,3 +175,17 @@ monotonic or proven independent of every recovered backup. A malicious
 or mistaken operator may create a fake ready marker. Other workers,
 in-flight requests, replicas and ingress must be fenced separately;
 there is no end-to-end signed release/ledger yet. See ADR 0019 and #141.
+
+
+## Quarantine and retention worker (#141 / ADR 0020)
+
+The in-process `RetentionSweepService` now uses
+`RecoveryGuardedRetentionCycle` to re-read the operator's external
+recovery marker before every bounded PostgreSQL purge batch. Invalid,
+missing or quarantined state stops **future** batches. An ongoing
+SQL transaction may still commit after revocation (TOCTOU).
+Non-Development still fails at API bootstrap without a private
+ready marker. The privileged SQL routine and any offline/external
+workers are NOT fenced at the database layer by this adapter.
+No independent ledger or verifiable authorization to promote a
+restored replica exists yet. See ADR 0020 and #141.

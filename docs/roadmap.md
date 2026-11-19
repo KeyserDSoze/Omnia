@@ -191,3 +191,15 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   high-watermark and immutable operator decision; coordinated stop
   of workers, in-flight requests and ingress across replicas.
 - [ ] No production deployment or GDPR completion claim.
+
+
+## #141 — Quarantena del worker retention (2026-11-19)
+
+- [x] Nuovo wrapper `RecoveryGuardedRetentionCycle` riusa il gate
+  dell'API e verifica il marker prima di ogni batch PostgreSQL TTL.
+- [x] Test con revoca tra due batch e real PostgreSQL: expired
+  note non rimossa in quarantena, rimossa dopo ready, live intatta.
+- [ ] Verificare CI GREEN finale e collegarla alla issue #141.
+- [ ] Restano aperti in-flight SQL/TOCTOU, offline workers, replica
+  coordination, watermark anti-rollback, vault, journal indipendente
+  e gating di ingress e provider.

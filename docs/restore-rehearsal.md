@@ -179,3 +179,27 @@ Il gate di questa singola API NON ferma retention worker già attivi,
 offline backfill, ingress di altre repliche o richieste in volo.
 Non riaprire servizi con dati reali prima del journal anti-rollback
 e della quarantena globale di #141. ADR: [0019](../adr/0019-api-recovery-quarantine.md).
+
+
+## In-process retention worker: quarantena tra batch (#141 / ADR 0020)
+
+Anche il worker `RetentionSweepService`, eseguito nello stesso processo
+ASP.NET, ora controlla `Recovery__AccessStateFile` prima di **ogni batch**
+di cancellazione TTL. Se manca o indica quarantena, non effettua
+ulteriori chiamate a `omnia_purge_expired_memories`; riprende soltanto
+durante un ciclo successivo quando il marker torna valido `ready` + LF.
+Il ruolo DB è sempre il login non privilegiato `omnia_retention`.
+
+I test PostgreSQL verificano che una nota scaduta rimanga fisicamente
+nel DB durante la quarantena e venga eliminata soltanto dopo il
+rilascio del marker, senza toccare una nota ancora viva. Un altro
+test simula la revoca dopo il primo batch autorizzato e controlla
+che il secondo non venga lanciato.
+
+**Non è un fence transazionale**: se il file cambia mentre una query
+PostgreSQL è già in corso, essa può arrivare al commit. Non sono
+recintati DB access esterni, offline backfill, altre repliche o
+l'eventuale lavoro verso provider. La release non è firmata e non
+verifica un journal anti-rollback. Per questi gap #141 resta aperta.
+
+Decisione: [ADR 0020](../adr/0020-recovery-gated-retention-worker.md).

@@ -10,6 +10,8 @@ using Omnia.Application;
 using Omnia.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+// Fail before opening the restored DB, running migrations or starting workers.
+RecoveryQuarantineGate.Verify(builder.Configuration, builder.Environment.IsDevelopment());
 var connection = builder.Configuration["Database:ConnectionString"];
 if (string.IsNullOrWhiteSpace(connection))
     throw new InvalidOperationException("Database:ConnectionString is required (no in-memory production fallback).");
@@ -147,6 +149,21 @@ switch (provider)
 }
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 70 * 1024);
 var app = builder.Build();
+// Recheck on each request: an operator can quarantine a running API by
+// withdrawing the ready marker. This is not a signed recovery release.
+app.Use(async (context, next) =>
+{
+    if (!RecoveryQuarantineGate.IsReady(builder.Configuration, builder.Environment.IsDevelopment()))
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        context.Response.Headers.CacheControl = "no-store";
+        await context.Response.WriteAsJsonAsync(
+            new { error = "recovery_quarantined" },
+            cancellationToken: context.RequestAborted);
+        return;
+    }
+    await next(context);
+});
 app.UseRouting();
 app.UseCors("browser");
 app.UseAuthentication();

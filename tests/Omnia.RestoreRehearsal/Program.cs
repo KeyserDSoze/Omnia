@@ -135,6 +135,20 @@ internal static class Program
     private static async Task VerifyAsync(NpgsqlDataSource db,
         AesGcmEnvelopeEncryption crypto)
     {
+        // In a recovered cluster, the runtime login must still have no
+        // unscoped visibility into either personal table. This catches a
+        // restore that dropped RLS policies/grants despite keeping FORCE RLS.
+        await using (var unscoped = db.CreateCommand("""
+            SELECT (SELECT count(*) FROM public.memory_entries)::bigint,
+                   (SELECT count(*) FROM public.consent_grants)::bigint
+            """))
+        await using (var reader = await unscoped.ExecuteReaderAsync())
+        {
+            if (!await reader.ReadAsync() ||
+                reader.GetInt64(0) != 0 || reader.GetInt64(1) != 0)
+                throw new InvalidOperationException("Unscoped restored RLS was not enforced.");
+        }
+
         var saved = await FetchAsync(db)
             ?? throw new InvalidOperationException("Restored fixture missing.");
         if (saved.Id == Guid.Empty || saved.RawRedacted != "[sealed]" ||

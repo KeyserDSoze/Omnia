@@ -32,13 +32,16 @@ internal static class Program
 
             var dbConnection = Required("OMNIA_REHEARSAL_DB");
             var ringPath = Required("OMNIA_REHEARSAL_KEYRING_PATH");
-            // This executable is test-only. Reject arbitrary server targets,
-            // including any live database even when an operator misconfigures
-            // the environment. CI always uses 127.0.0.1:15432.
+            // CI only: the source and same-cluster clone bind to 15432;
+            // independent pgvector recovery container binds to 15433.
+            // No remote hostname, custom port, DB or privileged login.
             var target = new NpgsqlConnectionStringBuilder(dbConnection);
-            if (target.Host is not ("127.0.0.1" or "localhost") ||
-                target.Port != 15432 ||
-                target.Database is not ("omnia_test" or "omnia_restore_drill") ||
+            var sourceFixture = target.Port == 15432 &&
+                target.Database is ("omnia_test" or "omnia_restore_drill");
+            var independentRecovery = target.Port == 15433 &&
+                target.Database == "omnia_recovery";
+            if (target.Host != "127.0.0.1" ||
+                !(sourceFixture || independentRecovery) ||
                 !string.Equals(target.Username, "omnia_app", StringComparison.Ordinal))
                 throw new InvalidOperationException("Restore rehearsal only supports disposable test databases.");
             await using var db = NpgsqlDataSource.Create(dbConnection);

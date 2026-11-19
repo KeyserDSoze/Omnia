@@ -91,6 +91,14 @@ docker cp "$source_container:$archive_path/." "$private_dir/archive/"
 [[ -s "$private_dir/base/global/pg_control" ]]
 [[ -s "$private_dir/archive/$last_segment" ]]
 
+cat > "$private_dir/pitr-config" <<'CONF'
+restore_command = 'cp /var/lib/postgresql/data/omnia_ci_wal_archive/%f %p'
+recovery_target_name = 'omnia_ci_before_destructive_change'
+recovery_target_action = 'promote'
+recovery_target_timeline = 'current'
+CONF
+chmod 600 "$private_dir/pitr-config"
+
 # New isolated physical runtime from the basebackup. The physical database
 # system ID must MATCH the source (unlike a logical restore) by design.
 docker volume create "$volume" >/dev/null
@@ -102,13 +110,7 @@ docker run --rm --entrypoint bash \
   cp -a /private/base/. /var/lib/postgresql/data/
   mkdir -m 700 /var/lib/postgresql/data/omnia_ci_wal_archive
   cp -a /private/archive/. /var/lib/postgresql/data/omnia_ci_wal_archive/
-  cat >> /var/lib/postgresql/data/postgresql.auto.conf <<CONF
-restore_command = '?cp /var/lib/postgresql/data/omnia_ci_wal_archive/%f %p?'
-recovery_target_name = '?omnia_ci_before_destructive_change?'
-recovery_target_action = '?promote?'
-recovery_target_timeline = '?current?'
-CONF
-  sed -i "s/\\\?/'\''/g" /var/lib/postgresql/data/postgresql.auto.conf
+  cat /private/pitr-config >> /var/lib/postgresql/data/postgresql.auto.conf
   touch /var/lib/postgresql/data/recovery.signal
   chmod 700 /var/lib/postgresql/data
   chown -R postgres:postgres /var/lib/postgresql/data

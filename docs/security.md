@@ -161,3 +161,17 @@ production traffic re-opening control. Without an external monotonic
 high-watermark, lost events remain undetectable. Backup encryption,
 vault-held signing keys, legal exceptions, audit, backups/WAL and
 distributed erasure remain outside this scope; see ADR 0018.
+
+
+## External file recovery gate, not signed journal (#141 / ADR 0019)
+
+Non-Development API startup requires a private external
+Recovery__AccessStateFile whose only accepted state is exact `ready\n`.
+Missing, malformed, symlink or group/world-accessible files fail closed;
+quarantine is checked again on EVERY HTTP request with 503/no-store.
+The explicit Development-only no-file exception is for local tests.
+The marker is **not cryptographically authenticated**, durable,
+monotonic or proven independent of every recovered backup. A malicious
+or mistaken operator may create a fake ready marker. Other workers,
+in-flight requests, replicas and ingress must be fenced separately;
+there is no end-to-end signed release/ledger yet. See ADR 0019 and #141.

@@ -147,3 +147,35 @@ provider e audit delle copie storiche. Questo è soltanto un test di
 replay nell'ambito usa-e-getta: NON riutilizzarlo in produzione.
 
 [ADR 0018](../adr/0018-synthetic-post-pitr-erasure-replay.md).
+
+
+## Gate applicativo di quarantena HTTP post-PITR (#141, ADR 0019)
+
+L'API ora legge **prima delle migrazioni** un file amministrativo indicato
+da `Recovery__AccessStateFile`. In qualunque ambiente non Development
+il file è obbligatorio e deve risiedere su un mount riservato, esterno
+al PGDATA recuperato e ai backup. Non incorporarlo in immagini Docker,
+file Git o artifact della CI. Se il file manca l'API non si avvia.
+
+Il file deve essere regolare, non symlink, con accesso esclusivo del
+proprietario (`chmod 400` o `chmod 600`), massimo 32 byte.
+Il contenuto è rigorosamente `ready` seguito da LF (newline);
+`quarantined` con LF impedisce l'avvio, così come qualsiasi formato
+non riconosciuto. Preparare e sostituire il file in modo atomico
+attraverso il sistema di configurazione esterno. Il codice non
+implementa da solo la custodia del marker o l'autorizzazione dell'operatore.
+
+Se l'API è già attiva, prima di ogni richiesta HTTP viene ricontrollato
+il file. Revoca, rimozione o corruzione restituiscono HTTP 503 con
+`Cache-Control: no-store` e JSON `recovery_quarantined` su /health
+e /api/v1. Il workflow OIDC E2E prova il blocco in un server reale.
+In Development, solo l'assenza della configurazione è consentita;
+un percorso fornito ma non valido fallisce comunque.
+
+ATTENZIONE: `ready` non attesta alcuna cancellazione, non è firmato
+e non dimostra che tutte le ricevute post-PITR siano state rilevate.
+Un amministratore in errore può bypassare questa misura impostando ready.
+Il gate di questa singola API NON ferma retention worker già attivi,
+offline backfill, ingress di altre repliche o richieste in volo.
+Non riaprire servizi con dati reali prima del journal anti-rollback
+e della quarantena globale di #141. ADR: [0019](../adr/0019-api-recovery-quarantine.md).

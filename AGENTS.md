@@ -176,3 +176,20 @@ loopback test ports/databases and must never be HTTP-accessible.
 DO NOT claim this test provides an authoritative external deletion
 journal, anti-rollback high watermark, legal consent, production
 traffic freeze, or cross-store erasure. Those remain P0 open gates.
+
+
+## Recovery quarantine gate (#141 / ADR 0019)
+
+Omnia.Api MUST call RecoveryQuarantineGate.Verify before DB connection,
+migration or worker startup. Non-Development requires an absolute
+operator-owned Recovery__AccessStateFile outside PGDATA/backup.
+Only exact `ready\n` with private Unix permissions is accepted.
+Any other content, missing path, unreadable file or symlink MUST block
+startup. Recheck on every HTTP request; return 503/no-store on
+missing/quarantined state. An explicitly configured Development file
+is subject to identical checks; Development may omit the option
+only for local/demo tests. Never create an HTTP release endpoint,
+trust browser headers, or put this file in the DB/backup/container image.
+IMPORTANT: a `ready\n` marker is NOT an authenticated complete
+erasure journal. No automatic promotion, no end-to-end worker/ingress
+fencing, no signed high-watermark or full #141 closure.

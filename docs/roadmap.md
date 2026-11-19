@@ -175,3 +175,19 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [ ] Nessun journal indipendente durabile, watermark anti-rollback,
   vault, autenticazione reale del mittente, gate di traffic freeze
   o data rights sui provider/backups/device; issue P0 aperte.
+
+
+## #141 — Recovery access-state gate of the API (2026-11-19)
+
+- [x] Strict operator-controlled private file required at non-Development
+  API boot before migrations/worker initialization; exact ready marker.
+- [x] Missing, quarantined, malformed, symlink and broad Unix permissions
+  deny startup, with unit/integration tests.
+- [x] Per-request HTTP recheck denies health/personal-data routes with
+  503 and no-store after operator quarantine.
+- [x] Live OIDC/API test and CI startup-denial test added; verify actual
+  Actions before asserting they passed on the latest HEAD.
+- [ ] Durable signed external erasure journal, proof of completeness,
+  high-watermark and immutable operator decision; coordinated stop
+  of workers, in-flight requests and ingress across replicas.
+- [ ] No production deployment or GDPR completion claim.

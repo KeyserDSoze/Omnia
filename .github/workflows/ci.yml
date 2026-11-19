@@ -50,7 +50,10 @@ jobs:
           docker run -d --rm --name omnia-ci-pg \
             -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_test \
             -e "POSTGRES_PASSWORD=$password" \
-            -p 127.0.0.1:15432:5432 pgvector/pgvector:pg17
+            -p 127.0.0.1:15432:5432 pgvector/pgvector:pg17 \
+            -c archive_mode=on \
+            -c "archive_command=mkdir -p /tmp/omnia-ci-wal-archive && test ! -f /tmp/omnia-ci-wal-archive/%f && cp %p /tmp/omnia-ci-wal-archive/%f" \
+            -c archive_timeout=60s
           for i in $(seq 1 60); do
             if docker exec omnia-ci-pg pg_isready -U omnia -d omnia_test; then break; fi
             sleep 2

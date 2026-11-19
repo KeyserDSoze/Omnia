@@ -47,6 +47,21 @@ public sealed class RecoveryQuarantineGateTests
     }
 
     [Fact]
+    public void RuntimeStateChangesAndLostFileImmediatelyQuarantineRequests()
+    {
+        using var fixture = new PrivateRecoveryFile();
+        var config = Config(fixture.Path);
+        fixture.Write("ready\n");
+        Assert.True(RecoveryQuarantineGate.IsReady(config, isDevelopment: false));
+        fixture.Write("quarantined\n");
+        Assert.False(RecoveryQuarantineGate.IsReady(config, isDevelopment: false));
+        fixture.Write("ready\n");
+        Assert.True(RecoveryQuarantineGate.IsReady(config, isDevelopment: false));
+        File.Delete(fixture.Path);
+        Assert.False(RecoveryQuarantineGate.IsReady(config, isDevelopment: false));
+    }
+
+    [Fact]
     public void MissingRelativeSymlinkAndInsecureFilesAreRejected()
     {
         Assert.Throws<InvalidOperationException>(() =>

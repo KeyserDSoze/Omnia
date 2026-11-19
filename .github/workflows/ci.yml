@@ -21,6 +21,47 @@ jobs:
           dotnet build src/backend/Omnia.Backfill/Omnia.Backfill.csproj -c Release
           dotnet build src/backend/Omnia.BackfillAudit/Omnia.BackfillAudit.csproj -c Release
           dotnet build tests/Omnia.RestoreRehearsal/Omnia.RestoreRehearsal.csproj -c Release
+      - name: Assert recovery quarantine prevents API startup before database access
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker="$(mktemp "$RUNNER_TEMP/omnia-recovery-state.XXXXXX")"
+          log="$(mktemp "$RUNNER_TEMP/omnia-recovery-log.XXXXXX")"
+          trap 'rm -f "$marker" "$log"' EXIT
+          printf 'quarantined\n' > "$marker"
+          chmod 600 "$marker"
+          if Recovery__AccessStateFile="$marker" ASPNETCORE_ENVIRONMENT=Development \
+            dotnet run --no-build --no-launch-profile -c Release \
+              --project src/backend/Omnia.Api/Omnia.Api.csproj > "$log" 2>&1; then
+            echo "Quarantined API unexpectedly started." >&2
+            exit 1
+          fi
+          grep -Fq 'RECOVERY_QUARANTINED' "$log" || {
+            echo "API failed for an unrelated reason; gate was not exercised." >&2
+            exit 1
+          }
+          if ASPNETCORE_ENVIRONMENT=Production \
+            dotnet run --no-build --no-launch-profile -c Release \
+              --project src/backend/Omnia.Api/Omnia.Api.csproj > "$log" 2>&1; then
+            echo "Production API unexpectedly started without release state." >&2
+            exit 1
+          fi
+          grep -Fq 'RECOVERY_QUARANTINED' "$log" || {
+            echo "Production mode did not deny missing recovery state." >&2
+            exit 1
+          }
+          printf 'ready\n' > "$marker"
+          if Recovery__AccessStateFile="$marker" ASPNETCORE_ENVIRONMENT=Development \
+            dotnet run --no-build --no-launch-profile -c Release \
+              --project src/backend/Omnia.Api/Omnia.Api.csproj > "$log" 2>&1; then
+            echo "Unconfigured API unexpectedly started." >&2
+            exit 1
+          fi
+          grep -Fq 'Database:ConnectionString is required' "$log" || {
+            echo "Ready state did not advance to the expected database check." >&2
+            exit 1
+          }
+
       - name: Start disposable PostgreSQL 17 / pgvector
         shell: bash
         run: |

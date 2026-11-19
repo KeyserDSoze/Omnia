@@ -121,6 +121,11 @@ jobs:
           export Cors__Origins__0=http://127.0.0.1:19006
           export ASPNETCORE_ENVIRONMENT=Development
           export ASPNETCORE_URLS=http://127.0.0.1:8080
+          # This state is owned by the ephemeral test operator, not restored
+          # from PGDATA or exposed in the web/API bundle.
+          export Recovery__AccessStateFile="$RUNNER_TEMP/omnia-oidc-recovery-state"
+          printf 'ready\n' > "$Recovery__AccessStateFile"
+          chmod 600 "$Recovery__AccessStateFile"
           nohup dotnet run --project src/backend/Omnia.Api/Omnia.Api.csproj \
             --configuration Release --no-launch-profile \
             > "$RUNNER_TEMP/omnia-oidc-api.log" 2>&1 < /dev/null &
@@ -130,6 +135,23 @@ jobs:
           done
           cat "$RUNNER_TEMP/omnia-oidc-api.log"
           exit 1
+
+      - name: Running API blocks access immediately when recovery quarantine is activated
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker="$RUNNER_TEMP/omnia-oidc-recovery-state"
+          body="$(mktemp "$RUNNER_TEMP/omnia-quarantine-response.XXXXXX")"
+          trap 'rm -f "$body"' EXIT
+          printf 'quarantined\n' > "$marker"
+          chmod 600 "$marker"
+          code="$(curl -sS -o "$body" -w '%{http_code}' http://127.0.0.1:8080/health)"
+          [[ "$code" == 503 ]] || { echo "Quarantined API still served traffic." >&2; exit 1; }
+          jq -e '.error == "recovery_quarantined"' "$body" >/dev/null
+          code="$(curl -sS -o "$body" -w '%{http_code}' http://127.0.0.1:8080/api/v1/memories)"
+          [[ "$code" == 503 ]] || { echo "Quarantined API exposed a personal-data route." >&2; exit 1; }
+          printf 'ready\n' > "$marker"
+          curl -fsS http://127.0.0.1:8080/health | jq -e '.status == "ok"' >/dev/null
 
       - name: Install web dependencies
         working-directory: src/mobile

@@ -161,3 +161,17 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   definitivo sulle issue #109 e #140; CI non equivale a DR in produzione.
 - [ ] Azure, OpenBao/Key Vault, backup cifrati, WAL offsite, RPO/RTO,
   vecchi backup e cutover legacy restano bloccanti.
+
+
+## #31/#109/#125 — Riconciliazione cancellazioni dopo PITR (2026-11-19)
+
+- [x] Slice CI: ricevuta sintetica esterna a PGDATA, HMAC-SHA256 e
+  test negativo su MAC assente o manomesso prima del replay.
+- [x] Replay via API infrastrutturale già esistente con actor lock e
+  RLS, idempotenza ed export vuoto dell'attore cancellato.
+- [x] Test negativo di isolamento di un secondo tenant sintetico.
+- [ ] Allegare run completo Actions sul commit finale prima della
+  dichiarazione GREEN.
+- [ ] Nessun journal indipendente durabile, watermark anti-rollback,
+  vault, autenticazione reale del mittente, gate di traffic freeze
+  o data rights sui provider/backups/device; issue P0 aperte.

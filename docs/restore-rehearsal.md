@@ -116,3 +116,34 @@ deleted-data/tombstones, enforcement delle retention e verifica dei
 diritti GDPR sulle copie storiche. Fino a questi gate #109/#140 restano OPEN.
 
 ADR: [0017](../adr/0017-physical-postgresql-pitr.md).
+
+
+## Gate CI successivo al PITR — replay sicuro di cancellazione sintetica (ADR 0018)
+
+Il test PITR ora può usare una ricevuta di cancellazione **fuori dal
+backup PostgreSQL**: viene prodotta soltanto dopo il DELETE sintetico
+sul sorgente, in una directory privata temporanea del runner. La
+ricevuta JSON v1 è autenticata con HMAC-SHA256 e una chiave casuale
+non presente nel PGDATA ripristinato. Non compare nei log o artifacts.
+
+Il database fisico recupera inizialmente la nota anteriore al restore
+point. Prima del replay, due tentativi con MAC assente o alterato
+devono fallire senza effettuare cancellazioni. Il replay autenticato
+usa poi `PostgresPersonalDataService.EraseAsync` con actor lock e RLS;
+un secondo replay è idempotente, e export/timeline dell'attore cancellato
+sono vuoti. Un secondo tenant sintetico rimane invece invariato.
+
+Comandi CI-only dell'harness: `seed-peer`, `sign-receipt`, `reconcile`,
+`verify-erased`, `verify-peer`; sono ristretti ai database di test
+loopback e agli attori sintetici hard-coded. Il semplice possesso del
+file JSON non è una credenziale di autorizzazione per gli utenti reali.
+
+**Limitazioni importanti:** il signer e il verifier girano sullo stesso
+runner e non provano l'origine, la durata o la completezza di un journal
+esterno: mancano watermark monotono, firme da vault/HSM, documentazione
+del diritto di cancellazione, ledger indipendente dai backup, policy di
+riapertura del traffico, erasure di cloud object store, connettori e
+provider e audit delle copie storiche. Questo è soltanto un test di
+replay nell'ambito usa-e-getta: NON riutilizzarlo in produzione.
+
+[ADR 0018](../adr/0018-synthetic-post-pitr-erasure-replay.md).

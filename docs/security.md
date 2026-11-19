@@ -146,3 +146,18 @@ encrypted durable backups. The test does not establish compliant backup
 storage, recovery from cloud vault, deletion from old snapshots, or
 disaster recovery in Azure. No real data, vendor tokens or backups
 may be fed to this script.
+
+
+## PITR erasure receipt replay — test-only boundary (#31/#109/#125)
+
+An authenticated HMAC receipt held outside the ephemeral PostgreSQL
+backup simulates erasure events created after a physical restore point.
+Only a hard-coded synthetic actor can be deleted by the offline harness.
+Missing or altered MAC fails closed before erasure, replay is idempotent,
+and the unrelated synthetic tenant stays isolated. The receipt is NOT
+an independently authenticated, durable, complete, anti-rollback ledger.
+Signing and replay happen on the same disposable runner without any
+production traffic re-opening control. Without an external monotonic
+high-watermark, lost events remain undetectable. Backup encryption,
+vault-held signing keys, legal exceptions, audit, backups/WAL and
+distributed erasure remain outside this scope; see ADR 0018.

@@ -160,3 +160,19 @@ Never connect this script to production, cloud storage, or real data.
 Never publish the physical PGDATA, archive/WAL, keys or passwords in
 git, logs or Actions artifacts. PITR on a CI runner is NOT proof of
 managed backup, vault recovery, geo-DR or GDPR deletion.
+
+
+## Synthetic post-PITR erasure reconciliation (#31/#109/#125, ADR 0018)
+
+The restore test MUST prove a record deleted after the named WAL
+recovery point is initially recovered and then deleted again ONLY
+following an authenticated out-of-PGDATA synthetic erasure receipt.
+Refuse missing/tampered receipts before any mutation, keep HMAC key
+off Git/logs/backups, reject extra/duplicate JSON fields, bind receipt
+to fixed synthetic actor and recovery point. The fixture has a second
+tenant whose data MUST remain intact; replay must be idempotent and
+return an empty actor export. The test harness accepts only fixed
+loopback test ports/databases and must never be HTTP-accessible.
+DO NOT claim this test provides an authoritative external deletion
+journal, anti-rollback high watermark, legal consent, production
+traffic freeze, or cross-store erasure. Those remain P0 open gates.

@@ -115,3 +115,19 @@ CLI rejecting remote/prod database targets. A same-cluster logical
 restore does not prove cross-cluster roles, encrypted managed backups,
 physical WAL/PITR, vault recovery, or deletion from backup replicas.
 See [restore runbook](restore-rehearsal.md).
+
+
+## Independent-cluster logical restore risk boundary (#109/#140)
+
+CI now checks distinct PostgreSQL system identifiers across two
+disposable pgvector containers. A source logical archive is copied
+between them using private ephemeral files. Destination roles are
+re-provisioned with new random secrets; original runtime password
+must fail. Non-owner RLS, no-context query denial, encrypted memory,
+historical KEK, export/TTL/vector and source/clone erasure isolation
+are checked. The script cannot safely be used on any real dataset.
+Neither the container cluster nor its secrets constitute an Azure DR
+environment. Backup plaintext metadata/legacy may exist in an
+archive. PITR/WAL, vault restore and backup retention/deletion
+policies require separate design and tests; no regulatory readiness
+assertions follow from this check. See ADR 0016.

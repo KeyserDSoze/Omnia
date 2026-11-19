@@ -39,3 +39,40 @@ Do not remove historical KEKs or enforce sealed_payload NOT NULL based
 on this CI-only result. Parent #138/#33 and #140 remain open.
 
 Decision: [ADR 0015](../adr/0015-synthetic-postgresql-restore-rehearsal.md).
+
+## #109/#140 — Restore in un secondo cluster usa-e-getta (ADR 0016)
+
+Il passo ulteriore rispetto al test ADR 0015 è
+`tests/restore/cross-cluster-rehearsal.sh`, lanciato dalla stessa CI
+DOPO il restore sintetico al database `omnia_restore_drill`.
+
+Il job avvia `omnia-ci-pg-recovery` su `127.0.0.1:15433` con database
+`omnia_recovery`, una nuova directory PGDATA e nuove password random.
+Confronta `system_identifier` dei due cluster PostgreSQL per evitare
+una falsa separazione. Un restore con i ruoli Omnia mancanti deve fallire;
+la CI quindi ricrea il database e provisiona i quattro login limitati
+senza copiare i segreti globali del server sorgente. Solo allora esegue
+il vero `pg_restore` dell'archivio logico.
+
+L'harness `Omnia.RestoreRehearsal` effettua i check anche nel cluster
+secondario come identità `omnia_app`: nessuna visibilità SQL senza
+contesto RLS su note/consensi, ID canonico, integrità AES-GCM,
+embedding, ricevuto/scadenza, timeline, export e erase. La password
+del login originario è rifiutata nel cluster di ripristino. Il test
+prova la decifratura mantenendo la vecchia KEK e il fallimento quando
+essa non è presente. L'erase nel target non modifica il sorgente.
+
+La cartella privata nel runner e i backup/secret file sono distrutti
+anche in caso di errore, insieme al secondo container. Nessun dump
+o keyring viene inviato come artifact.
+
+**Attenzione:** entrambi i cluster sono container locali di CI
+nello stesso runner; non è un ambiente Azure o geograficamente isolato.
+Resta un backup **logico**, non WAL/PITR. Non testa restore del vault,
+repliche, object storage, backup/tombstones GDPR o decrittazione di
+tutti i record legacy. Non è una procedura utilizzabile per dati reali.
+
+Decisione: [ADR 0016](../adr/0016-independent-postgresql-restore.md).
+Documentazione ufficiale:
+https://www.postgresql.org/docs/17/app-pg-dumpall.html
+https://www.postgresql.org/docs/17/app-pgrestore.html

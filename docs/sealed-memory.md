@@ -171,3 +171,15 @@ original TTL/vector, key-version continuity, missing-old-key rejection
 and scope-limited erasure. This is not a real backup recovery or
 production readiness certificate. See
 [docs/restore-rehearsal.md](restore-rehearsal.md).
+
+
+## #109/#140 — Cross-cluster backup verification (ADR 0016)
+
+The CI now additionally restores the same synthetic PostgreSQL dump
+into a **separate pgvector container** (not merely another database),
+after first demonstrating a missing-global-role restore failure.
+Distinct PG system IDs and fresh passwords are asserted; the
+non-owner recovered runtime role must enforce scoped access to both
+personal tables. Existing memory encryption and historical KEK are
+verified end-to-end after recovery. This still does NOT prove
+production backup encryption, archived copies, Azure/PITR or cutover.

@@ -134,3 +134,16 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [ ] Attach latest CI evidence to issue #140 after it actually finishes.
 - [ ] Physical/WAL/PITR, separate clusters, managed Azure backup, vault
   restore, legacy global zero and sealed_payload cutover still missing.
+
+
+## #109/#140 — Independent-cluster synthetic recovery test (2026-11-19)
+
+- [x] Nuova CI obbliga `pg_dump -Fc` + `pg_restore` verso un secondo
+  cluster PostgreSQL 17/pgvector e verifica `system_identifier` distinto.
+- [x] Ruoli e password sono creati esplicitamente dopo che il restore
+  con ruoli mancanti fallisce; test del vecchio login e RLS fail-closed.
+- [x] Contenuto sealed, AAD/UUID, TTL, embedding, export, KEK
+  retention e cancellazione isolata sono nuovamente verificati.
+- [ ] Annotare in #109 e #140 il risultato della CI sul commit finale.
+- [ ] Azure non-superuser, PITR/WAL, backup cifrati, vault recovery,
+  data rights per copie storiche, medias e cutover restano da fare.

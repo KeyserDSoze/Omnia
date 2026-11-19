@@ -127,3 +127,19 @@ Retain historical KEKs to read restored ciphertext, prove missing KEKs
 fail closed, validate RLS, UUID/AAD, expiry, export and erasure isolation.
 Do not log/archive backup or keys. This does NOT prove cross-cluster
 recovery, encrypted backups, WAL/PITR, Azure vault, GDPR erasure or cutover.
+
+
+## Independent PostgreSQL recovery-cluster CI gate (#109/#140; ADR 0016)
+
+`tests/restore/cross-cluster-rehearsal.sh` MUST run only in GitHub CI
+after the synthetic same-cluster restore gate. It creates a NEW temporary
+pgvector container with different PostgreSQL system identifier,
+passwords and roles; no shared PGDATA. Check that restoring a DB without
+the required global roles fails, then provision only the four Omnia
+restricted roles before the successful pg_restore. Never reuse source
+credentials or import real pg_dumpall password hashes. The harness
+accepts only 127.0.0.1 test ports 15432/15433, fixed databases and
+runtime identity; no HTTP exposure. RLS must deny unscoped queries
+against memories and consent grants after restore. Keep archives,
+keys and recovery passwords out of git/artifacts, and cleanup always.
+Production Azure/PITR/WAL/vault/backup/tombstones are NOT validated.

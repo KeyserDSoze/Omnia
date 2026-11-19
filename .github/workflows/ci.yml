@@ -80,6 +80,9 @@ jobs:
       - name: Restore rehearsal — real PostgreSQL dump/restore, retained and missing KEKs
         shell: bash
         run: bash tests/restore/restore-rehearsal.sh
+      - name: Independent-cluster PostgreSQL restore and role recovery gate
+        shell: bash
+        run: bash tests/restore/cross-cluster-rehearsal.sh
       - name: Stop disposable database
         if: always()
         run: docker rm -f omnia-ci-pg || true

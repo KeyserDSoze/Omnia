@@ -131,3 +131,18 @@ environment. Backup plaintext metadata/legacy may exist in an
 archive. PITR/WAL, vault restore and backup retention/deletion
 policies require separate design and tests; no regulatory readiness
 assertions follow from this check. See ADR 0016.
+
+
+## Physical PITR backup threat boundary (#109/#140, ADR 0017)
+
+The new CI physical `pg_basebackup` and named WAL recovery gate tests
+a synthetic encrypted record that is deleted only **after** the recovery
+target on the source. A post-basebackup marker must be recovered, and
+the later destructive mutation must be excluded. Restored credentials
+are rotated because unlike logical backup, a physical backup copies
+global role catalogs. Source and recovery stay on the same disposable
+runner, and the disk copy and WAL are private temporary files, not
+encrypted durable backups. The test does not establish compliant backup
+storage, recovery from cloud vault, deletion from old snapshots, or
+disaster recovery in Azure. No real data, vendor tokens or backups
+may be fed to this script.

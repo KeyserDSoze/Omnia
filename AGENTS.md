@@ -143,3 +143,20 @@ runtime identity; no HTTP exposure. RLS must deny unscoped queries
 against memories and consent grants after restore. Keep archives,
 keys and recovery passwords out of git/artifacts, and cleanup always.
 Production Azure/PITR/WAL/vault/backup/tombstones are NOT validated.
+
+
+## Disposable physical PostgreSQL PITR gate (#109/#140; ADR 0017)
+
+Keep `tests/restore/physical-pitr-rehearsal.sh` CI-ONLY, after the
+existing two logical restore gates. Run `pg_basebackup -X stream`,
+`pg_verifybackup`, post-backup `pg_create_restore_point`, and WAL
+archiving on the disposable test cluster only. The restored physical
+copy MUST include a marker written after the basebackup but before
+the restore point; it MUST EXCLUDE a second marker and the source-side
+deletion after the point. Rotate restored app credentials and prove
+original credentials fail. Verify sealed ciphertext, actor-scoped RLS,
+TTL, key-loss failure and export using the existing test-only harness.
+Never connect this script to production, cloud storage, or real data.
+Never publish the physical PGDATA, archive/WAL, keys or passwords in
+git, logs or Actions artifacts. PITR on a CI runner is NOT proof of
+managed backup, vault recovery, geo-DR or GDPR deletion.

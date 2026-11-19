@@ -147,3 +147,17 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [ ] Annotare in #109 e #140 il risultato della CI sul commit finale.
 - [ ] Azure non-superuser, PITR/WAL, backup cifrati, vault recovery,
   data rights per copie storiche, medias e cutover restano da fare.
+
+
+## #109/#140 — Backup fisico e PITR PostgreSQL 17 in CI (2026-11-19)
+
+- [x] Aggiunto il gate sintetico obbligatorio `pg_basebackup`,
+  `pg_verifybackup`, archivio WAL e recovery target nominale.
+- [x] Scenario negativo: cancellazione sorgente **dopo** il restore
+  point; il restore deve recuperare la nota ma non il marker successivo.
+- [x] Asserzioni su ruolo runtime dopo rotazione, RLS, AAD/KEK,
+  timeline/export e isolamento della copia.
+- [ ] Registrare URL e risultati effettivi delle Actions del commit
+  definitivo sulle issue #109 e #140; CI non equivale a DR in produzione.
+- [ ] Azure, OpenBao/Key Vault, backup cifrati, WAL offsite, RPO/RTO,
+  vecchi backup e cutover legacy restano bloccanti.

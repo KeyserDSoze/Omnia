@@ -83,6 +83,9 @@ jobs:
       - name: Independent-cluster PostgreSQL restore and role recovery gate
         shell: bash
         run: bash tests/restore/cross-cluster-rehearsal.sh
+      - name: Physical pg_basebackup + archived WAL point-in-time recovery gate
+        shell: bash
+        run: bash tests/restore/physical-pitr-rehearsal.sh
       - name: Stop disposable database
         if: always()
         run: docker rm -f omnia-ci-pg || true

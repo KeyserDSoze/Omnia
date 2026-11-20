@@ -201,6 +201,48 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
         return await EraseCoreAsync(tenantId, ownerSubject, requestId, ct);
     }
 
+    /// <summary>
+    /// Stronger CI-ONLY synthetic preflight: an authenticated remote intent
+    /// must already be HMAC-anchored, then a one-time attempt is committed
+    /// to THIRD PGDATA before touching source data. Duplicate attempts fail
+    /// even if the original primary outbox was lost to physical PITR.
+    /// A claimed request is NOT proof of primary DELETE/COMMIT, and a failed
+    /// or ambiguous source transaction MUST NOT be retried automatically.
+    /// This is NOT exposed by the REST API or IPersonalDataService.
+    /// </summary>
+    public async Task<PersonalDataErasureResult>
+        EraseWithOneShotAnchoredIntentAsync(
+            Guid requestId, string tenantId, string ownerSubject,
+            NpgsqlDataSource intentReader, NpgsqlDataSource anchorReader,
+            NpgsqlDataSource claimWriter, byte[] signingKey,
+            CancellationToken ct)
+    {
+        if (Environment.GetEnvironmentVariable("CI") != "true" ||
+            Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true")
+            throw new InvalidOperationException(
+                "One-shot erasure attempt is synthetic CI-only.");
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("An intent UUID is required.", nameof(requestId));
+        ArgumentNullException.ThrowIfNull(intentReader);
+        ArgumentNullException.ThrowIfNull(anchorReader);
+        ArgumentNullException.ThrowIfNull(claimWriter);
+        ArgumentNullException.ThrowIfNull(signingKey);
+        if (signingKey.Length != 32)
+            throw new InvalidDataException("INTENT_ANCHOR_KEY_INVALID.");
+
+        // No actor state or outbox is touched before both validations. The
+        // one-shot writer role is separate from anchor/witness writers.
+        await new PostgresPreEraseIntentAnchorVerifier(intentReader, anchorReader)
+            .VerifyRequestAsync(requestId, tenantId, ownerSubject, signingKey, ct);
+        await new PostgresPreEraseExecutionClaimWriter(claimWriter).ClaimOnceAsync(
+            requestId, tenantId, ownerSubject, signingKey, ct);
+
+        // A remote claim can persist when the following source COMMIT fails,
+        // crashes or returns an ambiguous ACK. This is intentional: do NOT
+        // auto-retry or auto-erase; operator investigation is mandatory.
+        return await EraseCoreAsync(tenantId, ownerSubject, requestId, ct);
+    }
+
     public Task<PersonalDataErasureResult> EraseAsync(string tenantId,
         string ownerSubject, CancellationToken ct) =>
         EraseCoreAsync(tenantId, ownerSubject, Guid.NewGuid(), ct);

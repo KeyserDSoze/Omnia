@@ -48,11 +48,13 @@ recovery_app_password="$(openssl rand -hex 24)"
 recovery_retention_password="$(openssl rand -hex 24)"
 recovery_backfill_password="$(openssl rand -hex 24)"
 recovery_audit_password="$(openssl rand -hex 24)"
+recovery_dispatch_password="$(openssl rand -hex 24)"
 echo "::add-mask::$recovery_admin_password"
 echo "::add-mask::$recovery_app_password"
 echo "::add-mask::$recovery_retention_password"
 echo "::add-mask::$recovery_backfill_password"
 echo "::add-mask::$recovery_audit_password"
+echo "::add-mask::$recovery_dispatch_password"
 
 docker run -d --rm --name "$target_container" \
   -e POSTGRES_USER=omnia -e POSTGRES_DB="$target_database" \
@@ -79,7 +81,7 @@ docker exec "$target_container" chmod 600 "$target_archive"
 # pg_dump does NOT include cluster-global PostgreSQL roles. Prove that
 # ACL-bearing restore fails into an otherwise fresh cluster without roles.
 no_roles="$(docker exec "$target_container" psql -U omnia -d "$target_database" -Atqc \
-  "SELECT count(*) FROM pg_roles WHERE rolname IN ('omnia_app', 'omnia_retention', 'omnia_backfill', 'omnia_backfill_audit')")"
+  "SELECT count(*) FROM pg_roles WHERE rolname IN ('omnia_app', 'omnia_retention', 'omnia_backfill', 'omnia_backfill_audit', 'omnia_dispatcher')")"
 [[ "$no_roles" == "0" ]] || { echo "Recovery cluster was not pristine." >&2; exit 1; }
 if docker exec "$target_container" pg_restore -U omnia -d "$target_database" \
     --no-owner --exit-on-error "$target_archive" >/dev/null 2>&1; then
@@ -87,7 +89,7 @@ if docker exec "$target_container" pg_restore -U omnia -d "$target_database" \
   exit 1
 fi
 
-# Reset failed partial restore and explicitly provision the minimum four roles.
+# Reset failed partial restore and explicitly provision the five minimum roles.
 # NEVER import pg_dumpall --globals-only credentials or reuse source secrets.
 docker exec "$target_container" dropdb -U omnia "$target_database"
 docker exec "$target_container" createdb -U omnia "$target_database"
@@ -96,7 +98,8 @@ docker exec -i "$target_container" psql -X -v ON_ERROR_STOP=1 \
   -v app_password="$recovery_app_password" \
   -v retention_password="$recovery_retention_password" \
   -v backfill_password="$recovery_backfill_password" \
-  -v audit_password="$recovery_audit_password" >/dev/null <<'SQL'
+  -v audit_password="$recovery_audit_password" \
+  -v dispatch_password="$recovery_dispatch_password" >/dev/null <<'SQL'
 SELECT format(
   'CREATE ROLE omnia_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
   :'app_password'
@@ -112,6 +115,10 @@ SELECT format(
 SELECT format(
   'CREATE ROLE omnia_backfill_audit LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
   :'audit_password'
+) \gexec
+SELECT format(
+  'CREATE ROLE omnia_dispatcher LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+  :'dispatch_password'
 ) \gexec
 SQL
 

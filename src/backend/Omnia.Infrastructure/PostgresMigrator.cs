@@ -6,7 +6,7 @@ namespace Omnia.Infrastructure;
 /// <summary>
 /// Schema owner/migration credentials only, never the runtime API connection.
 /// </summary>
-public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = null, string? retentionRole = null, string? backfillRole = null, string? auditRole = null)
+public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = null, string? retentionRole = null, string? backfillRole = null, string? auditRole = null, string? dispatchRole = null)
 {
     public async Task MigrateAsync(CancellationToken ct = default)
     {
@@ -147,6 +147,41 @@ public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = 
                 GRANT USAGE ON SCHEMA public TO {quoted};
                 GRANT EXECUTE ON FUNCTION public.omnia_count_legacy_memories()
                     TO {quoted};
+                """, conn, tx);
+            await grant.ExecuteNonQueryAsync(ct);
+        }
+        if (!string.IsNullOrWhiteSpace(dispatchRole))
+        {
+            if (new[] { runtimeRole, retentionRole, backfillRole, auditRole }
+                .Any(x => string.Equals(x, dispatchRole, StringComparison.Ordinal)))
+                throw new InvalidOperationException(
+                    "Outbox dispatcher must use an independent database identity.");
+
+            await using var lookup = new NpgsqlCommand("""
+                SELECT r.rolsuper, r.rolbypassrls,
+                    pg_has_role(r.oid, (SELECT relowner FROM pg_class
+                        WHERE oid = 'public.erasure_outbox'::regclass), 'MEMBER'),
+                    has_table_privilege(r.oid, 'public.erasure_outbox',
+                        'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'),
+                    has_table_privilege(r.oid, 'public.memory_entries',
+                        'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'),
+                    has_table_privilege(r.oid, 'public.consent_grants',
+                        'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+                FROM pg_roles r WHERE r.rolname = @role
+                """, conn, tx);
+            lookup.Parameters.AddWithValue("role", dispatchRole);
+            await using (var rows = await lookup.ExecuteReaderAsync(ct))
+            {
+                if (!await rows.ReadAsync(ct) ||
+                    Enumerable.Range(0, 6).Any(rows.GetBoolean))
+                    throw new InvalidOperationException(
+                        "Dispatch role must be a distinct no-bypass, no-table-access login.");
+            }
+            var quoted = new NpgsqlCommandBuilder().QuoteIdentifier(dispatchRole);
+            await using var grant = new NpgsqlCommand($"""
+                GRANT USAGE ON SCHEMA public TO {quoted};
+                GRANT EXECUTE ON FUNCTION public.omnia_read_erasure_outbox(
+                    integer, timestamptz, uuid) TO {quoted};
                 """, conn, tx);
             await grant.ExecuteNonQueryAsync(ct);
         }

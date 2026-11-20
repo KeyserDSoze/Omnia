@@ -349,3 +349,29 @@ WORM/offsite, high-watermark anti-rollback attestato, vault, publisher
 automatico, ACK remoto o replay che autorizzi a togliere la quarantena.
 Resta solo un prototipo di sicurezza. Vedi ADR 0025.
 
+
+
+## Vero PITR con erasure ricevuta dal secondo cluster (ADR 0026)
+
+Il test ora collega la STESSA cancellazione end-to-end: prende una
+pg_basebackup fisica del primario, crea il restore point nominato,
+poi invoca EraseAsync (non raw SQL DELETE) che elimina una nota,
+un consenso e committa la riga outbox in una transazione.
+Il dispatcher consegna l'UUID committato al secondo witness
+PostgreSQL indipendente dal PGDATA primario.
+
+Dopo il recupero fisico via WAL al punto precedente, il clone ha
+di nuovo la memoria privata, ma non il relativo evento outbox.
+La prova rifiuta un writer witness usato come reader senza mutare
+il clone; poi richiede una singola ricevuta per l'attore sintetico,
+la riconcilia con EraseAsync e ripete per verificare l'idempotenza
+dei dati. Export e timeline diventano vuoti; il tenant di controllo
+conserva memoria e consenso. Le prove precedenti su HMAC e KEK restano.
+
+La consegna antecedente al PITR è una precondizione artificiale
+della CI: non assicura eventi non consegnati prima di un crash,
+né completezza del journal, vault, offsite, watermark anti-rollback
+o autorizzazione a togliere la quarantena. Solo runner sintetico,
+nessun dato reale o endpoint di produzione. ADR 0026:
+../adr/0026-witness-reconciliation-after-physical-pitr.md
+

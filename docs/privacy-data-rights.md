@@ -120,3 +120,17 @@ no reviewed legal basis, vault key custody, data rights/DSAR
 procedure, retention, exporter, provider erasure or geo-independent
 availability for these records. #31, #32 and #141 remain OPEN.
 
+
+
+## Post-PITR recovery of erased actor (ADR 0026)
+
+A test-only physical restore now checks the same synthetic consent,
+memory and outbox erasure that was committed on the source and
+independently witnessed before the PITR. A restored copy lacks the
+event and resurrects the actor's note until the constrained witness
+replay deletes it via RLS/actor lock. A peer actor remains unaffected.
+This does not ensure delivery of erasures prior to system failure,
+nor erase backups, provider stores, local devices, caches or
+analytics, nor establish GDPR completeness, legal basis, retention
+of witness metadata, or a signed API release decision.
+

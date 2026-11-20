@@ -299,3 +299,20 @@ are NOT commit-order watermarks or durable ACKs. A second PGDATA on
 one CI host does NOT prove offsite durability, authority, complete
 GDPR erasure, remote key custody or safe release after PITR.
 
+
+
+## Same-event witness reconciliation on physical PITR (#141 / ADR 0026)
+
+The CI PITR script must invoke real actor-scoped EraseAsync AFTER its
+named restore point, committing consent/memory DELETE plus outbox.
+Deliver that committed outbox event to independent witness PGDATA
+BEFORE the actual PITR. The recovered database MUST have the actor's
+memory resurrected, but the outbox erasure event gone. Before any
+replay, verify a dedicated witness reader, a bounded scan and exactly
+one match for the hard-coded synthetic actor. Invalid witness role
+must fail BEFORE deleting. Repeat replay to check idempotent result;
+verify unrelated tenant remains intact, restored actor export empty.
+Only loopback test-only connections and no HTTP release endpoints.
+This does NOT prove capture of erasures that were not delivered
+before source loss, nor production DR, crypto trust or GDPR compliance.
+

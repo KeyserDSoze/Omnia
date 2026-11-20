@@ -280,3 +280,19 @@ anti-rollback anchor, signature from legal erasure authority,
 complete capture, remote backup, automatic publisher, or release
 authorization. Actor IDs remain regulated personal metadata.
 
+
+
+## Actual outbox event reconciliation after physical PITR (ADR 0026)
+
+A synthetic CI scenario now commits a REAL EraseAsync on the primary
+after a named WAL restore point, atomically producing the outbox
+event. The separate PGDATA witness receives the event before PITR.
+The physical restored primary contains resurrected personal memory
+but NOT the post-target outbox record. The runner denies an invalid
+witness reader and requires fixed actor and a bounded sequence scan
+before replaying erasure under existing RLS and actor lock. Peer
+isolation, ciphertext KEK failure, and empty export are verified.
+This is NOT evidence that every deletion would reach the witness
+before disaster, or that its database is immutable/offsite, nor
+a production recovery release token or GDPR conformity assessment.
+

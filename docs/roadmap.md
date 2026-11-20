@@ -283,3 +283,18 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   host/ingress/worker fencing, Azure/on-prem IaC and key custody.
 - [ ] Link final complete HEAD GitHub Actions evidence to #141.
 
+
+
+## #141 — Same-event physical PITR and witness replay (ADR 0026)
+
+- [x] Real source EraseAsync after named WAL point, atomic outbox insert.
+- [x] Publish the committed event UUID to the second PostgreSQL witness.
+- [x] Physical PITR before THAT SAME erasure: restored memory exists and
+  source outbox event is absent.
+- [x] Negative role denial, positive witness-read reconciliation,
+  repeated replay, export/timeline erased and peer tenant untouched.
+- [ ] Verify latest HEAD Actions and track on #141/#109/#31.
+- [ ] Delivery completeness before crash, signed immutable external
+  anti-rollback checkpoint, vault custody, production publisher,
+  global quarantine/traffic coordination, GDPR cross-store rights.
+

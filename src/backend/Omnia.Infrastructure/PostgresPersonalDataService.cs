@@ -202,7 +202,9 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
             """, actor.Connection, actor.Transaction);
         // Duplicating a previously committed correlated request triggers
         // unique_violation (23505) and rolls back ALL earlier deletes in
-        // this transaction. Never silently re-delete post-erasure data.
+        // this transaction IF the original outbox row still exists.
+        // After primary PITR removes that row this constraint is not an
+        // anti-rollback authority: NEVER replay pre-intents automatically.
         outbox.Parameters.AddWithValue("id", eventId);
         outbox.Parameters.AddWithValue("tenant", tenantId);
         outbox.Parameters.AddWithValue("owner", ownerSubject);

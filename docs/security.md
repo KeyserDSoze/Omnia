@@ -535,3 +535,5 @@ erasure request or signer. The third checkpoint doesn't
 yet anchor the pre-intent stream, all clusters share
 the CI runner, and immutable offsite custody, global
 fencing and complete provider/device erasure remain open.
+
+**Source PITR caveat:** duplicate UUID protection relies on the original outbox row. Once WAL PITR removes it, the request may appear new again in the recovered primary. Do NOT auto-retry the pre-intent or use successful SQL execution as proof of historical authorization; global recovery quarantine and independent commit provenance remain mandatory.

@@ -230,3 +230,5 @@ source transaction aborts on unique_violation.
 Physical source PITR still drops pre-ACK committed outbox
 and DELETE and leaves only an uncertain request intent,
 so this is not a production recovery release protocol.
+
+**Stale-request bound:** an old request UUID is rejected only while its original source outbox survives. Post-PITR a lost original row removes this local uniqueness memory, so recovery MUST NOT replay a pre-intent automatically. This experimental path is CI-only and is not registered by the API.

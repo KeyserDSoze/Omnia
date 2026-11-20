@@ -679,3 +679,5 @@ quorum o WORM/vault, nessuna firma offsite, nessuna attestazione
 di commit nel witness. Il pre-intent può esistere senza
 COMMIT e non deve autorizzare replay automatico.
 #141, #109 e #31 OPEN.
+
+**Importante:** la PK dell'outbox tutela dal riuso soltanto finché la sua riga originale non è stata persa. Dopo PITR del primario, il record originale può scomparire: **nessuna** ripetizione automatica di un pre-intent è sicura senza prove indipendenti e autorizzazione esplicita. Il clone rimane quarantinato.

@@ -89,3 +89,11 @@ e policy retention per i metadati. Queste misure
   https://www.postgresql.org/docs/17/sql-createfunction.html
 - GDPR, art. 5 e 17:
   https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng/
+
+**Limite fondamentale del retry:** la PK UUID impedisce il riuso
+soltanto quando l'outbox originale è ancora presente nel primario.
+Se un PITR ne elimina la riga, la protezione locale non può
+riconoscere il precedente commit; la request non deve essere
+riprodotta automaticamente sul database recuperato.
+Il sistema deve rimanere in quarantena fino a un'audit
+indipendente e un'autorizzazione di recovery completa.

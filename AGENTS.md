@@ -563,3 +563,5 @@ API in quarantine. Synthetic CI file with UUID is NOT an
 independent signed commit authority. Third anchor does not cover
 this intent and no OIDC actor identity is verified here. Keep
 #141/#109/#31/#32 open; no production release or GDPR assurance.
+
+**PITR caveat:** source UUID uniqueness prevents stale retries ONLY while the original source outbox exists. Once primary PITR loses that row, the unique constraint CANNOT remember the prior commit. An orphaned remote intent MUST NEVER trigger automatic re-deletion on a recovered primary. Keep API quarantined pending independent commit provenance and authorization.

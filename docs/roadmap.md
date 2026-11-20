@@ -438,3 +438,5 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   committato dopo crash, non ancoraggio degli intenti sulla
   terza PGDATA/offsite WORM, non fencing globale/repliche/
   worker/media/provider/backup o GDPR compliance.
+
+- [ ] **Warning:** after primary PITR removes the original outbox UUID, source PK uniqueness no longer prevents repeated use of that request; recovery MUST remain quarantined and never automatically replay an intent.

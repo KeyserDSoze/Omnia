@@ -23,6 +23,8 @@ internal static class Program
     private const string Model = "synthetic-vector-model";
     private const string PeerTenant = "omnia-restore-peer-synthetic";
     private const string PeerOwner = "unrelated-synthetic-peer";
+    private const string UnwitnessedTenant = "omnia-ci-unwitnessed-pitr-synthetic";
+    private const string UnwitnessedOwner = "synthetic-unwitnessed-pitr-owner";
     private const string ReceiptPoint = "omnia_ci_before_destructive_change";
     private const string ReceiptOperation = "erase-actor";
 
@@ -32,7 +34,9 @@ internal static class Program
         {
             if (args.Length != 1 || args[0] is not
                 ("seed" or "verify" or "missing-old-key" or "erase" or
-                 "seed-peer" or "verify-peer" or "sign-receipt" or
+                 "seed-peer" or "verify-peer" or "seed-unwitnessed" or
+                 "erase-unwitnessed" or "verify-unwitnessed-resurrected" or
+                 "sign-receipt" or
                  "append-journal" or "erase-source" or "publish-source" or
                   "witness-reconcile" or "reconcile" or "verify-erased"))
                 throw new InvalidOperationException("Invalid restore rehearsal phase.");
@@ -54,10 +58,12 @@ internal static class Program
                 !string.Equals(target.Username, "omnia_app", StringComparison.Ordinal))
                 throw new InvalidOperationException("Restore rehearsal only supports disposable test databases.");
             if (args[0] is "sign-receipt" or "seed-peer" or "append-journal" or
-                "erase-source" or "publish-source" && !(
+                "erase-source" or "publish-source" or
+                "seed-unwitnessed" or "erase-unwitnessed" && !(
                 target.Port == 15432 && target.Database == "omnia_test"))
                 throw new InvalidOperationException("Source-only synthetic recovery phase.");
-            if (args[0] is "reconcile" or "witness-reconcile" or "verify-erased" or "verify-peer" &&
+            if (args[0] is "reconcile" or "witness-reconcile" or "verify-erased" or
+                "verify-peer" or "verify-unwitnessed-resurrected" &&
                 !physicalRecovery)
                 throw new InvalidOperationException("Physical recovery test phase only.");
             await using var db = NpgsqlDataSource.Create(dbConnection);
@@ -80,6 +86,15 @@ internal static class Program
                     break;
                 case "seed-peer":
                     await SeedPeerAsync(db, crypto);
+                    break;
+                case "seed-unwitnessed":
+                    await SeedUnwitnessedAsync(db, crypto);
+                    break;
+                case "erase-unwitnessed":
+                    await EraseUnwitnessedAsync(db, crypto);
+                    break;
+                case "verify-unwitnessed-resurrected":
+                    await VerifyUnwitnessedResurrectedAsync(db, crypto);
                     break;
                 case "verify-peer":
                     await VerifyPeerAsync(db, crypto);
@@ -286,6 +301,65 @@ internal static class Program
             "peer synthetic note", ["separate"], now);
         await new PostgresMemoryRepository(db, crypto).UpsertAsync(note,
             CancellationToken.None);
+    }
+
+    // A distinct synthetic actor whose erasure is intentionally committed
+    // after the PITR point but NEVER published to the independent witness.
+    // This is negative DR evidence only, not a production erasure path.
+    private static async Task SeedUnwitnessedAsync(NpgsqlDataSource db,
+        AesGcmEnvelopeEncryption crypto)
+    {
+        var now = DateTimeOffset.UtcNow;
+        await new PostgresConsentRepository(db).GrantAsync(
+            ConsentGrant.Issue(UnwitnessedTenant, UnwitnessedOwner, Source,
+                ConsentGrant.MemoryCapture, "privacy-v1", now,
+                now.AddDays(2)), default);
+        var note = MemoryEntry.Capture(UnwitnessedTenant,
+            UnwitnessedOwner, Source, "unwitnessed-before-backup-v1",
+            "text/plain", "SYNTHETIC_UNWITNESSED_PITR",
+            "{\"test\":\"unwitnessed-pitr\"}",
+            "synthetic unwitnessed pitr note", ["rollback"], now);
+        await new PostgresMemoryRepository(db, crypto).UpsertAsync(
+            note, default);
+        if ((await new PostgresMemoryRepository(db, crypto)
+                .RecentAsync(UnwitnessedTenant, UnwitnessedOwner, 10, default))
+                .Count != 1)
+            throw new InvalidOperationException("Unwitnessed fixture not seeded.");
+    }
+
+    private static async Task EraseUnwitnessedAsync(NpgsqlDataSource db,
+        AesGcmEnvelopeEncryption crypto)
+    {
+        var result = await new PostgresPersonalDataService(db, crypto)
+            .EraseAsync(UnwitnessedTenant, UnwitnessedOwner, default);
+        if (result.DeletedMemories != 1 || result.DeletedConsents != 1 ||
+            (await new PostgresMemoryRepository(db, crypto)
+                .RecentAsync(UnwitnessedTenant, UnwitnessedOwner, 10, default))
+                .Count != 0)
+            throw new InvalidOperationException(
+                "Unwitnessed erasure did not atomically commit.");
+    }
+
+    private static async Task VerifyUnwitnessedResurrectedAsync(
+        NpgsqlDataSource db, AesGcmEnvelopeEncryption crypto)
+    {
+        // The recovered primary must contain the pre-backup ciphertext
+        // again, with its original actor-scoped consent. Do NOT erase
+        // this actor or authorize traffic in the negative rehearsal.
+        var notes = await new PostgresMemoryRepository(db, crypto)
+            .RecentAsync(UnwitnessedTenant, UnwitnessedOwner, 10, default);
+        if (notes.Count != 1 ||
+            notes[0].Summary != "synthetic unwitnessed pitr note")
+            throw new InvalidOperationException(
+                "Physical PITR did not resurrect the unwitnessed fixture.");
+        await using var export = new MemoryStream();
+        await new PostgresPersonalDataService(db, crypto).WriteExportAsync(
+            UnwitnessedTenant, UnwitnessedOwner, export, default);
+        using var document = JsonDocument.Parse(export.ToArray());
+        if (document.RootElement.GetProperty("memoryEntries").GetArrayLength() != 1 ||
+            document.RootElement.GetProperty("consentGrants").GetArrayLength() != 1)
+            throw new InvalidOperationException(
+                "Unwitnessed restored actor export/consent mismatch.");
     }
 
     private static async Task VerifyPeerAsync(NpgsqlDataSource db,

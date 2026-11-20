@@ -909,3 +909,21 @@ lo stesso ambiente e senza WORM, HSM o vault.
 Il rollback della QUARTA stessa o il compromesso
 del runner può rendere inaffidabile il registro.
 #141/#109 rimangono aperte.
+
+
+## PITR fisico complementare della quarta claim PGDATA (ADR 0041)
+
+Dopo `physical-third-claim-pitr-rehearsal.sh` la CI esegue
+`physical-fourth-claim-pitr-rehearsal.sh` su PostgreSQL 17.
+La QUARTA ha WAL archiving temporaneo separato e DB di rehearsal
+`omnia_ci_fourth_claim_pitr`. Il test genera un UUID privato, scrive
+una claim QUARTA→TERZA dopo un restore point, promuove un clone
+fisico QUARTA su 127.0.0.1:15442, autentica il MAC sopravvissuto
+sul TERZO e verifica l'assenza del vecchio UUID sulla copia QUARTA.
+Dopo rotazione delle due credenziali del clone, il riutilizzo dello
+stesso UUID è ammesso sulla QUARTA ripristinata ma deve essere negato
+sulla TERZA con 23505. La CI non esegue DELETE sul database primario
+né autorizza il riavvio dell'API. Tutti i dati sono sintetici e
+conservati solo durante la run; backup, WAL e chiavi non diventano
+artifact. Un rollback di entrambe le claim authority elude la prova:
+non è attestation di commit né DR/offsite pronto per produzione.

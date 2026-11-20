@@ -207,3 +207,19 @@ batches MUST stop the second. Continue to use the restricted
 Do not claim atomic cancellation of an already-running SQL query,
 DB-level fencing, control of offline CLI/workers, replicas or
 providers. The release marker remains unauthenticated; #141 OPEN.
+
+
+## Recovery journal verification slice (#141 / ADR 0021)
+
+The offline `RecoveryJournalVerifier` checks strict bounded JSONL:
+contiguous sequences starting at 1, unique event UUIDs, exact v1
+schema, authenticated SHA256 chain and a separately HMAC-authenticated
+checkpoint (distinct key and trust domain). The read-only CLI
+`src/backend/Omnia.RecoveryAudit` MUST fail closed on missing,
+truncated, invalid or insecure private files, and it MUST NOT log
+actor identifiers, keys or personal data. Do not use it as an
+automatic API release authorization. A valid checkpoint only detects
+rollback if it is independently durable and newer than the restored
+backup; rolling back BOTH artifacts remains undetectable.
+No signed production issuer, external append-only ledger, watermark
+authority, traffic gate coordination, erasure replay or GDPR sign-off.

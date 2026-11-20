@@ -203,3 +203,18 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [ ] Restano aperti in-flight SQL/TOCTOU, offline workers, replica
   coordination, watermark anti-rollback, vault, journal indipendente
   e gating di ingress e provider.
+
+
+## #141 — Offline HMAC recovery journal/checkpoint verification (2026-11-20)
+
+- [x] Verified bounded JSONL sequence, event MAC, SHA-256 chain,
+  exact v1 schema, distinct-key authenticated checkpoint and
+  rejection of missing/truncated/reordered/forged or gapped events.
+- [x] Read-only `Omnia.RecoveryAudit` and private file validation;
+  no access to PostgreSQL or data mutation.
+- [x] xUnit RED/GREEN and CI smoke for no-input fail-closed CLI.
+- [ ] Record final Actions status and evidence on issue #141.
+- [ ] External append-only publisher, crash-consistent outbox, signed
+  authorization, durable anti-rollback sequence/watermark, HSM/vault
+  custody, erasure replay, global traffic fence and Azure/on-prem
+  equivalence; not production ready.

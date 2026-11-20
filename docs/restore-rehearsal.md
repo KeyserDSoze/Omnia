@@ -203,3 +203,35 @@ l'eventuale lavoro verso provider. La release non è firmata e non
 verifica un journal anti-rollback. Per questi gap #141 resta aperta.
 
 Decisione: [ADR 0020](../adr/0020-recovery-gated-retention-worker.md).
+
+
+## Audit offline di journal + checkpoint dopo PITR (#141 / ADR 0021)
+
+`src/backend/Omnia.RecoveryAudit` è un tool **solo lettura**:
+non si connette a PostgreSQL, non elimina dati e non cambia il file
+`Recovery__AccessStateFile`. Richiede file **assoluti, privati e
+separati dalla copia PGDATA** indicati tramite:
+
+- `OMNIA_RECOVERY_JOURNAL_PATH`: JSON Lines v1 con eventi erase-actor;
+- `OMNIA_RECOVERY_CHECKPOINT_PATH`: checkpoint v1 con numero e tip SHA-256;
+- `OMNIA_RECOVERY_JOURNAL_KEY_PATH`: chiave HMAC binaria casuale da 32 byte;
+- `OMNIA_RECOVERY_CHECKPOINT_KEY_PATH`: seconda chiave HMAC distinta.
+
+Controlla LF framing, firme HMAC-SHA256, catena canonica, sequenze
+contigue, UUID unici, schema senza duplicati, dimensioni e coerenza
+tra conteggio finale e checkpoint. Un journal troncato viene rifiutato
+se il checkpoint esterno non è stato a sua volta riportato indietro.
+Rifiuta file mancanti, symlink, group/world read e formati ignoti.
+Exit 0 = file verificati contro il checkpoint PRESENTE; exit 2 = errore.
+Il tool non stampa tenant, owner, evento o chiavi; solo un totale.
+
+**Non è ancora una procedura reale di emissione e approvazione**:
+non esistono producer di cancellazioni su bus/outbox durabile,
+storage immutabile o ancoraggio monotono da Azure/OpenBao/HSM.
+La chiave e il checkpoint devono essere forniti dall'operatore
+indipendentemente dal backup, non creati durante la recovery stessa.
+Se vengono troncati o ripristinati insieme al journal, il verificatore
+non può attestare la completezza globale. Il risultato non promuove
+l'API, non esegue `EraseAsync` e non soddisfa il gate #141.
+
+Vedi [ADR 0021](../adr/0021-recovery-journal-checkpoint-verifier.md).

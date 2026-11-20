@@ -189,3 +189,19 @@ ready marker. The privileged SQL routine and any offline/external
 workers are NOT fenced at the database layer by this adapter.
 No independent ledger or verifiable authorization to promote a
 restored replica exists yet. See ADR 0020 and #141.
+
+
+## Recovery journal integrity is NOT journal completeness (#141 / ADR 0021)
+
+Read-only offline audit now checks per-record HMAC-SHA256 and hash
+chain order against a separately authenticated checkpoint with a
+distinct 32-byte HMAC key. Strict JSONL field and count validation,
+bounded inputs, private-path requirements and no PII logs reduce
+tampering/accidental release risks. A checkpoint is independent
+ONLY if its custody, freshness and monotonicity are independently
+enforced by an external system. Without that, attacker rollback of
+both checkpoint and journal remains undetectable. No production
+issuer, external journal store, durable anti-rollback authority,
+proof of full erasure capture, replay or API traffic authorization
+is implemented. The API recovery marker remains an unsigned
+operator assertion. #141 stays OPEN.

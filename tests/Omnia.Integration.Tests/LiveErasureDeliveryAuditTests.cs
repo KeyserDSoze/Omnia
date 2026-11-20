@@ -77,40 +77,32 @@ public sealed class LiveErasureDeliveryAuditTests
     }
 
     [Fact]
-    public async Task ConflictingWitnessActorForCommittedEventMustFailClosed()
+    public void ConflictingWitnessActorForCommittedEventMustFailClosed()
     {
-        await using var admin = NpgsqlDataSource.Create(Require("OMNIA_TEST_DB"));
-        await new PostgresMigrator(admin, "omnia_app", "omnia_retention",
-            "omnia_backfill", "omnia_backfill_audit",
-            dispatchRole: "omnia_dispatcher").MigrateAsync();
-        await using var app = NpgsqlDataSource.Create(Require("OMNIA_TEST_APP_DB"));
-        await using var dispatch = NpgsqlDataSource.Create(Require("OMNIA_TEST_DISPATCH_DB"));
-        await using var writer = NpgsqlDataSource.Create(Require("OMNIA_TEST_WITNESS_WRITER_DB"));
-        await using var reader = NpgsqlDataSource.Create(Require("OMNIA_TEST_WITNESS_READER_DB"));
-
-        var tenant = "live-mismatch-" + Guid.NewGuid().ToString("N");
-        const string subject = "synthetic-scope-audit";
-        await new PostgresPersonalDataService(app, TestEnvelopeCrypto.Create())
-            .EraseAsync(tenant, subject, default);
-
-        Guid eventId;
-        await using (var query = admin.CreateCommand("""
-            SELECT id FROM public.erasure_outbox
-            WHERE tenant_id = @tenant AND owner_sub = @subject
-            """))
-        {
-            query.Parameters.AddWithValue("tenant", tenant);
-            query.Parameters.AddWithValue("subject", subject);
-            eventId = (Guid)(await query.ExecuteScalarAsync()
-                ?? throw new InvalidOperationException("Expected committed test erasure."));
-        }
-
-        await new PostgresErasureWitness(writer).AppendAsync(
-            new ErasureDispatchEvent(eventId, tenant, subject + "-forged",
-                "erase-actor", DateTimeOffset.UtcNow), default);
-        await Assert.ThrowsAsync<InvalidDataException>(() =>
-            new PostgresErasureLiveDeliveryAudit(dispatch, reader)
-                .VerifyKnownEventAsync(eventId, default));
+        var eventId = Guid.NewGuid();
+        var occurredAt = DateTimeOffset.UtcNow;
+        var source = new ErasureDispatchEvent(eventId, "synthetic-tenant",
+            "synthetic-actor", "erase-actor", occurredAt);
+        var valid = new ErasureWitnessReceipt(42, eventId,
+            source.TenantId, source.OwnerSubject, "erase-actor");
+        Assert.Equal(42,
+            PostgresErasureLiveDeliveryAudit.RequireMatchingReceipt(source, valid));
+        Assert.Throws<InvalidDataException>(() =>
+            PostgresErasureLiveDeliveryAudit.RequireMatchingReceipt(
+                source, valid with { OwnerSubject = "forged-actor" }));
+        Assert.Throws<InvalidDataException>(() =>
+            PostgresErasureLiveDeliveryAudit.RequireMatchingReceipt(
+                source, valid with { TenantId = "another-tenant" }));
+        Assert.Throws<InvalidDataException>(() =>
+            PostgresErasureLiveDeliveryAudit.RequireMatchingReceipt(
+                source, valid with { EventId = Guid.NewGuid() }));
+        Assert.Throws<InvalidDataException>(() =>
+            PostgresErasureLiveDeliveryAudit.RequireMatchingReceipt(
+                source, valid with { Sequence = 0 }));
+        Assert.Throws<InvalidDataException>(() =>
+            PostgresErasureLiveDeliveryAudit.RequireMatchingReceipt(
+                source, valid with { EventType = "other" }));
+        // No forged receipt is ever persisted to the shared CI witness.
     }
 
     private static string Require(string name) =>

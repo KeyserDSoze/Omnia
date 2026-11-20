@@ -13,6 +13,20 @@ namespace Omnia.Integration.Tests;
 public sealed class RecoveryJournalVerifierTests
 {
     [Fact]
+    public void CanonicalHmacJsonDoesNotEscapeBase64PlusAndEquals()
+    {
+        var payload = RecoveryJournalVerifier.EntryPayload(
+            1, Guid.NewGuid().ToString("N"), "erase-actor",
+            "synthetic-tenant", "synthetic-owner", "ab+/cd==");
+        var anchor = RecoveryJournalVerifier.AnchorPayload(1, "ab+/cd==");
+        Assert.Contains("\"previousDigest\":\"ab+/cd==\"",
+            Encoding.UTF8.GetString(payload));
+        Assert.Contains("\"tipDigest\":\"ab+/cd==\"",
+            Encoding.UTF8.GetString(anchor));
+        Assert.DoesNotContain("\\u002B", Encoding.UTF8.GetString(payload));
+    }
+
+    [Fact]
     public void AcceptsOrderedSignedJournalOnlyWithMatchingIndependentAnchor()
     {
         var fixture = new JournalFixture();

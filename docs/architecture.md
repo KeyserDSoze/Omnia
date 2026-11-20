@@ -321,3 +321,18 @@ claim across source rollback without mutating the
 resurrected actor. It remains a receipt for an
 *attempt*, not a source commit, legal erasure request
 or production recovery authorization.
+
+## Four-PGDATA synthetic one-shot admission fence (ADR 0040)
+
+The experimental erasure method now gates a source
+DELETE on: authenticated pre-intent in SECOND/THIRD,
+one-shot attempt written to FOURTH physical PostgreSQL,
+then one-shot THIRD claim, then primary actor delete
+and transactional outbox. The FOURTH's physical PGDATA
+and `system_identifier` are distinct, though all four
+live on one disposable CI host; it is NOT offsite WORM.
+The real third-PGDATA WAL PITR test restores to before
+a claim and proves fourth-PGDATA HMAC still blocks reuse.
+All admission records prove an ATTEMPT, not historical
+source COMMIT, global GDPR erasure or release permission.
+Production REST/OIDC integration remains untouched.

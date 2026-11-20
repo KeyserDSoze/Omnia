@@ -331,3 +331,17 @@ chi abbia richiesto la cancellazione o se essa
 sia effettivamente avvenuta; OIDC/consenso,
 provider/media/backups/device, retention reale e
 GDPR artt. 5/17 restano fuori dal perimetro CI.
+
+## Fourth synthetic erasure attempt custody, still no GDPR proof (ADR 0040)
+
+The fourth PostgreSQL CI instance stores only a random
+request UUID, domain-separated HMAC of tenant/subject,
+and admission timestamp. Metadata remains correlated
+to a data subject and requires retention/access/export
+and legal-basis review. Admission can occur even if
+subsequent third or primary transactions never commit.
+The fourth PGDATA supplies no right-to-erasure verdict,
+nor real OIDC identity, consent, third-party media/backup/
+device erasure, immutable offsite storage or GDPR Art.17
+compliance. A true third-PGDATA physical PITR rehearsal
+does not modify the public REST API. #31/#32/#141 OPEN.

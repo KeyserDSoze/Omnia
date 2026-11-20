@@ -596,3 +596,35 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   privata ma nel runner CI. API pubblica e OIDC
   reale invariati; niente global fence o
   completamento GDPR di backup/provider/device.
+
+## #141 — Quarta PGDATA one-shot, PITR fisico della TERZA (ADR 0040)
+
+- [x] TDD RED: xUnit PostgreSQL richiede un nuovo metodo
+  `EraseWithFourthFenceAsync`, inizialmente mancante.
+- [x] Percorso CI sintetico: validate HMAC pre-intent
+  sul witness/third; consumare request UUID una volta
+  sulla QUARTA PGDATA fisicamente distinta; consumarlo
+  poi sulla TERZA; solo dopo DELETE + outbox nello
+  stesso commit source. Entrambe le claim sono
+  HMAC-bound a tenant/owner con SQL roles EXECUTE-only.
+- [x] Test PostgreSQL: simula perdita di claim TERZA
+  dopo primo commit, QUARTA sopravvive e blocca
+  riutilizzo dell'UUID anche con nuova memoria/
+  consenso; verifica caso di claim QUARTA orfana.
+- [x] Recovery fisico: basebackup della TERZA PGDATA,
+  restore point WAL nominato PRIMA della claim;
+  tentativo firmato QUARTA → TERZA, poi vero PITR
+  e promozione di clone TERZA senza claim. Il
+  lettore QUARTA autenticato conferma il consumo
+  e la nuova scrittura duplicata 23505 viene
+  negata. Credenziali del reader recuperato
+  ruotate e password precedente rifiutata.
+  Nessuna modifica ad API, DELETE, ready.
+- [ ] La QUARTA può essere ripristinata/alterata
+  dagli stessi amministratori del runner, e
+  nessun commit cross-cluster è atomico.
+  Non è WORM/offsite, né attestazione che DELETE
+  sul source abbia committato, né richiesta
+  legalmente autorizzata via OIDC. Nessun
+  fencing di ingress/workers/repliche e
+  gestione backup/device/provider. #141 OPEN P0.

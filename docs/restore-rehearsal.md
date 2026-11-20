@@ -873,3 +873,39 @@ alla chiave del runner. L'esistenza della claim
 non prova un commit source e i tre cluster non
 sono domini indipendenti fuori dall'host CI.
 #141 e #109 rimangono aperte.
+
+## PITR fisico della TERZA PGDATA con claim QUARTA superstite (ADR 0040)
+
+Lo step CI `physical-third-claim-pitr-rehearsal.sh` avvia
+un backup fisico della TERZA PGDATA PostgreSQL 17 con
+`pg_basebackup` e `pg_verifybackup`. Un DB dedicato
+`omnia_ci_claim_pitr` usa le funzioni `admission.*`
+e lettori/scrittori SQL a soli privilegi EXECUTE.
+Il restore point WAL è scritto PRIMA dell'ammissione
+di un tentativo sintetico; il CLI con chiave HMAC
+privata nel runner registra la richiesta dapprima
+sulla QUARTA PGDATA `omnia_fourth_claims`, poi
+sulla TERZA, e verifica entrambi gli scope.
+
+Viene archiviato WAL reale, ripristinato un nuovo
+clone della TERZA sul port 15441, verificato il
+`system_identifier` uguale a quello dell'originale
+e diverso dalla QUARTA, e i marker WAL prima/dopo
+il restore point (before presente, after assente).
+L'UUID è assente dal database del clone recuperato,
+mentre la QUARTA conserva il suo HMAC. Il nuovo
+tentativo sulla QUARTA è negato dalla constraint UUID
+con SQLSTATE 23505 e non esegue scritture sul clone
+o sul source. Il lettore del clone cambia password
+prima dell'audit; quella ereditata dal backup viene
+rifiutata. L'originale TERZA resta leggibile e il
+MAC della QUARTA non cambia. Nessun `ready` o
+retry automatico è consentito.
+
+**Questa non è una prova del COMMIT DELETE primary**:
+non viene invocato alcun DELETE reale e la QUARTA
+si trova sullo stesso runner CI, amministrata da
+lo stesso ambiente e senza WORM, HSM o vault.
+Il rollback della QUARTA stessa o il compromesso
+del runner può rendere inaffidabile il registro.
+#141/#109 rimangono aperte.

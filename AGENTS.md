@@ -765,3 +765,43 @@ A claimant with DB superuser access can rewrite the HMAC and a
 claim can exist without a source commit; none of this is WORM,
 offsite custody, user OIDC authentication or GDPR Art.17 compliance.
 Keep #141/#109/#31/#32 OPEN.
+
+## Fourth physical PostgreSQL one-shot attempt fence (ADR 0040/#141)
+
+The CI-only `EraseWithFourthFenceAsync` method must first validate
+an HMAC-anchored remote pre-intent on witness/third PGDATA; **then**
+commit a domain-separated one-shot UUID/scope-HMAC claim on a distinct
+FOURTH PGDATA using `omnia_claim_writer` EXECUTE-only, **then**
+commit the corresponding THIRD-PGDATA claim, **then** open the primary
+actor-scoped DELETE + same-UUID outbox transaction. The FOURTH attempt
+is **not a source COMMIT certificate**, and a failure anywhere after
+it is consumed leaves the request UNCERTAIN, never automatically
+replayed or marked erased. The fourth SQL writer must not be the third
+SQL connection. Both claim databases use the restricted
+`admission.claim_once` and `admission.claim_scope` functions,
+without raw table grants. The fourth store is a separately initialized
+PostgreSQL 17 instance with a distinct `system_identifier` and port
+15440; all PGDATAs still share one ephemeral CI host and common
+container administration, NOT offsite/WORM.
+
+The TDD integration test MUST (a) reject a fourth reader masquerading
+as writer before any mutation, (b) prove a successful single attempt
+on fourth+third and source UUID outbox, (c) simulate loss of the
+third-PGDATA claim via a TEST superuser, (d) show that the fourth
+claim remains HMAC-verifiable and rejects an identical request with
+23505 before deleting new source data, and (e) show that a fourth
+claim may be stranded if third write fails, with no automatic retry.
+A separate TRUE PHYSICAL WAL PITR rehearsal MUST take a
+`pg_basebackup` of THIRD PGDATA before a named restore point and
+commit a dedicated synthetic attempt fourth-then-third afterward;
+the promoted third clone must lack its original claim but the live
+fourth must still contain its authenticated scope. The CLI must
+use EXECUTE-only readers, rotate recovered third-reader credentials,
+reject stale passwords and repeated fourth writes, keep actor data
+untouched, and **never** emit recovery-ready. Original third
+should continue to verify the claim. Keep #141/#109/#31/#32
+OPEN. A simultaneous PITR of fourth and third, loss of the fourth
+acknowledgment, credential compromise or shared host/admin recovery
+may still defeat this synthetic anti-rollback; fix requires independently
+administered immutable offsite custody, authenticated real requester,
+primary COMMIT provenance, global traffic gates and legal review.

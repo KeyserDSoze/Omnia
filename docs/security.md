@@ -695,3 +695,38 @@ cross-store erasure or a production DR release. All
 PGDATAs and keys remain on one ephemeral CI runner;
 offsite WORM, vault/HSM, global fencing and GDPR
 review remain open.
+
+## Fourth-PGDATA one-shot anti-rollback, third-PGDATA physical PITR (ADR 0040)
+
+The synthetic CI-only fourth fence is an additional
+EXECUTE-only attempt ledger with its own physical PGDATA,
+system identifier and SQL credentials on loopback:15440.
+An HMAC-anchored pre-intent is validated first, followed
+by a non-idempotent fourth claim, then the third claim,
+then the primary transactional actor erase. The fourth
+claim survives a rollback of the third PGDATA alone and
+denies repeat UUIDs with 23505. A stranded fourth claim
+is a fail-closed uncertain attempt, NOT evidence of
+source COMMIT or lawful authorization.
+
+A real `pg_basebackup`/archived WAL PostgreSQL 17 PITR
+regression creates a restored third clone before a
+post-target claim while fourth PGDATA stays untouched.
+The clone has no matching claim, while authenticated
+fourth reader verifies exact synthetic tenant/owner.
+A duplicate fourth claim fails; recovered reader
+credentials are rotated, and inherited credentials
+are denied. No deletion or API release is triggered.
+
+**Threat model limitation:** all four PGDATAs and keys
+share a disposable GitHub-hosted CI runner and an
+administrative/failure domain. There is no remote
+geographically independent immutable authority,
+synchronous cross-cluster commit or signed source
+COMMIT attestation; an attacker with access to the
+fourth admin/key can rewrite its history, and timeout
+after fourth claim causes indefinite uncertainty.
+No OAuth/OIDC real-user authorization, global API/
+worker/replica/ingress fence or cross-provider GDPR
+deletion has been integrated. This is not production
+readiness or a `ready` certificate.

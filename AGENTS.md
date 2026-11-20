@@ -805,3 +805,18 @@ acknowledgment, credential compromise or shared host/admin recovery
 may still defeat this synthetic anti-rollback; fix requires independently
 administered immutable offsite custody, authenticated real requester,
 primary COMMIT provenance, global traffic gates and legal review.
+
+
+## Complementary fourth-PGDATA physical PITR negative gate (#141 / ADR 0041)
+
+`tests/restore/physical-fourth-claim-pitr-rehearsal.sh` is CI-only, after
+ADR 0040's THIRD-PGDATA drill. It physically rolls back FOURTH using a
+verified basebackup, named WAL target and promotion, while THIRD retains the
+actor-bound claim. With reissued restricted credentials on the restored
+FOURTH clone, replay may re-consume FOURTH but MUST fail at THIRD with
+PostgreSQL 23505 **before any primary DELETE**. Check original passwords
+are denied, marker order and authenticated claim scope. No real data,
+source deletion, API promotion or auto-retry. If both THIRD and FOURTH
+are rolled back, or a source COMMIT is lost/uncertain, these claims do
+NOT certify deletion. No offsite/WORM custody or production permission.
+#141/#109/#31/#32 remain open.

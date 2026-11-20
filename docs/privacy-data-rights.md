@@ -298,3 +298,21 @@ retention, access/export and deletion policies.
 No customer data, real OIDC authorization, provider/
 cache/backup/device erasure, offsite custody or
 GDPR certification is established. #31/#32/#141 OPEN.
+
+## Pre-source-DELETE attempt custody is not GDPR erasure proof (ADR 0038)
+
+The synthetic PostgreSQL third-cluster claim records
+only a random request UUID, a domain-separated HMAC
+of tenant/owner and an attempt timestamp, not raw
+subject or memory content. The attempt may be consumed
+even when the DELETE transaction fails or never
+commits. It cannot prove legal requester identity,
+consent, right-to-erasure completion or the scope
+of provider/backup/device deletion. Claim identifiers,
+MACs and timestamps remain personal-data metadata
+requiring a documented lawful basis, retention,
+export/access, deletion and exception handling;
+none is yet settled for production. A real
+physical source PITR test demonstrates denial
+of request reuse but no GDPR conformity.
+#31/#32/#141 stay OPEN.

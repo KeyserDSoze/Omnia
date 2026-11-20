@@ -793,3 +793,52 @@ con accesso all'HMAC key, al terzo DB admin o
 al restore di entrambi i cluster può aggirare
 l'autorità. Non dichiarare conformità GDPR,
 RPO/RTO, disponibilità offsite, WORM o chiusura #141.
+
+## Claim una tantum resistente al PITR primario (ADR 0038)
+
+Il nuovo scenario negativo usa anche `omnia_pitr_execution_claims`,
+un database separato sulla TERZA PGDATA PostgreSQL del runner
+CI. L'account `omnia_claim_writer` può invocare solo
+`admission.claim_once` e l'account `omnia_claim_reader`
+soltanto `admission.has_claim`; niente lettura diretta
+delle tabelle o gestione del checkpoint. La claim
+memorizza UUID e HMAC della coppia tenant/subject
+su dominio separato, NON il contenuto della nota.
+L'INSERT con PRIMARY KEY UUID è deliberatamente
+*non idempotente*: il secondo tentativo è sempre negato.
+
+L'ordine della prova è: intent remoto presente,
+checkpoint HMAC dell'intento ACK sulla TERZA PGDATA,
+**claim una tantum commit sulla TERZA PGDATA**, poi
+DELETE di memoria e consenso e INSERT dello stesso
+UUID nell'outbox transazionale del primario.
+In assenza di pre-ack dell'intent il primo passaggio
+deve negare la claim e non modificare dati.
+La cancellazione sintetica viene eseguita DOPO il
+restore point WAL e dopo l'ultima pubblicazione;
+manca deliberatamente il completed-erasure ACK.
+L'originale primaria contiene l'outbox committata;
+il clone fisico ripristinato perde DELETE e outbox.
+
+Dopo `pg_basebackup` + WAL PITR il test usa davvero
+`EraseWithOneShotAnchoredIntentAsync` contro il
+clone promosso. La claim persistita sul terzo
+cluster rifiuta il riuso con SQLSTATE 23505
+**prima** di aprire la transazione del clone:
+i dati sintetici risorti (memory e consent)
+restano intatti, l'outbox recuperata resta
+vuota, nessun replay o marker `ready`.
+La prova verifica anche che la claim sul
+terzo cluster non sia stata modificata dal
+PITR del primario.
+
+**Interpretazione corretta:** la claim prova
+soltanto il precedente **tentativo**, non che
+il DELETE primario abbia effettivamente
+committato. Una rete o un crash dopo la
+claim può lasciare un'operazione incerta,
+intenzionalmente bloccata fino ad audit e
+decisione autorizzata. Tutte le PGDATA
+risiedono sullo stesso runner, quindi il
+meccanismo non è WORM/offsite, failover
+geografico, 2PC o DR di produzione.

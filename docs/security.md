@@ -624,3 +624,39 @@ custody, authenticated real requester, global
 ingress/API/worker/replica fence and cross-store GDPR
 rights are not implemented. The source UUID PK
 does NOT protect retries after physical rollback.
+
+## One-shot pre-erase admission on third PostgreSQL PGDATA (ADR 0038)
+
+A CI-only `EraseWithOneShotAnchoredIntentAsync` first validates
+the exact UUID, tenant, subject, type and prefix MAC of an
+already-anchored witness pre-intent, then obtains a strictly
+non-repeatable attempt claim in a DIFFERENT database on the
+THIRD PGDATA *before* touching the source actor transaction.
+The narrow SQL writer can only EXECUTE an insert-once function;
+a separate reader can only EXECUTE a boolean membership check.
+SECURITY DEFINER functions and PUBLIC EXECUTE revocation share
+one transaction. A domain-separated HMAC stores no raw
+actor/tenant in the claim table; UUID/digest nevertheless
+remain personal metadata in privacy scope.
+
+Concurrency for the SAME UUID serializes via the PostgreSQL
+unique primary key: exactly one insert may commit; every
+duplicate, including after a primary-only PITR, raises
+23505. Once claimed, the request is *permanently uncertain*
+until external reconciliation: losing the primary commit,
+failure before commit or timeout after claim all require
+investigation and MUST NOT lead to automatic retry/re-delete.
+A recovered primary without the old source outbox must
+still consult this independent attempt claim. The test
+checks this against a real physical WAL PITR and denies
+re-deletion of resurrected memory/consent.
+
+**Trust and availability caveats:** any caller holding the
+claim-writer capability can pre-consume a UUID and cause
+denial of service; this is not an OIDC consent signature.
+If the THIRD PGDATA, its keys or administrators roll back
+or become compromised, the one-shot property can be lost.
+The public API retains its existing behavior; no external
+WORM, separate host, vault/HSM, cross-DB atomicity, global
+ingress/worker/replica fencing, source commit attestation,
+GDPR completion or automatic recovery release is provided.

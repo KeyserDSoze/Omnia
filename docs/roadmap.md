@@ -531,3 +531,41 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   esistere anche se la cancellazione fallisce; nuove
   acquisizioni dopo PITR richiedono decisioni autorizzate
   fuori banda. #141/#109/#31/#32 ancora OPEN.
+
+## #141 — One-shot attempt sulla TERZA PGDATA contro retry post-PITR (ADR 0038)
+
+- [x] TDD RED: nuovo test PostgreSQL richiede
+  `PostgresPreEraseExecutionClaimWriter/Reader` e
+  `EraseWithOneShotAnchoredIntentAsync`, prima assenti.
+- [x] Schema CI `admission.execution_claims` in
+  database separato della TERZA PGDATA: UUID primario
+  unico + HMAC di scope con separazione di dominio,
+  timestamp di tentativo; funzioni SECURITY DEFINER
+  con REVOKE PUBLIC in stessa transazione,
+  credenziali EXECUTE-only e nessun privilegio
+  diretto su tabelle.
+- [x] Percorso sintetico: verifica l'intent già ancorato
+  sulla seconda/terza PGDATA, poi ottiene una
+  **CLAIM una tantum** persistita sul terzo database
+  PRIMA del DELETE + outbox nella transazione source;
+  duplicati 23505 e richiesta consumata senza source
+  COMMIT rimane INCERTA, non ritentabile automaticamente.
+- [x] Test reale PostgreSQL: concorrenza stessa UUID,
+  cambio di attore, SQL role enforcement, rifiuto
+  retry con memoria e consenso acquisiti dopo, e
+  lettura read-only delle claim senza raw SELECT.
+- [x] PITR fisico del primario: tentativo consumato
+  salvato fuori dal source PGDATA, outbox e DELETE
+  source persi dal rollback; il clone promosso tenta
+  davvero lo stesso UUID ed è bloccato dalla claim,
+  lasciando intatte memoria e consenso risorti;
+  API mantiene quarantena e non emette ready.
+- [ ] **Non è commit proof**: una claim precede il
+  COMMIT e può rimanere orfana, nessun commit
+  atomico fra tre PGDATA, niente offsite WORM
+  o vault/HSM, identità OIDC dell'interessato,
+  api/workers/repliche global fencing o
+  cancellazione provider/media/backup/device.
+  Il vecchio metodo sintetico non-gated e il
+  REST pubblico non adottano ancora questo
+  protocollo; #141 e dipendenze restano OPEN.

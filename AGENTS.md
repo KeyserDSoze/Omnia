@@ -688,3 +688,50 @@ The two remote databases do not share a serializable distributed
 transaction; concurrent recovery or a rollback of the THIRD
 cluster can invalidate the safety assumption. #141 and GDPR/DR
 dependencies remain OPEN.
+
+## One-shot independent synthetic erasure attempt (ADR 0038 / #141)
+
+The CI-only `PostgresPersonalDataService.EraseWithOneShotAnchoredIntentAsync`
+adds a THIRD-PGDATA, one-time `admission.execution_claims` record
+**after** authenticating a matching, already-anchored remote pre-intent,
+but **before** opening any primary actor-scoped transaction. The
+dedicated `omnia_claim_writer` EXECUTE-only role may call
+`admission.claim_once(uuid,bytea)` but MUST NOT read/modify raw tables,
+issue HMAC checkpoints or completed-erasure witness receipts. An
+independent `omnia_claim_reader` may call only
+`admission.has_claim(uuid)`. The schema's unrevocable-per-user
+one-shot UUID PK is a fail-closed attempt record; any reuse MUST
+raise 23505, including an identical request. A concurrent eight-way
+same UUID claim must commit exactly once. The stored scope HMAC
+uses a domain-separated canonical payload; no raw actor or tenant
+text goes into THIRD PGDATA, but digest/request UUID are STILL
+regulated metadata. All SECURITY DEFINER routines must be
+created and have PUBLIC EXECUTE revoked in one transaction.
+
+**Critical semantics:** claim present means only "an attempt
+was admitted before a possible source DELETE". It is NOT a
+source commit receipt, not evidence of GDPR completion, and
+not proof of a legally authorized actor. A failed/ambiguous
+primary commit permanently consumes the UUID; NEVER retry,
+auto-replay, report "erased" or issue recovery ready.
+The claim writer alone can deny/consume a request: never
+treat CI SQL access as OIDC user authorization, and
+restrict/rotate real credentials in any future design.
+One-shot safety persists ONLY while this THIRD PGDATA and
+the HMAC key remain independently trustworthy; both still
+share one disposable CI host and admin with the primary/witness.
+
+The physical primary WAL PITR rehearsal MUST use a separate
+`omnia_pitr_execution_claims` DB on the THIRD PGDATA. It
+must first deny an unanchored intent, then register a
+one-shot claim and locally commit synthetic actor DELETE
+and same UUID outbox after independent intent checkpoint ACK
+but before completed witness ACK. It must prove the attempt
+record survives the physical source rollback and actually
+invoke the strict method on the promoted recovered primary:
+the source outbox UUID has vanished, yet the third-cluster
+claim MUST reject the reused request with 23505 BEFORE any
+re-deletion. The resurrected synthetic memory+consent and
+empty outbox must remain intact; API stays quarantined.
+Keep #141/#109/#31/#32 open; do not integrate this test
+method into REST/API or claim offsite WORM/commit certainty.

@@ -282,3 +282,25 @@ The production public erasure endpoint and API
 interface remain unchanged. This is not global DR
 release authorization, offsite signer custody or
 authenticated GDPR request handling.
+
+## Independent one-shot PRE-source-DELETE attempt record (ADR 0038)
+
+The experimental CI-only erasure path validates an
+HMAC-anchored intent across SECOND/THIRD PostgreSQL
+clusters, then consumes a per-request UUID in the
+THIRD PGDATA `admission.execution_claims` before
+the primary actor RLS DELETE/outbox transaction.
+The claim database uses separate EXECUTE-only
+writer and read-only identities; same-UUID
+concurrent attempts are serialized through a
+unique index and never silently retried. An
+attempt can remain committed without the
+source transaction succeeding. The physical
+primary PITR harness demonstrates that after
+source rollback the recovered outbox can lose
+the old UUID while the independently consumed
+attempt still denies a second erasure. There
+is no historical source COMMIT certificate,
+OIDC requester proof, offsite WORM/vault or
+global DR release authorization. The existing
+REST/API erasure path remains unchanged.

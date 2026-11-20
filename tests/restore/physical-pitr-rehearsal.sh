@@ -468,11 +468,13 @@ OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
   echo "Recovered primary unexpectedly wrote an outbox for consumed attempt." >&2
   exit 1
 }
+recovered_claim_id="$(cat "$OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH")"
 [[ "$(docker exec "$anchor_container" psql -U omnia \
   -d omnia_pitr_execution_claims -Atqc \
-  "SELECT count(*) FROM admission.execution_claims WHERE request_id = '$unwitnessed_id'")" == 1 ]] || {
+  "SELECT count(*) FROM admission.execution_claims WHERE request_id = '$recovered_claim_id'")" == 1 ]] || {
   echo "Independent one-shot claim changed during primary PITR." >&2; exit 1
 }
+unset recovered_claim_id
 echo "PHYSICAL_PRIMARY_PITR_OLD_ATTEMPT_STILL_CONSUMED"
 
 # Rotate the restored dispatcher password too, before any read-only

@@ -21,6 +21,31 @@ public static class RecoveryJournalLocalAppender
         UnixFileMode.GroupExecute | UnixFileMode.OtherRead |
         UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
 
+    /// <summary>
+    /// Reads two distinct, private binary keys with the same fail-closed
+    /// safeguards as the offline auditor. Used by synthetic CI recovery,
+    /// not exposed through a production HTTP/CLI writer.
+    /// </summary>
+    public static RecoveryJournalVerifier.Verification AppendFromPrivateFiles(
+        string journalPath, string checkpointPath,
+        string journalKeyPath, string checkpointKeyPath,
+        string tenantId, string ownerSubject)
+    {
+        var journalKey = RecoveryJournalFileAudit.ReadPrivate(journalKeyPath, 32);
+        try
+        {
+            var checkpointKey =
+                RecoveryJournalFileAudit.ReadPrivate(checkpointKeyPath, 32);
+            try
+            {
+                return Append(journalPath, checkpointPath,
+                    journalKey, checkpointKey, tenantId, ownerSubject);
+            }
+            finally { CryptographicOperations.ZeroMemory(checkpointKey); }
+        }
+        finally { CryptographicOperations.ZeroMemory(journalKey); }
+    }
+
     public static RecoveryJournalVerifier.Verification Append(
         string journalPath, string checkpointPath,
         ReadOnlySpan<byte> journalKey, ReadOnlySpan<byte> checkpointKey,

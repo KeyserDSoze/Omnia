@@ -33,7 +33,7 @@ internal static class Program
             if (args.Length != 1 || args[0] is not
                 ("seed" or "verify" or "missing-old-key" or "erase" or
                  "seed-peer" or "verify-peer" or "sign-receipt" or
-                 "reconcile" or "verify-erased"))
+                 "append-journal" or "reconcile" or "verify-erased"))
                 throw new InvalidOperationException("Invalid restore rehearsal phase.");
 
             var dbConnection = Required("OMNIA_REHEARSAL_DB");
@@ -52,7 +52,7 @@ internal static class Program
                 !(sourceFixture || independentRecovery || physicalRecovery) ||
                 !string.Equals(target.Username, "omnia_app", StringComparison.Ordinal))
                 throw new InvalidOperationException("Restore rehearsal only supports disposable test databases.");
-            if (args[0] is "sign-receipt" or "seed-peer" && !(
+            if (args[0] is "sign-receipt" or "seed-peer" or "append-journal" && !(
                 target.Port == 15432 && target.Database == "omnia_test"))
                 throw new InvalidOperationException("Source-only synthetic recovery phase.");
             if (args[0] is "reconcile" or "verify-erased" or "verify-peer" &&
@@ -84,6 +84,14 @@ internal static class Program
                     break;
                 case "sign-receipt":
                     SignSyntheticReceipt();
+                    break;
+                case "append-journal":
+                    RecoveryJournalLocalAppender.AppendFromPrivateFiles(
+                        Required("OMNIA_RECOVERY_JOURNAL_PATH"),
+                        Required("OMNIA_RECOVERY_CHECKPOINT_PATH"),
+                        Required("OMNIA_RECOVERY_JOURNAL_KEY_PATH"),
+                        Required("OMNIA_RECOVERY_CHECKPOINT_KEY_PATH"),
+                        Tenant, Owner);
                     break;
                 case "reconcile":
                     await ReconcileSyntheticErasureAsync(db, crypto);

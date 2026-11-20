@@ -36,6 +36,7 @@ internal static class Program
                 ("seed" or "verify" or "missing-old-key" or "erase" or
                  "seed-peer" or "verify-peer" or "seed-unwitnessed" or
                  "erase-unwitnessed" or "verify-unwitnessed-resurrected" or
+                 "verify-one-shot-replay-denied" or
                  "sign-receipt" or
                  "append-journal" or "erase-source" or "publish-source" or
                   "witness-reconcile" or "reconcile" or "verify-erased"))
@@ -63,7 +64,8 @@ internal static class Program
                 target.Port == 15432 && target.Database == "omnia_test"))
                 throw new InvalidOperationException("Source-only synthetic recovery phase.");
             if (args[0] is "reconcile" or "witness-reconcile" or "verify-erased" or
-                "verify-peer" or "verify-unwitnessed-resurrected" &&
+                "verify-peer" or "verify-unwitnessed-resurrected" or
+                "verify-one-shot-replay-denied" &&
                 !physicalRecovery)
                 throw new InvalidOperationException("Physical recovery test phase only.");
             await using var db = NpgsqlDataSource.Create(dbConnection);
@@ -96,6 +98,20 @@ internal static class Program
                 case "verify-unwitnessed-resurrected":
                     await VerifyUnwitnessedResurrectedAsync(db, crypto);
                     break;
+                case "verify-one-shot-replay-denied":
+                    try
+                    {
+                        await EraseUnwitnessedAsync(db, crypto);
+                    }
+                    catch (PostgresException ex) when (ex.SqlState == "23505")
+                    {
+                        await VerifyUnwitnessedResurrectedAsync(db, crypto);
+                        Console.WriteLine("PHYSICAL_PITR_ONE_SHOT_REPLAY_DENIED");
+                        break;
+                    }
+                    throw new InvalidDataException(
+                        "Previously consumed attempt was accepted.");
+
                 case "verify-peer":
                     await VerifyPeerAsync(db, crypto);
                     break;

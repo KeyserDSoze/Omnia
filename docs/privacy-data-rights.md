@@ -83,3 +83,25 @@ manca la chiave di idempotenza associata alla richiesta. L'outbox
 backup antecedente al COMMIT; non è un journal esterno e non
 dimostra replay/tombstone su provider, device, storage o backup.
 Vedi [ADR 0023](../adr/0023-transactional-erasure-outbox.md).
+
+
+## Dispatch della outbox di cancellazione (ADR 0024)
+
+Un login separato dai ruoli di API, retention e backfill può
+ottenere, **solo dopo opt-in esplicito dell'operatore di migrazione**,
+permesso `EXECUTE` su una funzione SECURITY DEFINER che espone
+per batch al massimo 100 metadata: UUID evento, tenant, subject,
+tipo `erase-actor` e timestamp. Nessun payload di memoria.
+La funzione permette lettura globale dei metadata personali,
+necessaria per l'eventuale delivery cross-tenant: va custodita
+come una credenziale sensibile e sottoposta a minimizzazione,
+audit, monitoraggio e retention specifici.
+
+Il test locale mostra consegna degli eventi confermati dall'API
+a un journal HMAC con UUID stabile e retry idempotente.
+Non è ancora in esecuzione un worker di pubblicazione verso
+un sistema esterno, né sono garantiti completezza, custodia
+indipendente, deduplica persistente o cancellazione da altre copie.
+Come precisato in ADR 0023, gli ID di outbox non rientrano
+ancora nell'export personale v1; non dichiarare la gestione
+DSAR e art. 17 completata.

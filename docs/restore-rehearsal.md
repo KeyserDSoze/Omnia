@@ -296,3 +296,28 @@ eventi autentici dell'API. Blocco API/retention, anti-rollback
 esterno e replay restano in #141.
 
 Decisione: [ADR 0023](../adr/0023-transactional-erasure-outbox.md).
+
+
+## Read-only dispatcher su ruolo separato (ADR 0024)
+
+Nei test PostgreSQL la quinta identità `omnia_dispatcher` viene
+creata con password casuale; non ha SELECT diretto sulle tabelle.
+Il migrator le concede soltanto EXECUTE di una funzione che
+restituisce massimo 100 eventi per richiesta e valida il cursore.
+Nel test di restore su cluster indipendente anche la credenziale
+del dispatcher viene ricreata, mai importata da `pg_dumpall`.
+
+Una prova di delivery locale legge eventi erasure VERAMENTE
+committati dal servizio applicativo e li aggiunge al journal
+HMAC ADR 0022 conservandone gli UUID. Una seconda esecuzione
+deve lasciare il journal identico; un checkpoint corrotto fa
+fallire la prova senza modificare l'outbox.
+
+ATTENZIONE: timestamp e UUID nel cursore NON sono un ordinamento
+di commit. Il publisher sintetico riscorre tutta la coda
+all'avvio, senza lasciare ACK nel database; un nuovo evento
+committato dopo la scansione richiede un passaggio successivo.
+Non è un journal esterno affidabile e non prova che tutte le
+cancellazioni successive a un PITR possano essere recuperate.
+
+Vedi [ADR 0024](../adr/0024-isolated-outbox-dispatch-and-local-delivery.md).

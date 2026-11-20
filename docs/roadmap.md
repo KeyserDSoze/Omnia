@@ -251,3 +251,19 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   monotonically anchored checkpoints, stable request-id dedup,
   audit metadata GDPR retention/export, zero-trust vault keys,
   cross-store erasure, disaster-recovery traffic release.
+
+
+## #141 — Bounded dispatcher and local at-least-once delivery slice (2026-11-20)
+
+- [x] New PostgreSQL `SECURITY DEFINER` bounded outbox metadata reader
+  (1–100 rows) with an optional EXECUTE-only, no-bypass dispatcher login.
+- [x] Tests deny API/backfill/audit/retention callers and direct table access.
+- [x] Synthetic local publisher preserves stable database event UUIDs,
+  scans from the beginning, and avoids journal duplication on retries.
+- [x] Test negative failures for corrupt checkpoint and wrong role;
+  source outbox remains untouched on delivery failure.
+- [ ] Verify complete Actions on latest main and update #141.
+- [ ] Durable external/append-only producer, authenticated ACK and
+  high-watermark, commit-order concurrency protocol, Key Vault/OpenBao,
+  worker scheduling, global traffic fencing, GDPR metadata retention
+  and on-prem/Azure staging remain unimplemented.

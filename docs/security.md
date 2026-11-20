@@ -241,3 +241,23 @@ to retention, data-rights handling and minimization review.
 No publisher/offsite immutable ledger, signed high-watermark,
 verified event provenance, request idempotency, vault custody or
 release authority is provided yet. ADR 0023 and #141 remain gating.
+
+
+## Isolated erasure dispatcher identity (#141 / ADR 0024)
+
+An optional, explicitly provisioned PostgreSQL identity receives
+EXECUTE only on a bounded SECURITY DEFINER erasure-outbox read
+function. The function reads metadata across tenants, so the
+identity is security-sensitive and has no direct table privileges.
+All other runtime, retention, backfill and count-audit identities
+must be denied. The test-only delivery bridge writes events to
+the local signed journal preserving source UUIDs, and verifies
+the existing checkpoint before each append; repeats with the
+same actor are idempotent and conflicts fail closed.
+CRITICAL: timestamp/id keyset is not commit-order and cannot
+be used for a persistent ACK. The bridge scans from the beginning
+on each invocation, with a hard cap. A privileged operator could
+rollback both journal and checkpoint. There is no producer host,
+independent trust-domain storage, durable delivery receipt,
+vault-held keys, anti-rollback anchor or application release
+authorization; #141 is OPEN. Actor IDs are personal metadata.

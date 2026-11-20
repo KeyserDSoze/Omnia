@@ -259,3 +259,25 @@ Zero-row erasure may still create a distinct event (no idempotency
 key yet). The outbox is INSIDE PGDATA: no durable offsite journal,
 no anti-rollback guarantee. Actor IDs are personal metadata and
 require retention/data-rights review; DO NOT claim GDPR completion.
+
+
+## Read-only erasure dispatcher and synthetic delivery (#141 / ADR 0024)
+
+The outbox dispatcher role is separate from API/retention/backfill/audit
+and has NO direct SELECT/INSERT/UPDATE/DELETE on personal tables.
+An explicit migration opt-in grants it ONLY EXECUTE of the bounded
+SECURITY DEFINER `omnia_read_erasure_outbox` function (max 100 rows,
+no arbitrary actor parameters). The owner-specific SELECT policy
+is necessary because FORCE RLS applies to schema owners, too.
+Never grant this function to PUBLIC or use privileged credentials
+for the dispatcher. `PostgresErasureDispatchReader.VerifyRoleAsync`
+must reject API, retention, audit and backfill identities.
+
+Current `PostgresErasureOutboxLocalPublisher` is test-only and
+NOT hosted in API or an autonomous service. It rescans from the
+start and uses the COMMITTED outbox UUID to deduplicate at the
+local HMAC sink. Timestamp/id cursor is NOT a commit-order watermark
+or durable ACK. Do not persist a cursor as delivery confirmation.
+An event re-delivered with a conflicting UUID/actor MUST fail closed.
+Never log personal actor metadata or journal keys, and never claim
+external immutable storage, exactly-once, or release authorization.

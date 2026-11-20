@@ -33,7 +33,8 @@ internal static class Program
             if (args.Length != 1 || args[0] is not
                 ("seed" or "verify" or "missing-old-key" or "erase" or
                  "seed-peer" or "verify-peer" or "sign-receipt" or
-                 "append-journal" or "reconcile" or "verify-erased"))
+                 "append-journal" or "erase-source" or "publish-source" or
+                  "witness-reconcile" or "reconcile" or "verify-erased"))
                 throw new InvalidOperationException("Invalid restore rehearsal phase.");
 
             var dbConnection = Required("OMNIA_REHEARSAL_DB");
@@ -52,10 +53,11 @@ internal static class Program
                 !(sourceFixture || independentRecovery || physicalRecovery) ||
                 !string.Equals(target.Username, "omnia_app", StringComparison.Ordinal))
                 throw new InvalidOperationException("Restore rehearsal only supports disposable test databases.");
-            if (args[0] is "sign-receipt" or "seed-peer" or "append-journal" && !(
+            if (args[0] is "sign-receipt" or "seed-peer" or "append-journal" or
+                "erase-source" or "publish-source" && !(
                 target.Port == 15432 && target.Database == "omnia_test"))
                 throw new InvalidOperationException("Source-only synthetic recovery phase.");
-            if (args[0] is "reconcile" or "verify-erased" or "verify-peer" &&
+            if (args[0] is "reconcile" or "witness-reconcile" or "verify-erased" or "verify-peer" &&
                 !physicalRecovery)
                 throw new InvalidOperationException("Physical recovery test phase only.");
             await using var db = NpgsqlDataSource.Create(dbConnection);
@@ -92,6 +94,15 @@ internal static class Program
                         Required("OMNIA_RECOVERY_JOURNAL_KEY_PATH"),
                         Required("OMNIA_RECOVERY_CHECKPOINT_KEY_PATH"),
                         Tenant, Owner);
+                    break;
+                case "erase-source":
+                    await EraseSourceAsync(db, crypto);
+                    break;
+                case "publish-source":
+                    await PublishSourceToWitnessAsync();
+                    break;
+                case "witness-reconcile":
+                    await ReconcileFromWitnessAsync(db, crypto);
                     break;
                 case "reconcile":
                     await ReconcileSyntheticErasureAsync(db, crypto);
@@ -429,6 +440,111 @@ internal static class Program
             CryptographicOperations.ZeroMemory(key);
             CryptographicOperations.ZeroMemory(raw);
         }
+    }
+
+    /// <summary>
+    /// Only known CI fixture: this is a REAL service erasure on the
+    /// disposable source after the named PITR point, not a raw SQL DELETE.
+    /// It creates the transactional source outbox in the same commit.
+    /// </summary>
+    private static async Task EraseSourceAsync(NpgsqlDataSource db,
+        AesGcmEnvelopeEncryption crypto)
+    {
+        await VerifyAsync(db, crypto);
+        var result = await new PostgresPersonalDataService(db, crypto)
+            .EraseAsync(Tenant, Owner, default);
+        if (result.DeletedMemories != 1 || result.DeletedConsents != 1 ||
+            await FetchAsync(db) is not null)
+            throw new InvalidOperationException(
+                "Synthetic source erasure was not atomic.");
+    }
+
+    private static NpgsqlDataSource OpenWitnessConnection(
+        string variable, string expectedRole)
+    {
+        var connection = Required(variable);
+        var options = new NpgsqlConnectionStringBuilder(connection);
+        if (options.Host != "127.0.0.1" || options.Port != 15436 ||
+            options.Database != "omnia_witness" ||
+            !string.Equals(options.Username, expectedRole,
+                StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "Only loopback disposable witness database is supported.");
+        return NpgsqlDataSource.Create(connection);
+    }
+
+    private static NpgsqlDataSource OpenDispatcher()
+    {
+        var connection = Required("OMNIA_REHEARSAL_DISPATCH_DB");
+        var options = new NpgsqlConnectionStringBuilder(connection);
+        if (options.Host != "127.0.0.1" || options.Port != 15432 ||
+            options.Database != "omnia_test" ||
+            options.Username != "omnia_dispatcher")
+            throw new InvalidOperationException(
+                "Only disposable source dispatcher is supported.");
+        return NpgsqlDataSource.Create(connection);
+    }
+
+    private static async Task RequireExactlyOneSyntheticWitnessAsync(
+        NpgsqlDataSource witness)
+    {
+        await PostgresErasureWitnessReader.VerifyReaderAsync(witness);
+        var reader = new PostgresErasureWitnessReader(witness);
+        long previousSequence = 0;
+        var found = 0;
+        // The witness may include unrelated synthetic events from previous
+        // CI tests. Never interpret an incomplete scan as authorization.
+        for (var page = 0; page < 100; page++)
+        {
+            var batch = await reader.ReadBatchAsync(
+                previousSequence, 100, CancellationToken.None);
+            if (batch.Count == 0)
+            {
+                if (found != 1)
+                    throw new InvalidOperationException(
+                        "Expected synthetic committed erasure witness missing.");
+                return;
+            }
+            foreach (var item in batch)
+            {
+                if (item.Sequence <= previousSequence ||
+                    item.EventId == Guid.Empty ||
+                    item.EventType != "erase-actor")
+                    throw new InvalidOperationException(
+                        "Witness event sequence or schema invalid.");
+                previousSequence = item.Sequence;
+                if (item.TenantId == Tenant && item.OwnerSubject == Owner)
+                    found++;
+            }
+        }
+        throw new InvalidOperationException(
+            "Witness scan bound exceeded before reconciliation.");
+    }
+
+    private static async Task PublishSourceToWitnessAsync()
+    {
+        await using var dispatcher = OpenDispatcher();
+        await using var writer = OpenWitnessConnection(
+            "OMNIA_REHEARSAL_WITNESS_WRITER_DB", "omnia_witness_writer");
+        await using var reader = OpenWitnessConnection(
+            "OMNIA_REHEARSAL_WITNESS_READER_DB", "omnia_witness_reader");
+        await new PostgresErasureOutboxWitnessPublisher(dispatcher, writer)
+            .PublishBatchAsync(1000, CancellationToken.None);
+        await RequireExactlyOneSyntheticWitnessAsync(reader);
+    }
+
+    private static async Task ReconcileFromWitnessAsync(NpgsqlDataSource db,
+        AesGcmEnvelopeEncryption crypto)
+    {
+        // Validate the INDEPENDENT witness and entire bounded sequence
+        // BEFORE any mutation on the recovered primary. Fixed actor only:
+        // no tenant selector from the remote event is accepted here.
+        await using var witness = OpenWitnessConnection(
+            "OMNIA_REHEARSAL_WITNESS_READER_DB", "omnia_witness_reader");
+        await RequireExactlyOneSyntheticWitnessAsync(witness);
+        await new PostgresPersonalDataService(db, crypto).EraseAsync(
+            Tenant, Owner, CancellationToken.None);
+        await VerifyErasedAsync(db, crypto);
     }
 
     private static async Task ReconcileSyntheticErasureAsync(NpgsqlDataSource db,

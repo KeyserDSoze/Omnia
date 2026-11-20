@@ -243,6 +243,62 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
         return await EraseCoreAsync(tenantId, ownerSubject, requestId, ct);
     }
 
+    /// <summary>
+    /// CI-ONLY fourth-independent-PGDATA admission fence. A committed attempt
+    /// on the FOURTH PGDATA blocks a replay even if a physical PITR of the
+    /// THIRD PGDATA loses its original one-shot claim. Each claimed attempt
+    /// can persist without the following source COMMIT. No automatic retry,
+    /// release or real REST integration is provided.
+    /// </summary>
+    public async Task<PersonalDataErasureResult> EraseWithFourthFenceAsync(
+        Guid requestId, string tenantId, string ownerSubject,
+        NpgsqlDataSource intentReader, NpgsqlDataSource anchorReader,
+        NpgsqlDataSource thirdClaimWriter,
+        NpgsqlDataSource fourthClaimWriter, byte[] signingKey,
+        CancellationToken ct)
+    {
+        if (Environment.GetEnvironmentVariable("CI") != "true" ||
+            Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true")
+            throw new InvalidOperationException(
+                "Fourth-claim erasure is synthetic CI only.");
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request UUID required.", nameof(requestId));
+        ArgumentNullException.ThrowIfNull(intentReader);
+        ArgumentNullException.ThrowIfNull(anchorReader);
+        ArgumentNullException.ThrowIfNull(thirdClaimWriter);
+        ArgumentNullException.ThrowIfNull(fourthClaimWriter);
+        ArgumentNullException.ThrowIfNull(signingKey);
+        if (signingKey.Length != 32)
+            throw new InvalidDataException("FOURTH_CLAIM_KEY_INVALID.");
+
+        // These endpoint assertions are TEST-ONLY topology constraints. They
+        // are not an independent certificate of a separate administrator/
+        // failure domain, and MUST NOT be carried to a production API.
+        var fourth = new NpgsqlConnectionStringBuilder(
+            fourthClaimWriter.ConnectionString);
+        if (fourth.Host != "127.0.0.1" || fourth.Port != 15440 ||
+            fourth.Database != "omnia_fourth_claims" ||
+            fourth.Username != "omnia_claim_writer")
+            throw new InvalidOperationException("FOURTH_CLAIM_ENDPOINT_DENIED.");
+        var third = new NpgsqlConnectionStringBuilder(
+            thirdClaimWriter.ConnectionString);
+        if (third.Host != "127.0.0.1" || third.Port != 15438 ||
+            third.Database != "omnia_execution_claims" ||
+            third.Username is not ("omnia_claim_writer" or "omnia_claim_reader"))
+            throw new InvalidOperationException("THIRD_CLAIM_ENDPOINT_DENIED.");
+
+        // A missing, forged or unanchored request must never consume either
+        // one-shot ledger. The fourth attempt is durably committed BEFORE
+        // any write to the third claim ledger and before the primary DELETE.
+        await new PostgresPreEraseIntentAnchorVerifier(intentReader, anchorReader)
+            .VerifyRequestAsync(requestId, tenantId, ownerSubject, signingKey, ct);
+        await new PostgresPreEraseExecutionClaimWriter(fourthClaimWriter)
+            .ClaimOnceAsync(requestId, tenantId, ownerSubject, signingKey, ct);
+        await new PostgresPreEraseExecutionClaimWriter(thirdClaimWriter)
+            .ClaimOnceAsync(requestId, tenantId, ownerSubject, signingKey, ct);
+        return await EraseCoreAsync(tenantId, ownerSubject, requestId, ct);
+    }
+
     public Task<PersonalDataErasureResult> EraseAsync(string tenantId,
         string ownerSubject, CancellationToken ct) =>
         EraseCoreAsync(tenantId, ownerSubject, Guid.NewGuid(), ct);

@@ -164,6 +164,43 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
         return await EraseCoreAsync(tenantId, ownerSubject, requestId, ct);
     }
 
+    /// <summary>
+    /// Stricter synthetic CI-only preflight than EraseWithWitnessedIntentAsync:
+    /// requires an HMAC-authenticated THIRD-PGDATA checkpoint of the exact
+    /// PRE-intent before opening a primary actor transaction.
+    /// Missing/incorrect/stale/unanchored intent MUST NOT erase anything.
+    /// The checkpoint does NOT certify source COMMIT or legal authorization.
+    /// This method is NOT registered with the production REST API.
+    /// </summary>
+    public async Task<PersonalDataErasureResult> EraseWithAnchoredIntentAsync(
+        Guid requestId, string tenantId, string ownerSubject,
+        NpgsqlDataSource intentReader, NpgsqlDataSource anchorReader,
+        byte[] signingKey, CancellationToken ct)
+    {
+        if (Environment.GetEnvironmentVariable("CI") != "true" ||
+            Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true")
+            throw new InvalidOperationException(
+                "Anchored intent erasure is synthetic CI-only.");
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("An intent UUID is required.", nameof(requestId));
+        ArgumentNullException.ThrowIfNull(intentReader);
+        ArgumentNullException.ThrowIfNull(anchorReader);
+        ArgumentNullException.ThrowIfNull(signingKey);
+        if (signingKey.Length != 32)
+            throw new InvalidDataException("INTENT_ANCHOR_KEY_INVALID.");
+
+        // This verifies the exact requested actor against ONE consistent
+        // remote witness snapshot and the previously persisted independent
+        // HMAC checkpoint. It cannot detect an anchor rolled back by its
+        // owner or provide a distributed atomic transaction.
+        await new PostgresPreEraseIntentAnchorVerifier(intentReader, anchorReader)
+            .VerifyRequestAsync(requestId, tenantId, ownerSubject, signingKey, ct);
+
+        // Primary DELETE + same-UUID outbox are transactionally atomic here;
+        // the remote pre-intent and HMAC checkpoint are NOT part of that tx.
+        return await EraseCoreAsync(tenantId, ownerSubject, requestId, ct);
+    }
+
     public Task<PersonalDataErasureResult> EraseAsync(string tenantId,
         string ownerSubject, CancellationToken ct) =>
         EraseCoreAsync(tenantId, ownerSubject, Guid.NewGuid(), ct);

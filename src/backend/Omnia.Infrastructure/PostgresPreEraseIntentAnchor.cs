@@ -66,7 +66,38 @@ public sealed class PostgresPreEraseIntentAnchorIssuer(
 public sealed class PostgresPreEraseIntentAnchorVerifier(
     NpgsqlDataSource intentReader, NpgsqlDataSource anchorReader)
 {
+    /// <summary>
+    /// Checks that an EXACT remote request is inside an ALREADY durable
+    /// authenticated prefix on the THIRD PGDATA. A request present only
+    /// in a newer unanchored witness suffix is NOT safe to execute.
+    /// This remains a CI-only preflight and NEVER proves source COMMIT.
+    /// </summary>
+    public async Task<int> VerifyRequestAsync(Guid requestId,
+        string tenantId, string ownerSubject, byte[] key, CancellationToken ct)
+    {
+        if (requestId == Guid.Empty ||
+            string.IsNullOrWhiteSpace(tenantId) ||
+            string.IsNullOrWhiteSpace(ownerSubject))
+            throw new ArgumentException("An exact synthetic request scope is required.");
+        var (count, snapshot) = await ReadVerifiedPrefixAsync(key, ct);
+        var remote = snapshot.SingleOrDefault(x => x.RequestId == requestId);
+        if (remote is null || remote.Sequence > count ||
+            remote.Sequence <= 0 ||
+            remote.IntentType != "erase-actor-intent" ||
+            !string.Equals(remote.TenantId, tenantId, StringComparison.Ordinal) ||
+            !string.Equals(remote.OwnerSubject, ownerSubject, StringComparison.Ordinal))
+            throw new InvalidDataException("PREERASE_INTENT_NOT_ANCHORED_FOR_ACTOR.");
+        return count;
+    }
+
     public async Task<int> VerifyAsync(byte[] key, CancellationToken ct)
+    {
+        var (count, _) = await ReadVerifiedPrefixAsync(key, ct);
+        return count;
+    }
+
+    private async Task<(int Count, IReadOnlyList<PreEraseIntentReceipt> Snapshot)>
+        ReadVerifiedPrefixAsync(byte[] key, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(key);
         if (key.Length != 32)
@@ -81,6 +112,6 @@ public sealed class PostgresPreEraseIntentAnchorVerifier(
         var count = IntentCheckpoint.Verify(intents, anchored.Checkpoint, key);
         if (count != anchored.Count)
             throw new InvalidDataException("INTENT_ANCHOR_COUNT_INVALID.");
-        return count;
+        return (count, intents);
     }
 }

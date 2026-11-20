@@ -730,3 +730,18 @@ No OAuth/OIDC real-user authorization, global API/
 worker/replica/ingress fence or cross-provider GDPR
 deletion has been integrated. This is not production
 readiness or a `ready` certificate.
+
+
+## #141 — Third-survivor when FOURTH claim PGDATA is physically rolled back (ADR 0041)
+
+La regressione CI ora ripristina fisicamente la QUARTA authority
+mentre la TERZA sopravvive. Verifica UUID e HMAC, sistema PostgreSQL,
+marker WAL pre/post restore point, rotazione dei login ereditati e
+rifiuto del secondo tentativo dal TERZO tramite UNIQUE `23505`.
+Il clone QUARTA può aver già riaccettato la richiesta: non equivale
+ad authorization né prova di DELETE. **Non estende la protezione a
+rollback simultaneo di TERZA+QUARTA**, errore incerto del COMMIT
+primario, attacco allo stesso runner/amministratore, compromissione
+del key material, provider/device/media/backup, o recovery dell'API.
+Nessuna fiducia offsite WORM, attestazione source o OIDC viene
+aggiunta. Rimangono le issue di privacy/security P0.

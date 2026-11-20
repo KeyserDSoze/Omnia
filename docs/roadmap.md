@@ -569,3 +569,30 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   Il vecchio metodo sintetico non-gated e il
   REST pubblico non adottano ancora questo
   protocollo; #141 e dipendenze restano OPEN.
+
+## #141 — Verifica autenticata scope della claim one-shot (ADR 0039)
+
+- [x] TDD RED con `VerifyClaimAsync` inesistente:
+  nuove asserzioni PostgreSQL di assenza UUID, tenant/owner
+  errati, chiave errata, ruolo SQL writer/reader improprio
+  e digest alterato dal superuser TEST.
+- [x] Funzione SECURITY DEFINER `admission.claim_scope(uuid)`
+  espone SOLO HMAC attraverso account EXECUTE-only reader,
+  senza SELECT sulla tabella claim. REVOKE PUBLIC +
+  GRANT nella stessa transazione di CREATE. Writer non
+  può chiamarla. Ruolo guard verifica anche questo ACL.
+- [x] Payload HMAC canonico unico per issuer e verifier,
+  confronto a tempo costante e azzeramento di buffer
+  temporanei. `HasClaimAsync` booleano resta solo
+  diagnostica, non attestazione di scope.
+- [x] PITR fisico PostgreSQL: autenticazione read-only
+  dell'esatto tenant/soggetto e rifiuto di scope estero
+  e writer usato come reader PRIMA e DOPO recovery;
+  il clone perde UUID source ma la claim su TERZA
+  PGDATA conserva digest atteso. Nessuna mutazione.
+- [ ] Claim autenticata significa tentativo, NON prova
+  storica di COMMIT source. DB superuser può modificare
+  HMAC, assente WORM/offsite/vault; la chiave è
+  privata ma nel runner CI. API pubblica e OIDC
+  reale invariati; niente global fence o
+  completamento GDPR di backup/provider/device.

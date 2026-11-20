@@ -304,3 +304,20 @@ is no historical source COMMIT certificate,
 OIDC requester proof, offsite WORM/vault or
 global DR release authorization. The existing
 REST/API erasure path remains unchanged.
+
+## Read-only authenticated scope of one-shot attempt (ADR 0039)
+
+The synthetic third-cluster claim store now exposes a
+second EXECUTE-only reader function returning only the
+stored 32-byte scope HMAC for a request UUID. A restricted
+reader recomputes the canonical, domain-separated HMAC
+of UUID+tenant+owner and compares in constant time;
+wrong-scope, missing or tampered claims fail closed.
+Writer and reader SQL capabilities remain separate
+with no raw SELECT grants, and the previous boolean
+lookup remains a non-authoritative diagnostic.
+The physical primary PITR test verifies the scoped
+claim across source rollback without mutating the
+resurrected actor. It remains a receipt for an
+*attempt*, not a source commit, legal erasure request
+or production recovery authorization.

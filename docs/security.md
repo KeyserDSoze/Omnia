@@ -660,3 +660,38 @@ The public API retains its existing behavior; no external
 WORM, separate host, vault/HSM, cross-DB atomicity, global
 ingress/worker/replica fencing, source commit attestation,
 GDPR completion or automatic recovery release is provided.
+
+## Exact actor-scope MAC for one-shot attempt readback (ADR 0039)
+
+A bare `HasClaimAsync(requestUuid)` is not enough to
+establish which tenant/owner was admitted before a source
+DELETE. The restricted third-cluster reader now executes
+only `admission.claim_scope(uuid)` and recomputes the
+EXACT HMAC-SHA256 over version, purpose, UUID, tenant
+and owner, using the same single canonical serializer as
+the writer. Missing, tampered or foreign-scope entries
+and a wrong signing key fail closed with
+`InvalidDataException`; wrong SQL identity fails
+with `InvalidOperationException`. HMACs are compared
+in constant time; transient bytes are zeroed.
+
+SECURITY DEFINER `claim_scope` is created and its
+default PUBLIC execute revoked in the same transaction;
+the function has trusted `search_path` and returns only
+`bytea`. Writer has no EXECUTE read and neither
+role may directly SELECT or UPDATE the claim table.
+The CI test demonstrates that a privileged TEST database
+administrator CAN mutate a stored MAC, but the restricted
+verifier rejects the substituted value. This is not
+tamper-proof custody against a privileged adversary
+with the HMAC key.
+
+The physical primary PITR test checks authenticated
+scope and negative foreign scope both before and after
+recovery, still rejecting reuse of a one-shot UUID.
+A valid claim is evidence of *admission* only, NOT of
+a source DELETE commit, OIDC user authority,
+cross-store erasure or a production DR release. All
+PGDATAs and keys remain on one ephemeral CI runner;
+offsite WORM, vault/HSM, global fencing and GDPR
+review remain open.

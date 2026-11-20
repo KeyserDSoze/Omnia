@@ -316,3 +316,18 @@ none is yet settled for production. A real
 physical source PITR test demonstrates denial
 of request reuse but no GDPR conformity.
 #31/#32/#141 stay OPEN.
+
+## Ambito autenticato della claim e metadati personali (ADR 0039)
+
+La nuova query read-only sul terzo cluster restituisce
+soltanto l'HMAC per UUID, non tenant o subject in
+chiaro; il verificatore ne controlla il confronto
+con tenant/owner attesi e chiave sintetica privata.
+Il digest non è anonimo per definizione: identifica
+un tentativo correlabile e necessita comunque di
+policy su accesso, conservazione, cancellazione e
+base giuridica. Anche un MAC corretto non dimostra
+chi abbia richiesto la cancellazione o se essa
+sia effettivamente avvenuta; OIDC/consenso,
+provider/media/backups/device, retention reale e
+GDPR artt. 5/17 restano fuori dal perimetro CI.

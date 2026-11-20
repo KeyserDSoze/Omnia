@@ -735,3 +735,33 @@ re-deletion. The resurrected synthetic memory+consent and
 empty outbox must remain intact; API stays quarantined.
 Keep #141/#109/#31/#32 open; do not integrate this test
 method into REST/API or claim offsite WORM/commit certainty.
+
+## Authenticated one-shot attempt scope / physical PITR (ADR 0039, #141)
+
+The CI-only third-PGDATA `admission.execution_claims` is **not**
+trustworthy based solely on UUID presence. For read-only verification use
+`PostgresPreEraseExecutionClaimReader.VerifyClaimAsync(uuid,tenant,owner,key,ct)`,
+which requires `omnia_claim_reader` (not the writer or DB admin) and
+reads only `admission.claim_scope(uuid)` through EXECUTE-only grants.
+The function must be created with `SECURITY DEFINER`,
+`search_path=pg_catalog,pg_temp`, and REVOKE PUBLIC/GRANT reader
+in the SAME SQL transaction as CREATE. Never grant raw table SELECT.
+`omnia_claim_writer` MUST NOT receive execute on `claim_scope`.
+The writer and verifier MUST share one canonical domain-separated
+HMAC-SHA256 payload for UUID, tenant, owner; the verifier must compare
+32-byte HMAC using `CryptographicOperations.FixedTimeEquals`
+and zero temporary digests. Missing UUID, wrong actor, wrong signing
+key, tampered HMAC, unauthorized SQL identity: fail closed.
+`HasClaimAsync` remains only a boolean diagnostic (not proof of scope).
+
+The real physical PRIMARY PITR rehearsal must use the privately
+supplied `OMNIA_PREERASE_PITR_HMAC_KEY_PATH` and restricted
+`OMNIA_PREERASE_PITR_CLAIM_READER_DB`. Verify no claim exists before
+the one-shot attempt, then verify the exact tenant/actor HMAC and
+reject foreign actor/reader-writer role confusion AFTER source COMMIT
+and AGAIN after the promoted primary clone has lost its source outbox.
+This read-only evidence still never authorizes `ready` or DELETE.
+A claimant with DB superuser access can rewrite the HMAC and a
+claim can exist without a source commit; none of this is WORM,
+offsite custody, user OIDC authentication or GDPR Art.17 compliance.
+Keep #141/#109/#31/#32 OPEN.

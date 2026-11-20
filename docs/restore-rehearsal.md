@@ -842,3 +842,34 @@ decisione autorizzata. Tutte le PGDATA
 risiedono sullo stesso runner, quindi il
 meccanismo non è WORM/offsite, failover
 geografico, 2PC o DR di produzione.
+
+## Audit read-only di UUID e scope della claim dopo PITR (ADR 0039)
+
+La verifica precedente usava `SELECT count(*)` su
+`admission.execution_claims` da amministratore per
+sapere se un UUID era ancora presente nel terzo cluster.
+La sola presenza non garantisce che la claim appartenga
+al tenant/soggetto atteso. Ora il test espone, esclusivamente
+al lettore SQL EXECUTE-only, `admission.claim_scope(uuid)`;
+il CLI legge la claim con `omnia_claim_reader` sul database
+`omnia_pitr_execution_claims`, recupera il segreto HMAC
+da un file privato 0600 nel runner e verifica con
+`FixedTimeEquals` lo stesso payload canonico firmato
+dal writer. Tenant/owner falsificati, digest errato,
+chiave falsa o accesso del writer vengono rifiutati.
+
+Il runbook richiede l'assenza della claim prima del
+tentativo; dopo la prima cancellazione conferma che
+il MAC corrisponde al fixture sintetico e NON a un
+soggetto estraneo. Ripete poi la verifica dopo il
+PITR fisico del PRIMARIO, quando la riga outbox
+originale è stata persa e i dati sono risorti.
+Le verifiche sono sole letture sulla TERZA PGDATA;
+non riavviano erasure né emettono `ready`.
+
+Un amministratore del TERZO DB può ancora modificare
+il contenuto, perdere lo storico con PITR o accedere
+alla chiave del runner. L'esistenza della claim
+non prova un commit source e i tre cluster non
+sono domini indipendenti fuori dall'host CI.
+#141 e #109 rimangono aperte.

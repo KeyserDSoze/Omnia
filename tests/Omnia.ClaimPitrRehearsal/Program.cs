@@ -9,7 +9,8 @@ try
 {
     if (args.Length != 1 ||
         args[0] is not ("--claim" or "--verify-live" or "--verify-recovered" or
-            "--claim-fourth" or "--verify-fourth-live" or "--verify-fourth-recovered") ||
+            "--claim-fourth" or "--verify-fourth-live" or "--verify-fourth-recovered" or
+            "--dual-claim" or "--dual-verify-live" or "--dual-probe-recovered") ||
         Environment.GetEnvironmentVariable("CI") != "true" ||
         Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
         Environment.GetEnvironmentVariable("OMNIA_CLAIM_PITR_CI_ONLY") != "1")
@@ -64,6 +65,90 @@ try
     if (key.Length != 32) throw new InvalidDataException("Synthetic HMAC key size invalid.");
     try
     {
+        // ADR 0042: simultaneous physical PITR of THIRD and FOURTH.
+        // This is an intentional *negative* CI-only probe: both restored
+        // claim ledgers can admit the same old UUID because neither has
+        // an external immutable high-watermark. Exit 42 = quarantined,
+        // NEVER permission to delete, replay, promote or call the API.
+        if (args[0] is "--dual-claim" or "--dual-verify-live" or
+            "--dual-probe-recovered")
+        {
+            const string dualTenant = "omnia-ci-physical-dual-claim-pitr";
+            const string dualActor = "synthetic-dual-claim-pitr-owner";
+            const string thirdDb = "omnia_ci_dual_third_claims";
+            const string fourthDb = "omnia_ci_dual_fourth_claims";
+            var recovered = args[0] == "--dual-probe-recovered";
+
+            await using var thirdReader = NpgsqlDataSource.Create(Restricted(
+                recovered ? "OMNIA_DUAL_PITR_RECOVERED_THIRD_READER_DB"
+                          : "OMNIA_DUAL_PITR_THIRD_READER_DB",
+                thirdDb, recovered ? 15443 : 15438, "omnia_claim_reader"));
+            await using var fourthReader = NpgsqlDataSource.Create(Restricted(
+                recovered ? "OMNIA_DUAL_PITR_RECOVERED_FOURTH_READER_DB"
+                          : "OMNIA_DUAL_PITR_FOURTH_READER_DB",
+                fourthDb, recovered ? 15444 : 15440, "omnia_claim_reader"));
+            var third = new PostgresPreEraseExecutionClaimReader(thirdReader);
+            var fourth = new PostgresPreEraseExecutionClaimReader(fourthReader);
+            if (args[0] == "--dual-claim")
+            {
+                await using var fourthWriter = NpgsqlDataSource.Create(Restricted(
+                    "OMNIA_DUAL_PITR_FOURTH_WRITER_DB", fourthDb, 15440,
+                    "omnia_claim_writer"));
+                await using var thirdWriter = NpgsqlDataSource.Create(Restricted(
+                    "OMNIA_DUAL_PITR_THIRD_WRITER_DB", thirdDb, 15438,
+                    "omnia_claim_writer"));
+                await new PostgresPreEraseExecutionClaimWriter(fourthWriter)
+                    .ClaimOnceAsync(requestId, dualTenant, dualActor, key, default);
+                await new PostgresPreEraseExecutionClaimWriter(thirdWriter)
+                    .ClaimOnceAsync(requestId, dualTenant, dualActor, key, default);
+                await fourth.VerifyClaimAsync(
+                    requestId, dualTenant, dualActor, key, default);
+                await third.VerifyClaimAsync(
+                    requestId, dualTenant, dualActor, key, default);
+                Console.WriteLine("DUAL_CLAIMS_ORIGINALLY_ACKNOWLEDGED");
+                return 0;
+            }
+            if (!recovered)
+            {
+                await fourth.VerifyClaimAsync(
+                    requestId, dualTenant, dualActor, key, default);
+                await third.VerifyClaimAsync(
+                    requestId, dualTenant, dualActor, key, default);
+                Console.WriteLine("LIVE_DUAL_AUTHORITIES_STILL_AUTHENTICATED");
+                return 0;
+            }
+            // Both promoted physical clones must LACK exactly this UUID.
+            // A reader role can inspect a claim but not create one.
+            if (await third.HasClaimAsync(requestId, default) ||
+                await fourth.HasClaimAsync(requestId, default))
+                throw new InvalidDataException(
+                    "DUAL_PITR_DID_NOT_LOSE_BOTH_CLAIMS.");
+            await using var recoveredFourthWriter = NpgsqlDataSource.Create(
+                Restricted("OMNIA_DUAL_PITR_RECOVERED_FOURTH_WRITER_DB",
+                    fourthDb, 15444, "omnia_claim_writer"));
+            await using var recoveredThirdWriter = NpgsqlDataSource.Create(
+                Restricted("OMNIA_DUAL_PITR_RECOVERED_THIRD_WRITER_DB",
+                    thirdDb, 15443, "omnia_claim_writer"));
+            // This replay is deliberately limited to expendable claim
+            // databases restored inside CI; no real DELETE or primary SQL.
+            await new PostgresPreEraseExecutionClaimWriter(recoveredFourthWriter)
+                .ClaimOnceAsync(requestId, dualTenant, dualActor, key, default);
+            await new PostgresPreEraseExecutionClaimWriter(recoveredThirdWriter)
+                .ClaimOnceAsync(requestId, dualTenant, dualActor, key, default);
+            await fourth.VerifyClaimAsync(
+                requestId, dualTenant, dualActor, key, default);
+            await third.VerifyClaimAsync(
+                requestId, dualTenant, dualActor, key, default);
+
+            // A caller must treat this as a NON-SUCCESS/QUARANTINE result.
+            // The shell negative-test explicitly REQUIRES the nonzero
+            // sentinel rather than interpreting a successful replay as
+            // an admission or recovery release token.
+            Console.Error.WriteLine(
+                "DUAL_PITR_BOTH_CLAIMS_CAN_BE_REUSED_NO_RELEASE");
+            return 42;
+        }
+
         // ADR 0041: complementary physical PITR of the FOURTH PGDATA.
         // Everything here is a synthetic CI-only admission test. A surviving
         // THIRD attempt can reject a replay when FOURTH loses its claim;

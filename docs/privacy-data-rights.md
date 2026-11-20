@@ -345,3 +345,14 @@ nor real OIDC identity, consent, third-party media/backup/
 device erasure, immutable offsite storage or GDPR Art.17
 compliance. A true third-PGDATA physical PITR rehearsal
 does not modify the public REST API. #31/#32/#141 OPEN.
+
+
+## Scope del test FOURTH-PGDATA PITR (ADR 0041)
+
+Un secondo scenario di restore fisico usa dati sintetici e mantiene
+la claim della TERZA PGDATA mentre retrocede la QUARTA. Il rifiuto
+`23505` dimostra solo la non riutilizzabilità dell'UUID sulla
+TERZA sopravvissuta, non il commit della cancellazione sul primario,
+non il soddisfacimento dell'art. 17 GDPR e non la propagazione a
+backup, dati derivati, connettori o provider. Nessuna rimozione di
+record personali reali né apertura del gate recovery. #31/#141 OPEN.

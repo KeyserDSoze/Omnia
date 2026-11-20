@@ -40,6 +40,35 @@ public sealed class RecoveryJournalLocalAppendTests
     }
 
     [Fact]
+    public void StableOutboxUuidIsIdempotentButConflictingActorFailsClosed()
+    {
+        using var fixture = new PrivateFiles();
+        var id = Guid.NewGuid();
+        var first = RecoveryJournalLocalAppender.AppendKnownEvent(
+            fixture.Journal, fixture.Checkpoint, fixture.Key,
+            fixture.AnchorKey, id, "tenant-one", "actor-one");
+        Assert.Equal(1, first.Count);
+        var before = File.ReadAllBytes(fixture.Journal);
+
+        var duplicate = RecoveryJournalLocalAppender.AppendKnownEvent(
+            fixture.Journal, fixture.Checkpoint, fixture.Key,
+            fixture.AnchorKey, id, "tenant-one", "actor-one");
+        Assert.Equal(first, duplicate);
+        Assert.Equal(before, File.ReadAllBytes(fixture.Journal));
+
+        Assert.Throws<InvalidDataException>(() =>
+            RecoveryJournalLocalAppender.AppendKnownEvent(
+                fixture.Journal, fixture.Checkpoint, fixture.Key,
+                fixture.AnchorKey, id, "tenant-two", "actor-two"));
+        Assert.Throws<InvalidDataException>(() =>
+            RecoveryJournalLocalAppender.AppendKnownEvent(
+                fixture.Journal, fixture.Checkpoint, fixture.Key,
+                fixture.AnchorKey, Guid.Empty, "tenant-one", "actor-one"));
+        Assert.Equal(before, File.ReadAllBytes(fixture.Journal));
+        Assert.Equal(1, fixture.Verify().Count);
+    }
+
+    [Fact]
     public void MissingOrCorruptCheckpointNeverAuthorizesASecondAppend()
     {
         using var fixture = new PrivateFiles();

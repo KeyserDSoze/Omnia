@@ -642,8 +642,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   vecchia claim nel clone QUARTA, rotazione reader+writer e rifiuto
   delle credenziali ereditate. Il retry deve fallire con `23505`
   sulla TERZA dopo la nuova claim su QUARTA.
-- [ ] Verificare la SUCCESS definitiva della CI dello SHA più recente
-  prima di dichiarare il gate testato end-to-end (stato su Actions).
+- [x] **GREEN verificata**: [Omnia CI 44824173620](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173620), [OIDC browser E2E 44824173641](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173641) e [Pages 44824173601](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173601) tutti SUCCESS al commit implementativo `274f574a`; entrambi i gate PITR terza/quarta sono success.
 - [ ] Autorità offsite WORM indipendente, prova commit del primario,
   eventuale rollback simultaneo TERZA+QUARTA, autenticazione OIDC e
   fencing globale ancora APERTI. **Nessuna cancellazione source in test.**

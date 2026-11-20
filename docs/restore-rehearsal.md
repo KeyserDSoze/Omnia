@@ -927,3 +927,5 @@ né autorizza il riavvio dell'API. Tutti i dati sono sintetici e
 conservati solo durante la run; backup, WAL e chiavi non diventano
 artifact. Un rollback di entrambe le claim authority elude la prova:
 non è attestation di commit né DR/offsite pronto per produzione.
+
+**TDD osservato per ADR 0041 (commit implementativo `274f574a`):** RED sul [run 44823897596](https://github.com/KeyserDSoze/Omnia/actions/runs/44823897596) (archive_mode della quarta assente). GREEN sulla [CI 44824173620](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173620) comprensiva di entrambi i test fisici di rollback TERZA/QUARTA; [OIDC](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173641) e [Pages](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173601) success. Queste evidenze non coprono WORM/offsite o attestazione commit.

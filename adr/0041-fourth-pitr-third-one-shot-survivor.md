@@ -79,3 +79,9 @@ legale GDPR. Le issue #141/#109/#31/#32/#33/#125 restano aperte.
   https://www.postgresql.org/docs/17/indexes-unique.html
 - GDPR Regolamento (UE) 2016/679:
   https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng/
+
+## Evidenza TDD / CI
+
+- **RED**: [run 44823897596](https://github.com/KeyserDSoze/Omnia/actions/runs/44823897596) al commit `9db2e67e`, failure deliberata sul nuovo step: `Fourth PGDATA WAL archiving unavailable.`
+- **GREEN**: [CI 44824173620](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173620) al commit `274f574a`, success dell'intera job .NET, inclusi i PITR fisici TERZA e QUARTA. [OIDC E2E](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173641) e [Pages](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173601) success allo stesso commit.
+- L'esito GREEN certifica **solo** questo scenario sintetico nel runner; non i gate di produzione elencati sopra.

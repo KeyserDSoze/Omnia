@@ -117,6 +117,24 @@ try
     await PostgresErasureDispatchReader.VerifyRoleAsync(sourceDb);
     await PostgresErasureWitnessReader.VerifyReaderAsync(witnessDb);
 
+    // The three-record audit is observation only, never recovery release:
+    // before PITR source outbox exists without ACK, after primary PITR
+    // intent alone cannot distinguish never-committed vs rolled-back.
+    await using var auditIntentReader = NpgsqlDataSource.Create(Restricted(
+        "OMNIA_TEST_INTENT_READER_DB", 15436,
+        "omnia_witness", "omnia_witness_intent_reader"));
+    var observation = await new PostgresCorrelatedErasureReconciliation(
+        sourceDb, auditIntentReader, witnessDb).InspectAsync(id, CancellationToken.None);
+    var expected = recovered
+        ? CorrelatedErasureVisibility.IntentOnlyCommitUnknown
+        : CorrelatedErasureVisibility.SourceEventPendingWitness;
+    if (observation.Visibility != expected || observation.MayReleaseRecovery ||
+        observation.MayAutoReplay)
+        throw new InvalidDataException("Unsafe observed erasure outcome.");
+    Console.WriteLine(recovered
+        ? "ERASURE_OBSERVED_COMMIT_UNKNOWN_NOT_READY"
+        : "ERASURE_OBSERVED_SOURCE_PENDING_NOT_READY");
+
     var sourceReader = new PostgresErasureDispatchReader(sourceDb);
     var foundInSource = false;
     DateTimeOffset? afterAt = null;

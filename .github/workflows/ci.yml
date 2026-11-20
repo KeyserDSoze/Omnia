@@ -327,6 +327,9 @@ jobs:
           grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
           dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1
           grep -Fq 'WITNESS_CHECKPOINT_VERIFIED' "$log"
+      - name: Physical witness WAL PITR must be rejected by surviving third-cluster anchor
+        shell: bash
+        run: bash tests/restore/physical-witness-pitr-rehearsal.sh
       - name: Restore rehearsal — real PostgreSQL dump/restore, retained and missing KEKs
         shell: bash
         run: bash tests/restore/restore-rehearsal.sh

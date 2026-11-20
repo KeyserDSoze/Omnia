@@ -197,3 +197,19 @@ source commit timeline. The API stays quarantined; no automatic
 `ready` or cross-provider delete is permitted. A real solution
 needs commit provenance beyond the failure domain of the
 primary, with proper source/remote failure handling and GDPR.
+
+## Separated pre-erase intent stream (ADR 0033)
+
+Within the SECOND disposable PostgreSQL witness PGDATA,
+a separate `erasure_intents` table and narrow,
+independently authenticated writer/reader roles
+store a durable pre-delete request marker. It is
+distinct in schema, UUID, roles and semantics from
+the previously implemented post-commit erasure witness
+receipt. The physical primary PITR test now shows
+the pre-delete intent survives a primary rollback
+that loses the source outbox before post-commit
+witness publication. No production API integrates
+the handshake; it does not guarantee primary commit
+atomicity, authorize automatic DR re-deletion, or
+serve as external offsite/immutable evidence.

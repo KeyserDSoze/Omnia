@@ -496,3 +496,38 @@ source-only scan appears clean. Witnessed replay of a DIFFERENT actor
 MUST NOT silently erase the lost-ACK actor: it remains unresolved.
 No release after DR until independently authenticated source-commit
 provenance and completeness exists. #141/#109/#31 remain OPEN.
+
+## Synthetic PRE-ERASE remote intent, never commit proof (ADR 0033/#141)
+
+`witness.erasure_intents` is a SECOND failure-domain PostgreSQL 17 CI
+prototype for an **intent/request before DELETE**, NOT an `erasure_events`
+post-commit receipt. Intent UUID differs from the later source outbox
+UUID and may exist even when primary `EraseAsync` never commits.
+Only `omnia_witness_intent_writer` may EXECUTE
+`witness.append_erase_intent(uuid,varchar,varchar)`, only
+`omnia_witness_intent_reader` may EXECUTE the find/list functions.
+Neither role may access raw witness tables or existing completed
+erasure receipts; owner, admin, app runtime and original witness
+writer/reader MUST be rejected inside each .NET adapter operation.
+Use `FOR UPDATE` on `witness.intent_head` for gapless idempotent
+request sequencing and reject same UUID with changed tenant/actor.
+Never log tenant/actor identifiers, UUIDs, or credentials; limit
+list reads to 100. CI should check the independent PGDATA
+`system_identifier` and real PostgreSQL role ACLs.
+
+Physical source PITR test MUST record a synthetic intent with a
+separately randomized UUID in the WITNESS PGDATA **before**
+`PostgresPersonalDataService.EraseAsync`. Denied remote writer or
+missing opt-in MUST abort before the source actor is touched.
+It must then commit the synthetic primary erase OUTSIDE the last
+publisher cycle (no completed witness ACK), restore the source
+physical WAL to a point before the DELETE, and show the
+pre-erase INTENT survives in the SECOND PGDATA even when the
+source outbox and completed witness receipt are BOTH absent.
+It MUST NOT infer from the intent that the source DELETE succeeded,
+that the request was authorized by a real user, or that recovery
+can delete the actor; all such cases require an independent
+authorization and commit proof. No API hook, automatic reconciliation
+or signed `ready` release is provided. Intent PGDATA itself can
+roll back (not third-cluster-anchored), and the whole test shares
+one CI host. Keep #141, #31, #109, #32 OPEN.

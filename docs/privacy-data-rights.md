@@ -214,3 +214,20 @@ UUID evidence is destroyed with the runner. No lawful-basis,
 notification, device/provider purge, retention, backup deletion
 or independent authorization proof has been established.
 #31/#32/#141 remain OPEN; do not claim GDPR compliance.
+
+## Pre-erase intent provenance and GDPR limits (ADR 0033)
+
+The synthetic independent intent ledger stores request
+UUID, tenant and subject before the primary erase.
+These values are personal metadata even though no note
+text is stored. They are accessed by separate
+EXECUTE-only PostgreSQL accounts and restricted to
+disposable CI. An intent record might exist even if
+the requested erase never commits; it MUST NOT be
+reported as a completed GDPR Article 17 action or
+used to delete a real user without independent
+authorization. No retention period, right-of-access,
+rectification, exception handling, data controller
+sign-off or multi-provider erasure propagation has
+been verified. All such requirements stay OPEN
+(#31/#32/#141).

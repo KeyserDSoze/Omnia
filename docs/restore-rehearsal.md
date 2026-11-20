@@ -599,3 +599,44 @@ verificatore può provare la completezza scansionando solo il
 database recuperato. Occorrono audit indipendente immutabile,
 fencing globale, vault/HSM e procedure GDPR prima della riapertura
 di servizi reali. #141/#109/#31 OPEN.
+
+## Intento remoto PRIMA della cancellazione (ADR 0033)
+
+Il test PITR fisico del primario ora prevede una richiesta di
+cancellazione artificiale registrata **PRIMA** del servizio
+`EraseAsync`, in una tabella separata
+`witness.erasure_intents` sulla SECONDA PGDATA.
+La ricevuta registra request UUID, tenant, subject e tipo
+`erase-actor-intent`, distinta da `witness.erasure_events`
+che conserva gli ACK post-commit. Il valore non è una prova
+dell'avvenuta cancellazione e non contiene il suo outbox UUID,
+generato solo dopo dal primario.
+
+La CI genera il request UUID e lo salva in file privato 0600
+sul runner sintetico. Due account PostgreSQL ulteriori
+(`omnia_witness_intent_writer`, `omnia_witness_intent_reader`)
+sono separati da scrittore e lettore delle cancellazioni
+confermate; hanno solo EXECUTE su funzioni bounded/SECURITY
+DEFINER, senza privilegi diretti sulle tabelle. Un record
+identico ripetuto è idempotente, uno con lo stesso UUID ma
+ambito diverso viene negato. Un writer errato o una CLI senza
+opt-in deve essere rifiutata PRIMA di toccare i dati.
+Il ledger di intenti non può generare un falso ACK erasure.
+
+Il nuovo `--record-intent` crea l'intento remoto, e
+`--verify-intent` verifica che esso sopravviva al PITR.
+La successiva cancellazione effettiva viene commit sul
+primario ma non pubblicata al witness (finestra già
+dimostrata da ADR 0032); il clone PITR resuscita memoria
+e consenso ma perde l'outbox. La CLI `--recovered-gap`
+osserva l'intento rimasto nel SECONDO cluster, senza
+modificare dati né emettere `ready`.
+
+**Limiti:** il flusso è orchestrato SOLO nello script
+sintetico CI, non nell'API di produzione; un intento
+sopravvissuto non attesta che il DELETE primario sia
+committato, che il richiedente abbia autorità, né
+autorizza un erase automatico dopo PITR. Gli intenti
+non sono ancorati nel terzo cluster e possono a loro
+volta retrocedere con il witness; tutte le PGDATA sono
+sullo stesso runner temporaneo. #141 e #109 OPEN.

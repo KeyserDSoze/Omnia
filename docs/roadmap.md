@@ -390,3 +390,28 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   ledger/WAL attestation before API/worker/replica release,
   offsite WORM/key custody, backup/AI/provider/device erasure,
   Azure/on-prem DR and documented GDPR review.
+
+## #141 — Independent pre-erase intent preflight (ADR 0033)
+
+- [x] **RED** integration test requires missing pre-erase SQL
+  writer/reader and a separate request role (CI expected compile
+  failure, plus corrected async assertion).
+- [x] **GREEN** new CI-only `witness.erasure_intents` with
+  serialized bounded idempotent UUID sequence, immutable
+  tenant/subject intent scope and separate EXECUTE-only writer
+  and reader SQL identities. Original completed-erase roles
+  CANNOT write/read intents, and intent roles CANNOT append
+  completed erasure receipts or access raw tables.
+- [x] Live synthetic physical PITR scenario now checks a remote
+  pre-erase intent before the DELETE; wrong role/opt-in deny
+  before actor mutation. After the primary PGDATA rollback
+  the remote intent is still visible even when both source
+  outbox and post-commit witness ACK are absent.
+- [ ] This is NOT an authenticated real-user erasure request,
+  a signed commit, or full source→remote commit ordering:
+  pre-intent may outlive a failed DELETE; missing intent
+  is not proof there were no requests. No automatic replay,
+  offsite WORM or third-cluster monotonic checkpoint of
+  the intent stream, vault custody, traffic fence,
+  data rights review, production API integration or
+  Azure/on-prem parity. #141 remains OPEN.

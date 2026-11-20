@@ -470,3 +470,37 @@ cannot authenticate an event that never reached the witness.
 No independent source commit authority/offsite WORM, global release
 fencing, crash-atomic cross-cluster protocol or production GDPR
 data-erasure guarantee exists. #141 remains OPEN P0.
+
+## Independent pre-erase intent, distinct from committed ACK (ADR 0033)
+
+A new CI-only, second-PGDATA `witness.erasure_intents`
+table separates a **request/intention before a primary
+erase** from post-commit `witness.erasure_events`.
+Only narrow EXECUTE-only intent writer/reader logins can
+access their dedicated SECURITY DEFINER functions.
+The intent writer cannot write a post-commit receipt and
+the existing completed witness writer cannot forge an
+intent. PostgreSQL FOR UPDATE serializes an idempotent
+UUID/tenant/subject request sequence; SQL owner/admin
+and direct table permissions fail inside .NET adapters.
+
+The physical PITR rehearsal now records a distinct
+intent UUID BEFORE committing a synthetic source erase.
+Wrong SQL identity and absent explicit test opt-in
+fail before the source actor is touched. When the
+primary PITR loses its committed deletion/outbox and
+resurrects data, the independent witness intent still
+exists and is readable. The completed witness erasure
+receipt still does NOT exist, and the API remains
+quarantined. This supports a conservative investigation
+signal, not a completed-delete claim or permission to
+replay arbitrary actor deletions.
+
+The intent may exist when source erase never committed;
+a missing intent may reflect a lost request or rollback
+of witness itself. Source API is NOT wired to require
+this preflight, and synthetic CI secrets are not vault
+credentials. No signer identity, externally immutable
+intent retention, monotonic third-cluster anchor for
+intent, crash-atomic two-DB transaction, global fencing
+or GDPR readiness is provided. #141 remains OPEN.

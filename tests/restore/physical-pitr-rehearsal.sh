@@ -158,6 +158,26 @@ OMNIA_REHEARSAL_WITNESS_WRITER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
 OMNIA_REHEARSAL_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_READER_DB" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- publish-source
 
+# A separate checkpoint is hosted in a new database in the THIRD
+# PostgreSQL cluster (not the primary or the witness), preserving monotonic
+# intent high-watermark independently of both primary PGDATA and witness PGDATA.
+# This remains on the SAME disposable CI runner, not an offsite WORM authority.
+anchor_container="omnia-ci-witness-anchor"
+docker inspect "$anchor_container" >/dev/null
+docker exec "$anchor_container" psql -X -v ON_ERROR_STOP=1 \
+  -U omnia -d postgres \
+  -c 'CREATE DATABASE omnia_pitr_preflight_anchor' >/dev/null
+docker exec -i "$anchor_container" psql -X -v ON_ERROR_STOP=1 \
+  -U omnia -d omnia_pitr_preflight_anchor \
+  < tests/restore/independent-anchor.sql >/dev/null
+export OMNIA_PREERASE_PITR_ANCHOR_WRITER_DB
+export OMNIA_PREERASE_PITR_ANCHOR_READER_DB
+OMNIA_PREERASE_PITR_ANCHOR_WRITER_DB="$(sed 's/Database=omnia_anchor;/Database=omnia_pitr_preflight_anchor;/' <<< "$OMNIA_TEST_ANCHOR_WRITER_DB")"
+OMNIA_PREERASE_PITR_ANCHOR_READER_DB="$(sed 's/Database=omnia_anchor;/Database=omnia_pitr_preflight_anchor;/' <<< "$OMNIA_TEST_ANCHOR_READER_DB")"
+export OMNIA_PREERASE_PITR_HMAC_KEY_PATH="$private_dir/preerase-hmac.bin"
+openssl rand 32 > "$OMNIA_PREERASE_PITR_HMAC_KEY_PATH"
+chmod 600 "$OMNIA_PREERASE_PITR_HMAC_KEY_PATH"
+
 # Explicit independent PRE-ERASE INTENT handshake. The request UUID is
 # NOT the later committed source event UUID. This operation must be
 # witnessed on the SECOND PGDATA BEFORE starting EraseAsync.
@@ -196,6 +216,40 @@ pending_before="$(docker exec "$source_container" psql -U omnia -d omnia_test -A
 intent_preflight --record-intent
 intent_preflight --record-intent
 intent_preflight --verify-intent
+
+# RED security rehearsal: BEFORE third-cluster checkpoint ACK, the
+# synthetic DELETE MUST be denied even though intent exists in witness.
+# Verify it did not delete memory or consent, and did not write an outbox.
+if OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
+   OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+     dotnet run --no-build -c Release \
+       --project tests/Omnia.RestoreRehearsal -- erase-unwitnessed >/dev/null 2>&1; then
+  echo "Synthetic DELETE accepted unanchored remote pre-intent." >&2
+  exit 1
+fi
+[[ "$(docker exec "$source_container" psql -U omnia -d omnia_test -Atqc \
+  "SELECT count(*) FROM public.memory_entries WHERE tenant_id = 'omnia-ci-unwitnessed-pitr-synthetic' AND owner_sub = 'synthetic-unwitnessed-pitr-owner'")" == 1 ]] || {
+  echo "Unanchored delete preflight altered actor state." >&2; exit 1
+}
+[[ "$(docker exec "$source_container" psql -U omnia -d omnia_test -Atqc \
+  "SELECT count(*) FROM public.erasure_outbox WHERE tenant_id = 'omnia-ci-unwitnessed-pitr-synthetic' AND owner_sub = 'synthetic-unwitnessed-pitr-owner'")" == 0 ]] || {
+  echo "Unanchored delete created an outbox row." >&2; exit 1
+}
+echo "UNANCHORED_PREERASE_DELETE_DENIED"
+
+# Successful third-cluster ACK is now an explicit prerequisite, NOT
+# proof that the later primary DELETE transaction has committed.
+intent_preflight --anchor-intent
+intent_preflight --verify-intent-anchor
+if intent_preflight --anchor-intent >/dev/null 2>&1; then
+  echo "Repeated third-cluster anchor bootstrap was accepted." >&2; exit 1
+fi
+anchor_checkpoint_before="$(docker exec "$anchor_container" psql \
+  -U omnia -d omnia_pitr_preflight_anchor -Atqc \
+  "SELECT encode(checkpoint, 'hex') FROM anchor.checkpoints ORDER BY checkpoint_count DESC LIMIT 1")"
+[[ -n "$anchor_checkpoint_before" ]] || {
+  echo "Pre-erase checkpoint missing from third PGDATA." >&2; exit 1
+}
 
 # An already recorded intent is still not a license to accept
 # unauthorized SQL readers. Fail BEFORE the primary deletion.
@@ -510,6 +564,15 @@ OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal \
     -- verify-unwitnessed-resurrected
 intent_preflight --verify-intent
+intent_preflight --verify-intent-anchor
+anchor_checkpoint_after="$(docker exec "$anchor_container" psql \
+  -U omnia -d omnia_pitr_preflight_anchor -Atqc \
+  "SELECT encode(checkpoint, 'hex') FROM anchor.checkpoints ORDER BY checkpoint_count DESC LIMIT 1")"
+[[ "$anchor_checkpoint_before" == "$anchor_checkpoint_after" ]] || {
+  echo "Third-cluster pre-erase checkpoint changed during primary recovery." >&2
+  exit 1
+}
+echo "ANCHORED_PREERASE_INTENT_SURVIVED_PRIMARY_PITR"
 echo "UNWITNESSED_PITR_REMAINS_UNRESOLVED_AFTER_WITNESSED_REPLAY"
 
 echo "Physical PITR plus authenticated out-of-backup erasure replay verified."

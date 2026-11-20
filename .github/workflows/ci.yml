@@ -199,6 +199,57 @@ jobs:
             echo "Witness reused the primary PostgreSQL cluster identity." >&2
             exit 1
           }
+      - name: Start THIRD independent PostgreSQL 17 witness checkpoint anchor (CI only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Third, distinct PGDATA and database identity; still one ephemeral CI host.
+          anchor_admin="$(openssl rand -hex 24)"
+          anchor_writer="$(openssl rand -hex 24)"
+          anchor_reader="$(openssl rand -hex 24)"
+          echo "::add-mask::$anchor_admin"
+          echo "::add-mask::$anchor_writer"
+          echo "::add-mask::$anchor_reader"
+          echo "OMNIA_TEST_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=omnia_anchor;Username=omnia;Password=$anchor_admin" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_anchor;Username=omnia_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_anchor;Username=omnia_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
+          docker run -d --rm --name omnia-ci-witness-anchor \
+            -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_anchor \
+            -e "POSTGRES_PASSWORD=$anchor_admin" \
+            -p 127.0.0.1:15438:5432 postgres:17
+          for i in $(seq 1 60); do
+            if docker exec omnia-ci-witness-anchor \
+              pg_isready -U omnia -d omnia_anchor >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          docker exec omnia-ci-witness-anchor pg_isready -U omnia -d omnia_anchor
+          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U omnia -d omnia_anchor \
+            -v writer_password="$anchor_writer" \
+            -v reader_password="$anchor_reader" <<'SQL'
+          SELECT format(
+            'CREATE ROLE omnia_anchor_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            :'writer_password'
+          ) \gexec
+          SELECT format(
+            'CREATE ROLE omnia_anchor_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            :'reader_password'
+          ) \gexec
+          SQL
+          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U omnia -d omnia_anchor < tests/restore/independent-anchor.sql
+          source_id="$(docker exec omnia-ci-pg psql -U omnia -d omnia_test -Atqc \
+            'SELECT system_identifier FROM pg_control_system()')"
+          witness_id="$(docker exec omnia-ci-erasure-witness psql \
+            -U omnia -d omnia_witness -Atqc \
+            'SELECT system_identifier FROM pg_control_system()')"
+          anchor_id="$(docker exec omnia-ci-witness-anchor psql \
+            -U omnia -d omnia_anchor -Atqc \
+            'SELECT system_identifier FROM pg_control_system()')"
+          [[ -n "$anchor_id" && "$anchor_id" != "$source_id" && "$anchor_id" != "$witness_id" ]] || {
+            echo "Anchor must use independent PostgreSQL PGDATA." >&2
+            exit 1
+          }
       - name: xUnit real PostgreSQL integration
         run: dotnet test tests/Omnia.Integration.Tests/Omnia.Integration.Tests.csproj -c Release
       - name: Isolated witness publisher CLI denies unsafe mode and confirms a test-only scan
@@ -288,6 +339,7 @@ jobs:
       - name: Stop disposable database
         if: always()
         run: |
+          docker rm -f omnia-ci-witness-anchor || true
           docker rm -f omnia-ci-erasure-witness || true
           docker rm -f omnia-ci-pg || true
       - name: Validate Docker Compose

@@ -628,3 +628,22 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   legalmente autorizzata via OIDC. Nessun
   fencing di ingress/workers/repliche e
   gestione backup/device/provider. #141 OPEN P0.
+
+
+## #141 — PITR della QUARTA PGDATA con claim TERZA sopravvissuta (ADR 0041)
+
+- [x] Aggiunto il test TDD RED sulla QUARTA PGDATA (inizialmente privo
+  di `--claim-fourth` e di WAL archiving); harness C# ed archiviazione
+  WAL implementati dopo il test.
+- [x] In CI è configurato un nuovo rehearsal fisico con
+  `pg_basebackup`, `pg_verifybackup`, restore point nominato e
+  promozione del clone QUARTA su 127.0.0.1:15442, distinto dal TERZO.
+- [x] Il test richiede MAC tenant/owner/UUID su TERZA, assenza della
+  vecchia claim nel clone QUARTA, rotazione reader+writer e rifiuto
+  delle credenziali ereditate. Il retry deve fallire con `23505`
+  sulla TERZA dopo la nuova claim su QUARTA.
+- [ ] Verificare la SUCCESS definitiva della CI dello SHA più recente
+  prima di dichiarare il gate testato end-to-end (stato su Actions).
+- [ ] Autorità offsite WORM indipendente, prova commit del primario,
+  eventuale rollback simultaneo TERZA+QUARTA, autenticazione OIDC e
+  fencing globale ancora APERTI. **Nessuna cancellazione source in test.**

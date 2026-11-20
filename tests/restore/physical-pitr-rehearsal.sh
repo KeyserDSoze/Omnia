@@ -91,6 +91,81 @@ OMNIA_REHEARSAL_RECEIPT_MAC_PATH="$receipt_mac" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- sign-receipt
 chmod 600 "$receipt_mac"
 
+# Separate (synthetic!) signed recovery journal + checkpoint, outside
+# PGDATA/WAL. This is NOT a trusted durable producer or monotonic store;
+# both artifacts still live on the same disposable CI runner.
+audit_dir="$private_dir/offline-journal"
+mkdir -m 700 "$audit_dir"
+python3 - "$audit_dir" <<'PY'
+import base64
+import hashlib
+import hmac
+import json
+import os
+import pathlib
+import secrets
+import sys
+import uuid
+
+folder = pathlib.Path(sys.argv[1])
+journal_key = secrets.token_bytes(32)
+checkpoint_key = secrets.token_bytes(32)
+genesis = base64.b64encode(hashlib.sha256(
+    b"omnia-recovery-journal-v1/genesis").digest()).decode("ascii")
+canonical = lambda obj: json.dumps(
+    obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+event = {
+    "schemaVersion": 1,
+    "sequence": 1,
+    "eventId": uuid.uuid4().hex,
+    "operation": "erase-actor",
+    "tenantId": "omnia-restore-drill-synthetic",
+    "ownerSubject": "synthetic-owner-only",
+    "previousDigest": genesis,
+}
+payload = canonical(event)
+signature = hmac.new(journal_key, payload, hashlib.sha256).digest()
+tip = base64.b64encode(hashlib.sha256(payload + signature).digest()).decode("ascii")
+entry = dict(event, mac=base64.b64encode(signature).decode("ascii"))
+checkpoint = {"schemaVersion": 1, "count": 1, "tipDigest": tip}
+checkpoint_signature = hmac.new(
+    checkpoint_key, canonical(checkpoint), hashlib.sha256).digest()
+checkpoint["mac"] = base64.b64encode(checkpoint_signature).decode("ascii")
+files = {
+    "journal.jsonl": canonical(entry) + b"\n",
+    "checkpoint.json": canonical(checkpoint),
+    "journal.key": journal_key,
+    "checkpoint.key": checkpoint_key,
+}
+for filename, raw in files.items():
+    path = folder / filename
+    with path.open("wb") as output:
+        os.fchmod(output.fileno(), 0o600)
+        output.write(raw)
+PY
+
+export OMNIA_RECOVERY_JOURNAL_PATH="$audit_dir/journal.jsonl"
+export OMNIA_RECOVERY_CHECKPOINT_PATH="$audit_dir/checkpoint.json"
+export OMNIA_RECOVERY_JOURNAL_KEY_PATH="$audit_dir/journal.key"
+export OMNIA_RECOVERY_CHECKPOINT_KEY_PATH="$audit_dir/checkpoint.key"
+audit_journal() {
+  dotnet run --no-build -c Release \
+    --project src/backend/Omnia.RecoveryAudit/Omnia.RecoveryAudit.csproj
+}
+
+# This check verifies the signed count & chain but cannot prove a
+# complete real-world deletion event stream. It is not a release token.
+audit_journal
+cp "$OMNIA_RECOVERY_JOURNAL_PATH" "$audit_dir/journal.original"
+chmod 600 "$audit_dir/journal.original"
+: > "$OMNIA_RECOVERY_JOURNAL_PATH"
+if audit_journal >/dev/null 2>&1; then
+  echo "Recovery audit accepted a truncated external journal." >&2
+  exit 1
+fi
+mv "$audit_dir/journal.original" "$OMNIA_RECOVERY_JOURNAL_PATH"
+audit_journal
+
 # Ensure the segment containing the named restore point and the later
 # destructive action is durable in the WAL archive before copying.
 last_segment="$(docker exec "$source_container" psql -U omnia -d omnia_test -Atqc \

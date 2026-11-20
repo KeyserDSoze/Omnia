@@ -64,6 +64,13 @@ public sealed class WitnessIndependentAnchorTests
                 firstCount - 1, stored.Checkpoint, default));
         Assert.Equal(stored, await new PostgresWitnessAnchorReader(
             anchorReader).ReadAsync(default));
+        // Even an owner connection accidentally supplied to a client
+        // adapter must be rejected before executing a read or append.
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new PostgresWitnessAnchorReader(anchorAdmin).ReadAsync(default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new PostgresWitnessAnchor(anchorAdmin).AdvanceAsync(
+                firstCount, stored.Checkpoint, default));
 
         // An untrusted writer/reader login cannot inspect or change head SQL.
         await Assert.ThrowsAsync<InvalidOperationException>(() =>

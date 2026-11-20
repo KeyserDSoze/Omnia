@@ -79,48 +79,48 @@ try
             const string fourthDb = "omnia_ci_dual_fourth_claims";
             var recovered = args[0] == "--dual-probe-recovered";
 
-            await using var thirdReader = NpgsqlDataSource.Create(Restricted(
+            await using var dualThirdReader = NpgsqlDataSource.Create(Restricted(
                 recovered ? "OMNIA_DUAL_PITR_RECOVERED_THIRD_READER_DB"
                           : "OMNIA_DUAL_PITR_THIRD_READER_DB",
                 thirdDb, recovered ? 15443 : 15438, "omnia_claim_reader"));
-            await using var fourthReader = NpgsqlDataSource.Create(Restricted(
+            await using var dualFourthReader = NpgsqlDataSource.Create(Restricted(
                 recovered ? "OMNIA_DUAL_PITR_RECOVERED_FOURTH_READER_DB"
                           : "OMNIA_DUAL_PITR_FOURTH_READER_DB",
                 fourthDb, recovered ? 15444 : 15440, "omnia_claim_reader"));
-            var third = new PostgresPreEraseExecutionClaimReader(thirdReader);
-            var fourth = new PostgresPreEraseExecutionClaimReader(fourthReader);
+            var dualThird = new PostgresPreEraseExecutionClaimReader(dualThirdReader);
+            var dualFourth = new PostgresPreEraseExecutionClaimReader(dualFourthReader);
             if (args[0] == "--dual-claim")
             {
-                await using var fourthWriter = NpgsqlDataSource.Create(Restricted(
+                await using var dualFourthWriter = NpgsqlDataSource.Create(Restricted(
                     "OMNIA_DUAL_PITR_FOURTH_WRITER_DB", fourthDb, 15440,
                     "omnia_claim_writer"));
-                await using var thirdWriter = NpgsqlDataSource.Create(Restricted(
+                await using var dualThirdWriter = NpgsqlDataSource.Create(Restricted(
                     "OMNIA_DUAL_PITR_THIRD_WRITER_DB", thirdDb, 15438,
                     "omnia_claim_writer"));
-                await new PostgresPreEraseExecutionClaimWriter(fourthWriter)
+                await new PostgresPreEraseExecutionClaimWriter(dualFourthWriter)
                     .ClaimOnceAsync(requestId, dualTenant, dualActor, key, default);
-                await new PostgresPreEraseExecutionClaimWriter(thirdWriter)
+                await new PostgresPreEraseExecutionClaimWriter(dualThirdWriter)
                     .ClaimOnceAsync(requestId, dualTenant, dualActor, key, default);
-                await fourth.VerifyClaimAsync(
+                await dualFourth.VerifyClaimAsync(
                     requestId, dualTenant, dualActor, key, default);
-                await third.VerifyClaimAsync(
+                await dualThird.VerifyClaimAsync(
                     requestId, dualTenant, dualActor, key, default);
                 Console.WriteLine("DUAL_CLAIMS_ORIGINALLY_ACKNOWLEDGED");
                 return 0;
             }
             if (!recovered)
             {
-                await fourth.VerifyClaimAsync(
+                await dualFourth.VerifyClaimAsync(
                     requestId, dualTenant, dualActor, key, default);
-                await third.VerifyClaimAsync(
+                await dualThird.VerifyClaimAsync(
                     requestId, dualTenant, dualActor, key, default);
                 Console.WriteLine("LIVE_DUAL_AUTHORITIES_STILL_AUTHENTICATED");
                 return 0;
             }
             // Both promoted physical clones must LACK exactly this UUID.
             // A reader role can inspect a claim but not create one.
-            if (await third.HasClaimAsync(requestId, default) ||
-                await fourth.HasClaimAsync(requestId, default))
+            if (await dualThird.HasClaimAsync(requestId, default) ||
+                await dualFourth.HasClaimAsync(requestId, default))
                 throw new InvalidDataException(
                     "DUAL_PITR_DID_NOT_LOSE_BOTH_CLAIMS.");
             await using var recoveredFourthWriter = NpgsqlDataSource.Create(
@@ -135,9 +135,9 @@ try
                 .ClaimOnceAsync(requestId, dualTenant, dualActor, key, default);
             await new PostgresPreEraseExecutionClaimWriter(recoveredThirdWriter)
                 .ClaimOnceAsync(requestId, dualTenant, dualActor, key, default);
-            await fourth.VerifyClaimAsync(
+            await dualFourth.VerifyClaimAsync(
                 requestId, dualTenant, dualActor, key, default);
-            await third.VerifyClaimAsync(
+            await dualThird.VerifyClaimAsync(
                 requestId, dualTenant, dualActor, key, default);
 
             // A caller must treat this as a NON-SUCCESS/QUARANTINE result.

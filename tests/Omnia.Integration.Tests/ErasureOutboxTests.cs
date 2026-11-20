@@ -139,7 +139,7 @@ public sealed class ErasureOutboxTests
             await using (var add = admin.CreateCommand($"""
                 ALTER TABLE public.erasure_outbox
                 ADD CONSTRAINT {constraint}
-                CHECK (tenant_id <> '${tenant}') NOT VALID
+                CHECK (tenant_id <> '{tenant}') NOT VALID
                 """))
             {
                 // tenant is a locally generated prefixed UUID, never input.
@@ -185,7 +185,7 @@ public sealed class ErasureOutboxTests
 
         await using var verify = admin.CreateCommand("""
             SELECT relrowsecurity, relforcerowsecurity,
-              has_table_privilege('omnia_app', 'public.erasure_outbox', 'INSERT'),
+              has_column_privilege('omnia_app', 'public.erasure_outbox', 'id', 'INSERT'),
               has_table_privilege('omnia_app', 'public.erasure_outbox',
                 'SELECT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'),
               has_table_privilege('omnia_retention', 'public.erasure_outbox', 'SELECT, INSERT, UPDATE, DELETE'),

@@ -288,7 +288,7 @@ privacy.MapPost("/erase", async (EraseMyDataCommand input,
 using (var scope = app.Services.CreateScope())
 {
     await scope.ServiceProvider.GetRequiredService<PostgresMigrator>().MigrateAsync();
-    await PostgresRuntimeGuard.VerifyAsync(
+    await PostgresRuntimeGuard.VerifyApiAsync(
         scope.ServiceProvider.GetRequiredService<NpgsqlDataSource>());
     await PostgresRetentionRepository.VerifyWorkerRoleAsync(
         scope.ServiceProvider.GetRequiredKeyedService<NpgsqlDataSource>("retention"));

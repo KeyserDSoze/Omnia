@@ -187,6 +187,8 @@ docker exec -i "$anchor_container" psql -X -v ON_ERROR_STOP=1 \
   < tests/restore/preerase-execution-claims.sql >/dev/null
 export OMNIA_PREERASE_PITR_CLAIM_WRITER_DB
 OMNIA_PREERASE_PITR_CLAIM_WRITER_DB="$(sed 's/Database=omnia_execution_claims;/Database=omnia_pitr_execution_claims;/' <<< "$OMNIA_TEST_EXECUTION_CLAIM_WRITER_DB")"
+export OMNIA_PREERASE_PITR_CLAIM_READER_DB
+OMNIA_PREERASE_PITR_CLAIM_READER_DB="$(sed 's/Database=omnia_execution_claims;/Database=omnia_pitr_execution_claims;/' <<< "$OMNIA_TEST_EXECUTION_CLAIM_READER_DB")"
 
 # Explicit independent PRE-ERASE INTENT handshake. The request UUID is
 # NOT the later committed source event UUID. This operation must be
@@ -249,6 +251,12 @@ echo "UNANCHORED_PREERASE_DELETE_DENIED"
 
 # Successful third-cluster ACK is now an explicit prerequisite, NOT
 # proof that the later primary DELETE transaction has committed.
+# A signed PRE-intent is NOT yet a claimed attempt. A missing claim
+# cannot pass the read-only scope-HMAC verifier.
+if intent_preflight --verify-claim-scope >/dev/null 2>&1; then
+  echo "Read-only third-cluster claim verifier accepted missing attempt." >&2
+  exit 1
+fi
 intent_preflight --anchor-intent
 intent_preflight --verify-intent-anchor
 if intent_preflight --anchor-intent >/dev/null 2>&1; then
@@ -307,6 +315,15 @@ claimed="$(docker exec "$anchor_container" psql -U omnia \
   echo "Third-cluster one-shot attempt was not durably claimed." >&2; exit 1
 }
 echo "PREERASE_ONE_SHOT_THIRD_CLAIM_COMMITTED"
+# The historical attempt must match the precise synthetic tenant and
+# subject, not merely exist under the UUID. Reader role is distinct.
+intent_preflight --verify-claim-scope
+intent_preflight --verify-claim-foreign-scope
+if OMNIA_PREERASE_PITR_CLAIM_READER_DB="$OMNIA_PREERASE_PITR_CLAIM_WRITER_DB" \
+  intent_preflight --verify-claim-scope >/dev/null 2>&1; then
+  echo "Claim writer credentials incorrectly authorized authenticated read." >&2
+  exit 1
+fi
 unset intent_source_id
 export OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH="$private_dir/unwitnessed-event.id"
 printf '%s\n' "$unwitnessed_id" > "$OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH"
@@ -476,6 +493,11 @@ recovered_claim_id="$(cat "$OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH")"
 }
 unset recovered_claim_id
 echo "PHYSICAL_PRIMARY_PITR_OLD_ATTEMPT_STILL_CONSUMED"
+# No primary SQL is needed here. The THIRD PGDATA still attests the
+# exact actor's attempt HMAC after physically rolling back the source.
+intent_preflight --verify-claim-scope
+intent_preflight --verify-claim-foreign-scope
+echo "PHYSICAL_PRIMARY_PITR_CLAIM_SCOPE_AUTHENTICATED"
 
 # Rotate the restored dispatcher password too, before any read-only
 # recovered-outbox scan; reject inherited source credentials.

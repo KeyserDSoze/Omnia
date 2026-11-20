@@ -144,6 +144,92 @@ public sealed class ExternalErasureWitnessTests
                 default));
     }
 
+
+    [Fact]
+    public async Task AutonomousDeliveryRetriesUnavailableWitnessWithoutLosingAcknowledgement()
+    {
+        await using var source = NpgsqlDataSource.Create(Require("OMNIA_TEST_DB"));
+        await new PostgresMigrator(source, "omnia_app", "omnia_retention",
+            "omnia_backfill", "omnia_backfill_audit",
+            dispatchRole: "omnia_dispatcher").MigrateAsync();
+        await using var app = NpgsqlDataSource.Create(Require("OMNIA_TEST_APP_DB"));
+        await using var dispatch = NpgsqlDataSource.Create(Require("OMNIA_TEST_DISPATCH_DB"));
+        await using var witnessWriter = NpgsqlDataSource.Create(Require("OMNIA_TEST_WITNESS_WRITER_DB"));
+        await using var witnessReader = NpgsqlDataSource.Create(Require("OMNIA_TEST_WITNESS_READER_DB"));
+        await using var unavailable = NpgsqlDataSource.Create(
+            "Host=127.0.0.1;Port=15437;Database=omnia_witness;" +
+            "Username=omnia_witness_writer;Password=unavailable;Timeout=1");
+
+        var tenant = "autonomous-" + Guid.NewGuid().ToString("N");
+        const string subject = "synthetic-autonomous-subject";
+        var now = DateTimeOffset.UtcNow;
+        await new PostgresConsentRepository(app).GrantAsync(
+            ConsentGrant.Issue(tenant, subject, "manual",
+                ConsentGrant.MemoryCapture, "privacy-v1", now, now.AddDays(1)),
+            default);
+        await new PostgresMemoryRepository(app, TestEnvelopeCrypto.Create())
+            .UpsertAsync(MemoryEntry.Capture(tenant, subject, "manual",
+                Guid.NewGuid().ToString("N"), "text/plain", "synthetic",
+                "{\"test\":true}", "synthetic", [], now), default);
+        await new PostgresPersonalDataService(app, TestEnvelopeCrypto.Create())
+            .EraseAsync(tenant, subject, default);
+
+        Guid eventId;
+        await using (var query = source.CreateCommand("""
+            SELECT id FROM public.erasure_outbox
+             WHERE tenant_id = @tenant AND owner_sub = @subject
+            """))
+        {
+            query.Parameters.AddWithValue("tenant", tenant);
+            query.Parameters.AddWithValue("subject", subject);
+            eventId = (Guid)(await query.ExecuteScalarAsync()
+                ?? throw new InvalidOperationException("Missing synthetic erasure event."));
+        }
+
+        var reader = new PostgresErasureWitnessReader(witnessReader);
+        var outcomes = new List<bool>();
+        var attempts = 0;
+        var absentAfterOutage = false;
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var delivery = new ErasureWitnessDeliveryLoop(async ct =>
+        {
+            attempts++;
+            if (attempts == 2)
+                absentAfterOutage = await reader.FindAsync(eventId, ct) is null;
+            return await new PostgresErasureOutboxWitnessPublisher(
+                dispatch, attempts == 1 ? unavailable : witnessWriter)
+                .PublishBatchAsync(1000, ct);
+        }, TimeSpan.FromMilliseconds(20), successful =>
+        {
+            outcomes.Add(successful);
+            if (outcomes.Count == 2) cancellation.Cancel();
+        });
+
+        await delivery.RunAsync(cancellation.Token);
+        Assert.Equal([false, true], outcomes);
+        Assert.True(absentAfterOutage);
+        var acknowledged = await reader.FindAsync(eventId, default);
+        Assert.NotNull(acknowledged);
+        Assert.Equal(tenant, acknowledged!.TenantId);
+
+        // A brand-new publisher invocation after restart replays from the
+        // source, but the independently persisted witness ACK is unchanged.
+        await new PostgresErasureOutboxWitnessPublisher(dispatch, witnessWriter)
+            .PublishBatchAsync(1000, default);
+        Assert.Equal(acknowledged, await reader.FindAsync(eventId, default));
+    }
+
+    [Fact]
+    public void DeliveryLoopRejectsUnboundedRetryInterval()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new ErasureWitnessDeliveryLoop(_ => Task.FromResult(0),
+                TimeSpan.Zero));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new ErasureWitnessDeliveryLoop(_ => Task.FromResult(0),
+                TimeSpan.FromHours(2)));
+    }
+
     private static string Require(string name)
     {
         var value = Environment.GetEnvironmentVariable(name);

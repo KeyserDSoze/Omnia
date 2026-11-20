@@ -186,3 +186,16 @@ deletion, backup retention policy or legal exception for retained
 witness metadata has been validated. Three PostgreSQL PGDATA and the
 key still share a temporary CI machine. #31, #32, #109 and #141 stay
 OPEN; no declaration of GDPR erasure completion.
+
+## Live erasure delivery audit is NOT GDPR completion (ADR 0031)
+
+The read-only preflight compares a synthetic committed primary
+deletion UUID and actor scope to the witness receipt; it persists
+no additional actor metadata or new source ACK. Its CI output
+contains only generic success/denial, never tenant/subject IDs.
+The original primary outbox and witness still retain personal
+metadata under unresolved retention, export, correction/deletion
+exception and lawful-basis policies. The preflight cannot account
+for an erasure commit that was lost by primary PITR BEFORE the
+first remote witness receipt. This is not GDPR Article 17 end-to-end
+assurance; #31/#32/#141 remain OPEN.

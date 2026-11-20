@@ -169,3 +169,16 @@ auditor. The clone retains the witness's physical system identifier;
 the anchor cluster has another. No API integration, real offsite
 custodian, immutable store, global traffic release signer, or
 cross-provider erase guarantee is supplied by this test.
+
+## Live erasure delivery observation — offline CI slice (ADR 0031)
+
+A new read-only infrastructure audit compares currently committed
+primary `erasure_outbox` rows against independent witness receipts,
+requiring exact UUID and actor scope. Its primary scan is bounded
+inside one `REPEATABLE READ` transaction using the dispatch
+SECURITY DEFINER function; the remote witness uses its separate
+EXECUTE-only reader function. The standalone `Omnia.ErasureDeliveryAudit`
+process is CI-only, never an HTTP API or recovery-release authority.
+The check cannot establish erasure history lost after primary PITR
+and cannot substitute for the independently anchored witness or
+global traffic fencing.

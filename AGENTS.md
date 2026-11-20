@@ -434,3 +434,32 @@ The third database still shares the same CI host and administrator:
 not an offsite immutable high-watermark, signer vault, global traffic
 fence or evidence that EVERY primary erase reached the witness before
 a crash. #141/#109/#31 remain OPEN.
+
+## Live primary-outbox → witness receipt preflight (#141 / ADR 0031)
+
+`PostgresErasureLiveDeliveryAudit` runs READ-ONLY and must validate
+`omnia_dispatcher` EXECUTE-only SOURCE identity and independent
+`omnia_witness_reader` EXECUTE-only WITNESS identity on EVERY audit.
+Read the live primary outbox via only the bounded
+`public.omnia_read_erasure_outbox` SECURITY DEFINER function inside
+ONE `REPEATABLE READ` / `SET TRANSACTION READ ONLY` session, with
+created_at+UUID pagination (never persist as commit-order cursor),
+UUID uniqueness and a 1000-event bound plus overflow probe. For every
+committed event, query its remote witness receipt by UUID and compare
+UUID, tenant, subject, event type and positive witness sequence
+exactly, rejecting missing/conflicting entries. No direct table
+privileges or write-side ACKs; no actor IDs, SQL errors or credentials
+in logs. `VerifyKnownEventAsync` checks a known live committed UUID;
+`VerifyAllAsync` checks every row in the bounded source snapshot.
+After xUnit + witness publisher, CI runs the offline
+`Omnia.ErasureDeliveryAudit --all` tool, requiring CI, GitHub Actions,
+explicit opt-in and fixed loopback DB/roles. Wrong source/witness
+credentials or disabled opt-in must fail. The tool never grants
+`ready` or touches HTTP/worker service state.
+CRITICAL: a clean LIVE outbox scan covers only retained source rows
+at its snapshot. It CANNOT prove that an erased outbox event never
+existed on a restored/rolled-back primary, nor does it rule out
+future concurrent commits or guarantee producer-before-crash delivery.
+Keep #141, #109 and #31 OPEN; require independent durable commit
+sequence/trust authority, ingress/worker fencing, offsite/WORM/vault
+and GDPR review before claiming production recovery safety.

@@ -345,3 +345,22 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   anti-rollback high-watermark, primary commit→witness source
   completeness, global service fence, external store erase and GDPR
   review remain OPEN (#141/#109/#31/#33).
+
+## #141 — Live source-to-witness acknowledgement audit (ADR 0031, 2026-11-20)
+
+- [x] TDD RED: synthetic `EraseAsync` commits an outbox event; before
+  independent receipt, the restricted read-only audit must deny
+  acknowledgement. Additional tests reject wrong credentials, unknown
+  UUID and event metadata mismatch without poisoning shared CI witness.
+- [x] GREEN: `PostgresErasureLiveDeliveryAudit` scans bounded committed
+  primary outbox in a single REPEATABLE READ / READ ONLY PostgreSQL
+  snapshot through EXECUTE-only SQL and checks matching witness receipt
+  UUID+tenant+subject+type. It never writes source cursor or receipt.
+- [x] Separate CI-only offline `Omnia.ErasureDeliveryAudit --all` verifies
+  *all* currently committed source outbox rows AFTER test publisher
+  completes; denies missing opt-in and wrong witness/source roles.
+- [ ] This is a LIVE delivery-health audit, not historical completeness
+  proof after primary PITR. Pre-ACK primary crash can still lose
+  committed erasures; no independent source commit counter, offsite
+  WORM/vault, global gate, Azure/Docker parity or end-to-end GDPR
+  erasure assurance. #141/#109/#31 remain open.

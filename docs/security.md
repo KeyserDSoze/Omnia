@@ -413,3 +413,28 @@ compromise, offsite disaster, primary erasure before first ACK,
 in-flight workers/replicas and external provider data remain
 unresolved. It proves neither source journal completeness nor GDPR
 Art. 17 compliance or safe release of production traffic.
+
+## Live outbox-to-witness read-only receipt reconciliation (ADR 0031)
+
+The new `PostgresErasureLiveDeliveryAudit` requires the EXECUTE-only
+primary dispatcher AND a separate witness reader (never owner, app,
+writer or BYPASSRLS). It scans all currently committed source outbox
+events in one bounded `REPEATABLE READ, READ ONLY` transaction and
+looks up matching independently persisted receipts. The audit denies
+missing, duplicated, overflowing, unknown or actor/type-conflicting
+events. A known-event audit can be performed without mutating either
+store; no source ACK/cursor exists or is moved.
+
+The test-only `Omnia.ErasureDeliveryAudit --all` is disconnected
+from API traffic/recovery readiness, accepts only fixed 127.0.0.1
+CI connection roles, fails closed on missing opt-in or mismatch and
+does not log SQL details or actor metadata. Post-publish CI verifies
+all source-visible committed erasures have a witness receipt.
+
+This is a useful operational lag/scope check **only while the
+original primary source outbox still exists**. The source snapshot
+is not an independently durable commit watermark; concurrent commits
+after the snapshot are out of scope. A PITR that rolls back unacked
+source commits can make the apparent backlog empty. Therefore this
+does NOT close the crash-before-ACK, anti-rollback, production global
+fencing, WORM/offsite signer, vault or GDPR obligations of #141.

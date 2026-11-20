@@ -528,3 +528,34 @@ La cancellazione che andasse persa PRIMA del primo append witness
 resterebbe indetectabile tramite questo metodo. Non esiste ancora
 un gate globale ingress/API/repliche/workers o la cancellazione
 verificata dei sistemi esterni e backup. #141/#109/#31 OPEN.
+
+## Live committed-erasure delivery preflight (ADR 0031)
+
+An offline CI-only component checks the **currently live primary
+outbox**, not an already restored database. The dedicated dispatcher
+is validated as EXECUTE-only; it opens a single PostgreSQL
+`REPEATABLE READ`, `READ ONLY` transaction and scans via
+`omnia_read_erasure_outbox` with a hard limit of 1000 events and
+an extra-row probe. For each source UUID, the independently
+provisioned witness READER checks the acknowledgement and exact
+immutable actor/tenant/type scope. Missing witness ACK, changed
+scope, unknown source UUID, wrong SQL role or source overflow deny
+the audit without writing data. No personal IDs are logged.
+
+The `LiveErasureDeliveryAuditTests` first creates an actual
+`PostgresPersonalDataService.EraseAsync` (transactional consent/memory
+DELETE and outbox) and expects an unconfirmed result while witness
+ACK is absent. A bounded publisher retry then creates the remote
+receipt and the read-only audit succeeds, including on a fresh
+auditor. A separate in-memory mismatch test checks the immutable
+receipt scope without writing a deliberately forged UUID to the
+shared witness database. CI invokes `Omnia.ErasureDeliveryAudit
+--all` only after the publisher one-shot test, checks wrong roles
+and missing opt-in, and emits only a generic success/deny token.
+
+This proves delivery only for the events visible on that **LIVE
+primary snapshot**; a primary PITR can remove a committed event
+before publication, leaving nothing to compare. It is not proof
+of commit-order completeness, external durable ACK, all-device
+erasure, or permission to set `Recovery__AccessStateFile=ready`.
+#141 remains OPEN.

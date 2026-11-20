@@ -46,6 +46,12 @@ OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- seed-peer
 
+# RED: a second synthetic actor must already exist BEFORE backup, so
+# losing its later committed erasure (without witness ACK) resurrects data.
+OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- seed-unwitnessed
+
 # True physical basebackup: includes the database cluster, global roles,
 # extensions, RLS, and WAL up to the backup end. pg_verifybackup verifies
 # manifest/checksums before any restoration attempt.

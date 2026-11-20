@@ -20,7 +20,29 @@ jobs:
           dotnet build src/backend/Omnia.Api/Omnia.Api.csproj -c Release
           dotnet build src/backend/Omnia.Backfill/Omnia.Backfill.csproj -c Release
           dotnet build src/backend/Omnia.BackfillAudit/Omnia.BackfillAudit.csproj -c Release
+          dotnet build src/backend/Omnia.RecoveryAudit/Omnia.RecoveryAudit.csproj -c Release
           dotnet build tests/Omnia.RestoreRehearsal/Omnia.RestoreRehearsal.csproj -c Release
+      - name: Recovery audit CLI denies missing external journal and checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$(mktemp "$RUNNER_TEMP/omnia-recovery-audit.XXXXXX")"
+          trap 'rm -f "$log"' EXIT
+          if env -u OMNIA_RECOVERY_JOURNAL_PATH \
+                 -u OMNIA_RECOVERY_CHECKPOINT_PATH \
+                 -u OMNIA_RECOVERY_JOURNAL_KEY_PATH \
+                 -u OMNIA_RECOVERY_CHECKPOINT_KEY_PATH \
+            dotnet run --no-build -c Release \
+            --project src/backend/Omnia.RecoveryAudit/Omnia.RecoveryAudit.csproj \
+            > "$log" 2>&1; then
+            echo "Recovery audit unexpectedly accepted absent external trust files." >&2
+            exit 1
+          fi
+          grep -Fq 'RECOVERY_AUDIT_FAILED' "$log" || {
+            echo "Recovery audit failed for an unrelated reason." >&2
+            exit 1
+          }
+
       - name: Assert recovery quarantine prevents API startup before database access
         shell: bash
         run: |

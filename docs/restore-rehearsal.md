@@ -559,3 +559,43 @@ before publication, leaving nothing to compare. It is not proof
 of commit-order completeness, external durable ACK, all-device
 erasure, or permission to set `Recovery__AccessStateFile=ready`.
 #141 remains OPEN.
+
+## Perdita pre-ACK: PITR primario può dare un audit 'pulito' falso (ADR 0032)
+
+Il test CI del PITR FISICO del primario, accanto alla cancellazione
+già consegnata al witness, ora crea un SECONDO attore sintetico
+completamente separato. Un memory+consent reale viene persistito
+PRIMA della basebackup. Dopo il restore point WAL e dopo l'ultima
+pubblicazione verso il witness, `PostgresPersonalDataService.EraseAsync`
+cancella davvero memory+consent con outbox transazionale. Il nuovo
+UUID è presente nella sorgente LIVE, il dato non c'è più, ma il
+reader witness EXECUTE-only non trova alcuna ricevuta. La CLI
+`Omnia.UnwitnessedPitrRehearsal --live-gap` osserva proprio
+questo PENDING ACK.
+
+L'UUID è temporaneamente annotato in un file 0600 nella directory
+0700 del runner, fuori dalla PGDATA primaria. Dopo `pg_basebackup`
++ WAL PITR, il clone recupera il memory+consent di quell'attore,
+mentre il suo outbox event ID NON esiste più e lo stesso UUID non
+è nel witness. La modalità read-only `--recovered-gap` controlla
+che `PostgresErasureLiveDeliveryAudit.VerifyAllAsync` possa
+riuscire sui soli eventi ancora visibili nel database recuperato,
+anche se il precedente UUID committato risulta perso. La presenza
+del solo UUID nel file del runner CI è prova di quanto accaduto NEL
+TEST, non un ledger affidabile o un'ancora di commit di produzione.
+
+La verifica ruota anche la password di `omnia_dispatcher` nel
+clone ed esclude l'accesso con le credenziali pre-PITR, oltre a
+negare un writer come reader witness. L'API, con marker locale
+`quarantined`, deve ancora negare l'avvio anche dopo il
+source-only false-green. Il replay di un ALTRO actor cancellato
+e già witnessed deve restare idempotente, ma NON deve far sparire
+l'attore perduto nella finestra commit→ACK.
+
+**NON è un recovery gate di produzione:** non si è aggiunta
+un'identità firmataria esterna di ogni erase commit. Se il crash
+accade prima della registrazione esterna del commit, nessun
+verificatore può provare la completezza scansionando solo il
+database recuperato. Occorrono audit indipendente immutabile,
+fencing globale, vault/HSM e procedure GDPR prima della riapertura
+di servizi reali. #141/#109/#31 OPEN.

@@ -463,3 +463,36 @@ future concurrent commits or guarantee producer-before-crash delivery.
 Keep #141, #109 and #31 OPEN; require independent durable commit
 sequence/trust authority, ingress/worker fencing, offsite/WORM/vault
 and GDPR review before claiming production recovery safety.
+
+## Physical primary PITR with a committed but NEVER witnessed erasure (#141 / ADR 0032)
+
+The real `tests/restore/physical-pitr-rehearsal.sh` now exercises a
+SECOND distinct synthetic actor. Seed its memory and consent BEFORE
+`pg_basebackup`, then after the named WAL restore point and AFTER the
+last source→witness publisher cycle, commit `EraseAsync` via real
+actor-scoped service. Verify that the live primary has NO memory for
+that actor and DOES have its committed outbox UUID, while the witness
+EXECUTE-only reader has NO acknowledgement. Save only that synthetic
+UUID in a private 0600 file under the ephemeral 0700 runner directory
+(outside source PGDATA, not in logs/artifacts). NEVER claim this
+unsigned ephemeral file is a trusted external commit witness.
+
+After a REAL physical source PITR, the recovered primary MUST have
+the actor memory+consent resurrected and its committed outbox UUID
+ABSENT; witness must STILL lack that UUID. A bounded, read-only
+`PostgresErasureLiveDeliveryAudit.VerifyAllAsync` may misleadingly
+return success on the remaining source outbox. This must NEVER be
+treated as proof of historic completeness or recovery release.
+`Omnia.UnwitnessedPitrRehearsal` is test-only: fixed
+127.0.0.1:15432/15435 dispatcher identities and 15436 witness READER,
+`CI=true`, `GITHUB_ACTIONS=true`, explicit opt-in and known private
+synthetic UUID are required. Negative test mode `--live-gap` confirms
+a committed pending ACK; `--recovered-gap` confirms the false-clean
+risk after PITR. It MUST NOT emit a ready marker, write SQL, or
+print UUIDs, tenant data, secrets or raw exception details.
+Rotate the recovered dispatcher credential, assert old credential
+denial and API quarantine 503/startup denial even after the
+source-only scan appears clean. Witnessed replay of a DIFFERENT actor
+MUST NOT silently erase the lost-ACK actor: it remains unresolved.
+No release after DR until independently authenticated source-commit
+provenance and completeness exists. #141/#109/#31 remain OPEN.

@@ -364,3 +364,29 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   committed erasures; no independent source commit counter, offsite
   WORM/vault, global gate, Azure/Docker parity or end-to-end GDPR
   erasure assurance. #141/#109/#31 remain open.
+
+## #141 — Physical pre-ACK erasure loss and false-green source audit (ADR 0032, 2026-11-20)
+
+- [x] TDD RED: physical primary PITR script requests a new synthetic
+  actor before `pg_basebackup`; the earlier restore harness does not
+  implement that phase, so the CI PITR step fails.
+- [x] CI-only actor is captured BEFORE physical backup; real
+  `EraseAsync` commits AFTER the named WAL point and AFTER the LAST
+  witness publisher cycle. Original live source has no actor memory,
+  committed outbox UUID but witness has no ACK.
+- [x] Private runner UUID outside source PGDATA drives read-only
+  `--live-gap` / `--recovered-gap` checks: PITR resurrects the
+  actor's memory+consent but BOTH recovered source outbox and
+  independent witness lack the committed event. Source-only full
+  scan can pass on remaining witnessed events; the remembered UUID
+  explicitly demonstrates why this is NOT release evidence.
+- [x] Only restricted SQL dispatcher/reader, recovered dispatcher
+  password rotation, missing opt-in and wrong role denied;
+  quarantined API remains unavailable. Replay for another
+  witnessed actor cannot silently resolve missing historical ACK.
+- [ ] The private test UUID is NOT independently signed or
+  monotonic, so the system still CANNOT reliably discover every
+  pre-ACK erasure lost after a real crash. Need external per-commit
+  ledger/WAL attestation before API/worker/replica release,
+  offsite WORM/key custody, backup/AI/provider/device erasure,
+  Azure/on-prem DR and documented GDPR review.

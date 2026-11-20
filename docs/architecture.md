@@ -182,3 +182,18 @@ process is CI-only, never an HTTP API or recovery-release authority.
 The check cannot establish erasure history lost after primary PITR
 and cannot substitute for the independently anchored witness or
 global traffic fencing.
+
+## Source commit→witness ACK loss demonstrated with physical PITR (ADR 0032)
+
+The synthetic DR architecture now tests a *negative* window:
+primary `EraseAsync` commits to its own transactional outbox
+AFTER the last witness publish and AFTER the WAL recovery point.
+The physical primary clone loses both that erase transaction
+and outbox event, while the independent witness never saw it.
+A source-only read-only outbox audit can consequently return a
+misleading success. A CI-private remembered UUID demonstrates
+the gap but does NOT establish an independent authenticated
+source commit timeline. The API stays quarantined; no automatic
+`ready` or cross-provider delete is permitted. A real solution
+needs commit provenance beyond the failure domain of the
+primary, with proper source/remote failure handling and GDPR.

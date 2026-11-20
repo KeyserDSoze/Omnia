@@ -438,3 +438,35 @@ after the snapshot are out of scope. A PITR that rolls back unacked
 source commits can make the apparent backlog empty. Therefore this
 does NOT close the crash-before-ACK, anti-rollback, production global
 fencing, WORM/offsite signer, vault or GDPR obligations of #141.
+
+## Pre-ACK primary PITR: a false-green source-only delivery check (ADR 0032)
+
+The real PostgreSQL 17 physical primary PITR rehearsal now covers
+TWO erasures on distinct synthetic actors: one delivered to the
+independent witness, and one committed AFTER the final publisher
+cycle and NEVER delivered. The second actor's memory and consent
+were included in the earlier physical basebackup. Its committed
+primary outbox UUID is observed live before PITR with a remote
+witness receipt proven ABSENT. Named-WAL-point recovery resurrects
+that actor's ciphertext and consent but removes the primary UUID;
+the witness still has no matching event.
+
+The new isolated `Omnia.UnwitnessedPitrRehearsal` test CLI
+keeps only the synthetic UUID in a private ephemeral runner file,
+requires CI and exact restricted 127.0.0.1 SQL reader identities,
+and performs NO writes or release operations. It shows how the
+existing LIVE-source `VerifyAllAsync` may pass on other witnessed
+events on the restored primary while a previously committed erasure
+is missing from BOTH source and witness. Recovered dispatcher
+credentials are rotated; the stale password and witness-writer
+role are rejected. API quarantine must remain active after this
+misleading clean scan, and replay for another witnessed actor must
+not erase the unacknowledged actor automatically.
+
+**Trust boundary:** a UUID file on the SAME CI host is not a
+signed independent per-commit journal, has no source coverage
+guarantee and can be lost or forged. Even an HMAC witness anchor
+cannot authenticate an event that never reached the witness.
+No independent source commit authority/offsite WORM, global release
+fencing, crash-atomic cross-cluster protocol or production GDPR
+data-erasure guarantee exists. #141 remains OPEN P0.

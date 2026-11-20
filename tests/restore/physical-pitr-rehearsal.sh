@@ -46,7 +46,7 @@ OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- seed-peer
 
-# RED: a second synthetic actor must already exist BEFORE backup, so
+# A second synthetic actor must already exist BEFORE backup, so
 # losing its later committed erasure (without witness ACK) resurrects data.
 OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
@@ -354,7 +354,8 @@ unwitnessed_gap --recovered-gap
 quarantine_file="$private_dir/unwitnessed-quarantine.state"
 api_denial_log="$private_dir/unwitnessed-api-denied.log"
 printf 'quarantined\n' > "$quarantine_file"
-chmod 600 "$quarantine_file" "$api_denial_log" 2>/dev/null || chmod 600 "$quarantine_file"
+: > "$api_denial_log"
+chmod 600 "$quarantine_file" "$api_denial_log"
 if Recovery__AccessStateFile="$quarantine_file" ASPNETCORE_ENVIRONMENT=Development \
    dotnet run --no-build --no-launch-profile -c Release \
      --project src/backend/Omnia.Api/Omnia.Api.csproj \

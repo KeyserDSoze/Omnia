@@ -199,3 +199,18 @@ exception and lawful-basis policies. The preflight cannot account
 for an erasure commit that was lost by primary PITR BEFORE the
 first remote witness receipt. This is not GDPR Article 17 end-to-end
 assurance; #31/#32/#141 remain OPEN.
+
+## Unwitnessed committed erasure lost during primary PITR (ADR 0032)
+
+The new test demonstrates an important Article 17 failure mode:
+a real synthetic `EraseAsync` can have committed successfully,
+including deletion and outbox, while physical rollback resurrects
+the actor's sealed memory and consent and loses the outbox UUID
+BEFORE independent witness acknowledgement. The existing
+source-only delivery audit can then appear clean because it sees
+only surviving rows. The scenario uses no real user data; test
+output contains only generic result tokens, and its local private
+UUID evidence is destroyed with the runner. No lawful-basis,
+notification, device/provider purge, retention, backup deletion
+or independent authorization proof has been established.
+#31/#32/#141 remain OPEN; do not claim GDPR compliance.

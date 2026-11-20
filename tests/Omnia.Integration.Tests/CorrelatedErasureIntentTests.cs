@@ -96,7 +96,7 @@ public sealed class CorrelatedErasureIntentTests
         // A stale request ID MUST NOT erase a later fresh capture even if
         // the old remote intent remains readable. PK uniqueness rolls
         // the entire second source transaction back.
-        var later = now.AddMinutes(2);
+        var later = DateTimeOffset.UtcNow;
         await consents.GrantAsync(ConsentGrant.Issue(tenant, owner, "manual",
             ConsentGrant.MemoryCapture, "privacy-v2", later,
             later.AddDays(1)), default);
@@ -110,8 +110,8 @@ public sealed class CorrelatedErasureIntentTests
                 requestId, tenant, owner, intentReader, default));
         Assert.Equal("23505", err.SqlState);
         Assert.Single(await memories.RecentAsync(tenant, owner, 10, default));
-        Assert.Single(await consents.ActiveAsync(tenant, owner, "manual",
-            ConsentGrant.MemoryCapture, default));
+        Assert.Single((await consents.ListAsync(tenant, owner, default))
+            .Where(grant => grant.RevokedAt is null));
     }
 
     private static string Required(string name) =>

@@ -27,6 +27,7 @@ jobs:
           dotnet build tests/Omnia.RestoreRehearsal/Omnia.RestoreRehearsal.csproj -c Release
           dotnet build tests/Omnia.UnwitnessedPitrRehearsal/Omnia.UnwitnessedPitrRehearsal.csproj -c Release
           dotnet build tests/Omnia.WitnessPitrRehearsal/Omnia.WitnessPitrRehearsal.csproj -c Release
+          dotnet build tests/Omnia.ClaimPitrRehearsal/Omnia.ClaimPitrRehearsal.csproj -c Release
       - name: Recovery audit CLI denies missing external journal and checkpoint
         shell: bash
         run: |
@@ -238,7 +239,10 @@ jobs:
           docker run -d --rm --name omnia-ci-witness-anchor \
             -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_anchor \
             -e "POSTGRES_PASSWORD=$anchor_admin" \
-            -p 127.0.0.1:15438:5432 postgres:17
+            -p 127.0.0.1:15438:5432 postgres:17 \
+            -c archive_mode=on \
+            -c "archive_command=mkdir -p /tmp/omnia-ci-third-claim-wal-archive && test ! -f /tmp/omnia-ci-third-claim-wal-archive/%f && cp %p /tmp/omnia-ci-third-claim-wal-archive/%f" \
+            -c archive_timeout=60s
           for i in $(seq 1 60); do
             if docker exec omnia-ci-witness-anchor \
               pg_isready -U omnia -d omnia_anchor >/dev/null 2>&1; then break; fi
@@ -499,6 +503,9 @@ jobs:
       - name: Physical pg_basebackup + archived WAL point-in-time recovery gate
         shell: bash
         run: bash tests/restore/physical-pitr-rehearsal.sh
+      - name: Physical THIRD-PGDATA claim WAL PITR must fail against surviving FOURTH
+        shell: bash
+        run: bash tests/restore/physical-third-claim-pitr-rehearsal.sh
       - name: Stop disposable database
         if: always()
         run: |

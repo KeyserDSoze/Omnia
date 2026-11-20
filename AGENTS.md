@@ -223,3 +223,20 @@ rollback if it is independently durable and newer than the restored
 backup; rolling back BOTH artifacts remains undetectable.
 No signed production issuer, external append-only ledger, watermark
 authority, traffic gate coordination, erasure replay or GDPR sign-off.
+
+
+## Recovery journal local writer prototype (#141, ADR 0022)
+
+`RecoveryJournalLocalAppender` is NOT a production erasure-event
+publisher: it is an append-only synthetic on-disk harness. It MUST
+verify old journal + separately keyed checkpoint BEFORE appending,
+reject partial/missing/tampered state and stale exclusive lock,
+and flush the new journal record before publishing the checkpoint.
+Crash between both operations leaves a mismatch and MUST fail closed,
+not auto-repair, truncate or silently authorize `ready\n`. Never
+put its keys or actor identities in logs, Git, Pages or artifacts.
+CI `append-journal` accepts only known fixture actor/test source DB.
+Local private files do NOT establish independent durable custody,
+distributed locking, true fsync of directories, request authorization,
+transactional DB outbox, cross-host monotonic watermark or GDPR erasure.
+Do not wire an unauthenticated writer to the real API / EraseAsync.

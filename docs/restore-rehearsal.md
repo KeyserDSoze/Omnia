@@ -252,3 +252,29 @@ su dati sintetici; la generazione avviene **nello stesso runner**
 e non fornisce durabilità, autenticazione di un operatore esterno
 o protezione contro rollback simultaneo di journal e checkpoint.
 Il tool non autorizza `ready`, non ferma servizi e non cancella dati.
+
+
+## Emitter locale append-only della fixture PITR (ADR 0022)
+
+La CI genera due chiavi HMAC distinte in una directory temporanea
+privata e usa `Omnia.RestoreRehearsal -- append-journal` con il
+database **sintetico** (127.0.0.1:15432) per aggiungere l'evento
+`erase-actor` al journal e aggiornare il checkpoint.
+Il tool di audit indipendente dal database li rilegge dopo l'append.
+Questo sostituisce la precedente generazione JSONL in Python.
+
+Il produttore `RecoveryJournalLocalAppender` prende un lock esclusivo
+e rilegge/verifica checkpoint e journal prima di aggiungere una riga.
+Conferma i dati di file su disco con `Flush(true)` e pubblica un
+checkpoint privato da un file temporaneo nella stessa directory.
+Se la scrittura viene interrotta tra i due file, il checkpoint
+resta indietro e ulteriori append sono rifiutati: la riparazione
+manuale NON è automatizzata. Sono testati append multipli, resume
+dopo riapertura, mismatch e permessi non privati.
+
+**Non usarlo per cancellazioni reali.** Questo è un produttore locale
+di fixture, non una sorgente autorizzata di eventi, un registro
+durabile fuori dal failure domain PostgreSQL o un watermark monotono.
+Non implementa outbox transazionale, rimozione da backup/provider
+o traffic release gate. Il file `ready` non viene aggiornato.
+Decisione: [ADR 0022](../adr/0022-local-append-only-recovery-journal.md).

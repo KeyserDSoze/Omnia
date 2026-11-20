@@ -218,3 +218,20 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   authorization, durable anti-rollback sequence/watermark, HSM/vault
   custody, erasure replay, global traffic fence and Azure/on-prem
   equivalence; not production ready.
+
+
+## #141 — Local recovery journal append writer (2026-11-20)
+
+- [x] Added signed append-only local writer with verification of
+  previous journal/checkpoint, strict private directory and exclusive
+  lock; snapshot/checkpoint update after journal flush.
+- [x] Tests for multiple writes and restart, fail-closed partial
+  state / simulated crash, file permissions, lock conflicts and
+  actor/key validation.
+- [x] CI PITR source fixture now appends through the .NET writer
+  instead of generating a single Python JSONL record directly.
+- [ ] Record complete final Actions result and links on #141.
+- [ ] Producer from authorized app erasures, transactional outbox,
+  off-DB append-only ledger with independent monotonic checkpoint,
+  multiple replica fencing/ingress, provider erasure, GDPR assessment
+  and Azure/on-prem parity remain P0 OPEN.

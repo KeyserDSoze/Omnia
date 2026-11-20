@@ -19,7 +19,7 @@ e indipendentemente autenticato, separata dalle mutazioni sul database.
   da newline LF. Ciascuna riga descrive un evento `erase-actor` con
   `schemaVersion=1`, sequenza contigua da 1, eventId UUID N unico,
   tenant/subject, `previousDigest` e HMAC-SHA256 del payload canonico.
-- La forma canonica v1 del payload è **JSON UTF-8 compatto, campi in ordine fisso e caratteri Base64 stampabili non escaped** (esplicitamente configurato con `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` su .NET, mai usato come HTML). La fixture Python di CI genera esattamente gli stessi byte; un test protegge i caratteri `+`, `/` e `=`. Il MAC autentica il payload canonico, non un rendering HTML.
+- La forma canonica v1 del payload è **JSON UTF-8 compatto, campi in ordine fisso e caratteri Base64 stampabili non escaped** (esplicitamente configurato con `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` su .NET, mai usato come HTML). La fixture Python ha validato l'interoperabilità dei byte nel precedente gate; ora il PITR usa l'appender .NET dell'ADR 0022. Un test protegge i caratteri `+`, `/` e `=`. Il MAC autentica il payload canonico, non un rendering HTML.
 - La catena collega gli eventi mediante `SHA256(canonicalPayload || HMAC)`;
   il primo evento fa riferimento a un digest genesis deterministico.
   Vengono rifiutati sequenze saltate, duplicati, riordinamenti,

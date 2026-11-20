@@ -205,3 +205,20 @@ issuer, external journal store, durable anti-rollback authority,
 proof of full erasure capture, replay or API traffic authorization
 is implemented. The API recovery marker remains an unsigned
 operator assertion. #141 stays OPEN.
+
+
+## Local recovery journal append prototype (#141 / ADR 0022)
+
+The new append-only prototype verifies the existing HMAC chain and
+separately keyed checkpoint before every local write, creates one
+new signed erase-actor event under an exclusive 0700 directory/0600
+files, fsyncs the journal and atomically renames a same-directory
+checkpoint temp. A crash between the append and the checkpoint
+leaves an inconsistent pair and new writes fail closed. A leftover
+lock also prevents continued writing until operator intervention.
+Tests prove these properties with synthetic actors. This is NOT
+a production deletion publisher: no durable external custody,
+authoritative request identity, DB transaction/outbox, trust in
+file paths against a privileged attacker, directory fsync, remote
+witness, full host recovery, Azure/OpenBao or high-watermark service.
+Both files can be rolled back together undetected. See ADR 0022.

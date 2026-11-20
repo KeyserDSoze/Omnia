@@ -356,3 +356,15 @@ TERZA sopravvissuta, non il commit della cancellazione sul primario,
 non il soddisfacimento dell'art. 17 GDPR e non la propagazione a
 backup, dati derivati, connettori o provider. Nessuna rimozione di
 record personali reali né apertura del gate recovery. #31/#141 OPEN.
+
+## Controesempio di erasure intent dopo doppio PITR (ADR 0042)
+
+Con il rollback di due claim authority nella stessa
+area amministrativa, i rispettivi UUID one-shot possono
+andare entrambi persi: non è dimostrata impossibilità
+di replay. Il test PostgreSQL è limitato a dati sintetici,
+mantiene la quarantena e non invoca il DELETE reale.
+Una claim validata o nuovamente scritta NON è evidenza
+del commit della richiesta di cancellazione GDPR Art.17.
+Restano obbligatorie fonte esterna affidabile, revisioni
+privacy/legal, dati derivati, backup e provider.

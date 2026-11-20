@@ -929,3 +929,23 @@ artifact. Un rollback di entrambe le claim authority elude la prova:
 non è attestation di commit né DR/offsite pronto per produzione.
 
 **TDD osservato per ADR 0041 (commit implementativo `274f574a`):** RED sul [run 44823897596](https://github.com/KeyserDSoze/Omnia/actions/runs/44823897596) (archive_mode della quarta assente). GREEN sulla [CI 44824173620](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173620) comprensiva di entrambi i test fisici di rollback TERZA/QUARTA; [OIDC](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173641) e [Pages](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173601) success. Queste evidenze non coprono WORM/offsite o attestazione commit.
+
+## Gate negativo di PITR fisico SIMULTANEO TERZA e QUARTA (ADR 0042)
+
+Il test `physical-dual-claim-pitr-rehearsal.sh` crea
+database sintetici separati nelle due claim authority,
+prende due reali basebackup con verifica di manifest,
+imposta due restore point WAL nominati, registra la
+stessa claim HMAC QUARTA→TERZA e recupera due cloni
+indipendenti alla fase pre-claim. Prova perdita del
+medesimo UUID su **entrambi** i cloni, HMAC ancora
+autenticato sugli originali, cambio credenziali
+ereditate e nuovo consumo consentito dai due cloni.
+La CLI emette exit **42** e una sentinella di NON
+rilascio; lo script considera valida la regressione
+solo in presenza di quella negazione.
+Non è una procedura di riparazione: è evidenza di
+finestra di rollback comune. Nessun DELETE, API
+ready, ingest, traffico worker o accesso esterno.
+WAL/PGDATA/key restano nel runner temporaneo e
+vengono eliminati dopo il test.

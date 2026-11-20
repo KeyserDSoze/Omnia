@@ -646,3 +646,20 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [ ] Autorità offsite WORM indipendente, prova commit del primario,
   eventuale rollback simultaneo TERZA+QUARTA, autenticazione OIDC e
   fencing globale ancora APERTI. **Nessuna cancellazione source in test.**
+
+## #141 — PITR fisico contemporaneo TERZA+QUARTA (ADR 0042)
+
+- [x] RED: aggiunto scenario CI prima dei nuovi comandi
+  `--dual-claim` e `--dual-probe-recovered`.
+- [x] GREEN implementativa: due veri basebackup fisici/pg_verifybackup,
+  restore point nominati PRE-claim, WAL archiviato POST-claim,
+  due cloni promossi su 15443/15444 con credenziali ruotate,
+  role guard EXECUTE-only e HMAC tenant/owner/UUID.
+- [ ] Eseguire e verificare GREEN nella **CI dell'ultimo SHA**:
+  l'esito voluto è che entrambe le claim nei cloni scompaiano e
+  i due adapter possano riaccettare lo stesso UUID, rendendo
+  la procedura **NON sicura per la riapertura** (exit 42 richiesto).
+- [ ] Costruire una vera authority esterna non riscrivibile,
+  una prova di commit DELETE sul primario e la release
+  operativa/legale autenticata prima di usare dati reali.
+  Il test non esegue DELETE né cambia lo stato recovery.

@@ -62,3 +62,16 @@ do not infer deployment health solely from a successful static export.
 - Official deploy action: https://github.com/actions/deploy-pages
 - GitHub Pages custom workflows:
   https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages
+
+## Negative security regression: dual claim physical PITR (#141 / ADR 0042)
+
+Run the CI-only shell gate after the separate THIRD and FOURTH
+PITR tests. A passing test intentionally observes **both
+post-target claims lost and re-admitted**; the drill CLI
+returns exit **42**, not zero, with a fixed no-release
+sentinel. A missing sentinel, unexpected success or any
+other error must fail the workflow. This captures a known
+common-mode vulnerability without mistaking a successful
+replay for a safe recovery. All source actor/tenant values
+are hardcoded synthetic test fixtures; neither the primary
+personal data DB nor the REST endpoint is modified.

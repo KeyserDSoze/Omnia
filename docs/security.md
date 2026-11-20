@@ -745,3 +745,18 @@ primario, attacco allo stesso runner/amministratore, compromissione
 del key material, provider/device/media/backup, o recovery dell'API.
 Nessuna fiducia offsite WORM, attestazione source o OIDC viene
 aggiunta. Rimangono le issue di privacy/security P0.
+
+## #141 — Dual-claim authority common-mode rollback (ADR 0042)
+
+Lo scenario CI ripristina TERZA e QUARTA alla stessa
+fase pre-claim e prova che i due writer ristretti
+riaccettano il vecchio UUID. Il risultato positivo
+del test è una **segnalazione di vulnerabilità**:
+entrambi i vincoli `23505` non bastano se entrambi
+gli archivi vanno persi. Il processo DEVE terminare
+con stato fail-closed exit 42 e quarantena;
+nessun DELETE o apertura dei servizi. Rotazione
+credenziali e scope HMAC non costituiscono
+immutabilità, non sostituiscono un high-watermark
+offsite e non provano il commit di cancellazione
+sul primario. #141/109/31/32 OPEN.

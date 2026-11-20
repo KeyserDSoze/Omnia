@@ -348,3 +348,15 @@ prima di qualunque mutazione primario. L'implementazione REST non
 adotta questa catena; non esiste commit attestation, consenso reale,
 custodia WORM/offsite né garanzia in caso di rollback simultaneo.
 Non disegnare la topologia di CI come architettura produttiva.
+
+## Common-mode rollback of claim authorities (ADR 0042)
+
+Le due PGDATA CI possono retrocedere **insieme** prima della
+stessa claim. Il test fisico simultaneo mostra che i vincoli
+UNIQUE di entrambe possono riaccettare l'UUID precedente:
+la separazione dei `system_identifier` non è un
+confine di custodia anti-rollback. Qualsiasi progetto
+di authority produttiva richiede controllo esterno
+indipendente e attestazione del commit del primario.
+La prova non espone un'API e non rende effettiva
+la cancellazione di dati reali.

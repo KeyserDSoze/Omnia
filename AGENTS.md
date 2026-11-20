@@ -820,3 +820,19 @@ source deletion, API promotion or auto-retry. If both THIRD and FOURTH
 are rolled back, or a source COMMIT is lost/uncertain, these claims do
 NOT certify deletion. No offsite/WORM custody or production permission.
 #141/#109/#31/#32 remain open.
+
+## Simultaneous THIRD+FOURTH physical PITR counterexample (#141 / ADR 0042)
+
+The CI-only `tests/restore/physical-dual-claim-pitr-rehearsal.sh`
+performs TWO verified basebackups and named-WAL PITRs to a point before
+the SAME HMAC-scoped request UUID was claimed on both PGDATAs. The
+promoted clones use ports 15443 and 15444 and rotated restricted
+credentials. Both original clusters must still authenticate the
+request. Both recovered claim writers can RE-CLAIM the same UUID:
+this is intentionally an **unsafe replay counterexample**, NOT a
+defense or a production success. The CLI must return NONZERO 42 with
+`DUAL_PITR_BOTH_CLAIMS_CAN_BE_REUSED_NO_RELEASE` and the shell must
+interpret only that exact result as a successful NEGATIVE regression;
+API, DELETE, worker and release state remain untouched/quarantined.
+No offsite immutable authority, postcommit source attestation or
+simultaneous rollback protection exists. #141 and dependencies OPEN.

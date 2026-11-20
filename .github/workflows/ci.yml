@@ -260,6 +260,16 @@ jobs:
           SQL
           docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
             -U omnia -d omnia_anchor < tests/restore/independent-anchor.sql
+          # A second DATABASE on the THIRD PGDATA isolates intent checkpoint
+          # authority from the completed erasure checkpoint (separate keys
+          # and domain-separated HMAC formats, same non-production CI host).
+          docker exec omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U omnia -d postgres -c 'CREATE DATABASE omnia_intent_anchor' >/dev/null
+          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U omnia -d omnia_intent_anchor < tests/restore/independent-anchor.sql
+          echo "OMNIA_TEST_INTENT_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=omnia_intent_anchor;Username=omnia;Password=$anchor_admin" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_INTENT_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_intent_anchor;Username=omnia_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_INTENT_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_intent_anchor;Username=omnia_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
           source_id="$(docker exec omnia-ci-pg psql -U omnia -d omnia_test -Atqc \
             'SELECT system_identifier FROM pg_control_system()')"
           witness_id="$(docker exec omnia-ci-erasure-witness psql \

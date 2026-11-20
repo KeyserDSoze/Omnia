@@ -129,8 +129,43 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
         await actor.CommitAsync(ct);
     }
 
-    public async Task<PersonalDataErasureResult> EraseAsync(string tenantId,
-        string ownerSubject, CancellationToken ct)
+    /// <summary>
+    /// Opt-in, CI-only preflight for a synthetic erasure request that has
+    /// already been persisted on a second PostgreSQL cluster.
+    /// The SAME request UUID is written to the transactional source outbox.
+    /// This is NOT an externally authenticated request or commit-proof
+    /// and MUST NOT issue a recovery-ready marker or be bound to HTTP.
+    /// </summary>
+    public async Task<PersonalDataErasureResult> EraseWithWitnessedIntentAsync(
+        Guid requestId, string tenantId, string ownerSubject,
+        NpgsqlDataSource intentReader, CancellationToken ct)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("An intent UUID is required.", nameof(requestId));
+        ArgumentNullException.ThrowIfNull(intentReader);
+        // The independent SQL identity check occurs in FindAsync, including
+        // owner/admin rejection and EXECUTE-only read privileges.
+        var remote = await new PostgresPreEraseIntentReader(intentReader)
+            .FindAsync(requestId, ct) ??
+            throw new InvalidDataException("ERASURE_INTENT_NOT_FOUND.");
+        if (remote.RequestId != requestId || remote.Sequence <= 0 ||
+            remote.IntentType != "erase-actor-intent" ||
+            !string.Equals(remote.TenantId, tenantId, StringComparison.Ordinal) ||
+            !string.Equals(remote.OwnerSubject, ownerSubject, StringComparison.Ordinal))
+            throw new InvalidDataException("ERASURE_INTENT_SCOPE_MISMATCH.");
+
+        // The primary transaction cannot make the remote record atomic.
+        // A failed or ambiguous COMMIT must still be treated as uncertain;
+        // source outbox UUID is NOT authoritative after PITR.
+        return await EraseCoreAsync(tenantId, ownerSubject, requestId, ct);
+    }
+
+    public Task<PersonalDataErasureResult> EraseAsync(string tenantId,
+        string ownerSubject, CancellationToken ct) =>
+        EraseCoreAsync(tenantId, ownerSubject, Guid.NewGuid(), ct);
+
+    private async Task<PersonalDataErasureResult> EraseCoreAsync(string tenantId,
+        string ownerSubject, Guid eventId, CancellationToken ct)
     {
         await using var actor = await PostgresActorScope.OpenAsync(db, tenantId, ownerSubject, ct);
         await PostgresActorLock.AcquireAsync(
@@ -161,7 +196,10 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
                 (id, tenant_id, owner_sub, event_type)
             VALUES (@id, @tenant, @owner, 'erase-actor')
             """, actor.Connection, actor.Transaction);
-        outbox.Parameters.AddWithValue("id", Guid.NewGuid());
+        // Duplicating a previously committed correlated request triggers
+        // unique_violation (23505) and rolls back ALL earlier deletes in
+        // this transaction. Never silently re-delete post-erasure data.
+        outbox.Parameters.AddWithValue("id", eventId);
         outbox.Parameters.AddWithValue("tenant", tenantId);
         outbox.Parameters.AddWithValue("owner", ownerSubject);
         await outbox.ExecuteNonQueryAsync(ct);

@@ -261,3 +261,22 @@ rollback both journal and checkpoint. There is no producer host,
 independent trust-domain storage, durable delivery receipt,
 vault-held keys, anti-rollback anchor or application release
 authorization; #141 is OPEN. Actor IDs are personal metadata.
+
+
+
+## Separate erasure witness PostgreSQL cluster (#141 / ADR 0025)
+
+CI uses an independent PG17 database with a different
+system_identifier and dedicated writer/reader credentials. Roles
+only have EXECUTE on narrowly scoped SECURITY DEFINER functions;
+neither can read or mutate raw witness tables. A transactional
+singleton-row lock allocates commit-consistent local witness
+sequence numbers and stable UUIDs deduplicate retries. The
+integration test proves a synthetic event survives source outbox
+row deletion, not offsite regional failure or source PITR before
+delivery. A privileged witness owner can still restore/rewrite
+its rows and its local sequence; there is NO trusted external
+anti-rollback anchor, signature from legal erasure authority,
+complete capture, remote backup, automatic publisher, or release
+authorization. Actor IDs remain regulated personal metadata.
+

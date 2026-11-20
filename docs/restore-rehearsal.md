@@ -321,3 +321,31 @@ Non è un journal esterno affidabile e non prova che tutte le
 cancellazioni successive a un PITR possano essere recuperate.
 
 Vedi [ADR 0024](../adr/0024-isolated-outbox-dispatch-and-local-delivery.md).
+
+
+
+## Secondo PostgreSQL witness — prova separazione del failure domain (ADR 0025)
+
+Nella CI viene creato omnia-ci-erasure-witness, una seconda istanza
+PostgreSQL 17 sulla porta locale 15436. Il suo system_identifier è
+verificato differente rispetto al database primario su 15432. Password
+e ruoli di writer/reader sono generati esclusivamente dal runner.
+
+Un test crea una cancellazione reale del servizio su dati SINTETICI,
+invia il relativo event UUID dell'outbox al witness e poi elimina
+soltanto quella riga di outbox dal primario con credenziali admin
+di test. La ricevuta rimane interrogabile sul secondo cluster.
+Un invio ripetuto non crea una seconda sequence; un UUID con attore
+differente viene rifiutato. Le funzioni SQL sono accessibili
+solo a login EXECUTE-only che non possono leggere tabelle direttamente.
+
+Questa NON è ancora una prova PITR integrata con lo stesso erase:
+la cancellazione della riga da parte del test simula la perdita
+dell'outbox sorgente. La pipeline continua a eseguire separatamente
+il PITR fisico reale del primario come prova distinta.
+
+Il witness condivide l'host effimero CI, non possiede un archivio
+WORM/offsite, high-watermark anti-rollback attestato, vault, publisher
+automatico, ACK remoto o replay che autorizzi a togliere la quarantena.
+Resta solo un prototipo di sicurezza. Vedi ADR 0025.
+

@@ -267,3 +267,19 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   high-watermark, commit-order concurrency protocol, Key Vault/OpenBao,
   worker scheduling, global traffic fencing, GDPR metadata retention
   and on-prem/Azure staging remain unimplemented.
+
+
+
+## #141 — Separate PostgreSQL erasure witness prototype (2026-11-20)
+
+- [x] Second PostgreSQL 17 container with independent PGDATA and
+  explicitly checked distinct system identifier.
+- [x] EXECUTE-only witness writer and reader logins; bounded SQL
+  read, stable UUID dedup and transactional sequence via FOR UPDATE.
+- [x] Real PostgreSQL test: committed synthetic erase delivered to
+  witness, source outbox test row removed, remote receipt persists.
+- [ ] Production independent durability/backup across failure domains,
+  signed off-cluster monotonic checkpoint, continuous publisher + ACK,
+  host/ingress/worker fencing, Azure/on-prem IaC and key custody.
+- [ ] Link final complete HEAD GitHub Actions evidence to #141.
+

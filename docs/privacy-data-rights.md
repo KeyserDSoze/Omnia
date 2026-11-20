@@ -105,3 +105,18 @@ indipendente, deduplica persistente o cancellazione da altre copie.
 Come precisato in ADR 0023, gli ID di outbox non rientrano
 ancora nell'export personale v1; non dichiarare la gestione
 DSAR e art. 17 completata.
+
+
+
+## Separate recovery witness — only CI (ADR 0025)
+
+A new synthetic CI test delivers a committed erase event from
+the source PostgreSQL outbox to a second PostgreSQL cluster.
+The witness retains UUID, tenant, subject, type and a local
+append sequence. Tenant/subject identifiers remain PERSONAL DATA
+even without memory text or embeddings. This is NOT a live
+production service or a compliant deletion receipt. There is
+no reviewed legal basis, vault key custody, data rights/DSAR
+procedure, retention, exporter, provider erasure or geo-independent
+availability for these records. #31, #32 and #141 remain OPEN.
+

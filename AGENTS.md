@@ -281,3 +281,21 @@ or durable ACK. Do not persist a cursor as delivery confirmation.
 An event re-delivered with a conflicting UUID/actor MUST fail closed.
 Never log personal actor metadata or journal keys, and never claim
 external immutable storage, exactly-once, or release authorization.
+
+
+
+## Independent PostgreSQL witness proof (#141 / ADR 0025)
+
+The witness SQL in tests/restore/independent-witness.sql is CI-only.
+The PostgreSQL cluster MUST have distinct system_identifier/PGDATA,
+roles and passwords, without shared volumes with the primary DB.
+Writer has EXECUTE-only append; reader has EXECUTE-only bounded read.
+Never expose witness login credentials to API clients or web bundles.
+The witness append sequence is allocated transactionally under a
+singleton row lock, not nextval. A duplicate UUID with conflicting
+actor/type must fail closed. The publisher is ONLY called by test
+code and must rescan from the beginning because source timestamps
+are NOT commit-order watermarks or durable ACKs. A second PGDATA on
+one CI host does NOT prove offsite durability, authority, complete
+GDPR erasure, remote key custody or safe release after PITR.
+

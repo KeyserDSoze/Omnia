@@ -173,3 +173,16 @@ checkpoint key are confined to synthetic CI. This proof does not
 establish lawful basis, storage limitation, or exercise of GDPR
 Article 17 across backups, witness, provider data or devices.
 #31/#32/#141 remain OPEN.
+
+## Witness physical PITR with separate saved HMAC checkpoint (ADR 0030)
+
+The restore rehearsal operates on a single synthetic fixed actor and
+checks that a witness receipt created after a WAL restore point is
+missing in the recovered physical witness clone while the third
+cluster retains its HMAC checkpoint. The checkpoint stores count,
+digest and MAC, not raw subject/tenant. This is a technical rollback
+detection proof; no real personal data, user authorization, provider
+deletion, backup retention policy or legal exception for retained
+witness metadata has been validated. Three PostgreSQL PGDATA and the
+key still share a temporary CI machine. #31, #32, #109 and #141 stay
+OPEN; no declaration of GDPR erasure completion.

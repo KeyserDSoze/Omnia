@@ -403,3 +403,34 @@ FIRST synthetic CI checkpoint, and MUST fail if a head already exists.
 identity or a production release decision. Do not expose it via API,
 user input, or scheduled worker. Lost/truncated anchor requires
 out-of-band investigation, not re-bootstrap or auto-`ready`.
+
+## Actual physical witness PITR against surviving third-cluster anchor (#141 / ADR 0030)
+
+The synthetic `physical-witness-pitr-rehearsal.sh` MUST run only on
+disposable GitHub Actions with 127.0.0.1 fixed PostgreSQL 17 clusters.
+The WITNESS (not the primary) must have WAL archiving enabled; take
+`pg_basebackup` and verify its manifest before post-backup WAL writes.
+Create a named restore point, append a synthetic erasure through the
+restricted witness writer, then advance the HMAC checkpoint stored in
+a NEW database of the third PGDATA after verifying the old prefix.
+Recover a physical witness clone with `recovery.signal` and
+`recovery_target_name` set BEFORE that append, assert before/after
+WAL markers and that the post-point event is missing, and assert source
+and recovered system_identifier MATCH while third-cluster identifier
+differs. Rotate the clone reader password before accessing it.
+The read-only verifier MUST reject the recovered witness against the
+PRE-EXISTING third-cluster anchored prefix, while accepting the live
+witness. Verify the third-cluster count and exact bytes are unchanged
+after recovery. Never bootstrap/reanchor after the rollback, mutate
+the original anchor, use privileged actor reads, or promote `ready`.
+
+The separate test CLI `Omnia.WitnessPitrRehearsal` MUST require
+`CI=true`, `GITHUB_ACTIONS=true`, explicit opt-in and exact
+loopback/DB/SQL role restrictions; it may create only a known synthetic
+witness erasure in its `--append-and-anchor` phase. It MUST NOT be
+hosted by the API. Keep signing keys/private backups inside ephemeral
+0700 runner temp, no PII/log secrets and no GitHub artifacts.
+The third database still shares the same CI host and administrator:
+not an offsite immutable high-watermark, signer vault, global traffic
+fence or evidence that EVERY primary erase reached the witness before
+a crash. #141/#109/#31 remain OPEN.

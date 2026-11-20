@@ -486,3 +486,45 @@ non sostituisce un'identità operatore autenticata, vault/WORM o
 attestazione di una storia mai inizializzata; dopo un incidente
 l'assenza di head comporta quarantena, non generazione di nuova
 baseline. Prova TDD nella issue #141.
+
+## PITR fisico del witness con terza ancora sopravvissuta (ADR 0030)
+
+La pipeline ora verifica anche un vero `pg_basebackup` del cluster
+witness (PostgreSQL 17, 15436) con WAL archiviato e restore point
+nominato `omnia_ci_before_witness_pitr_erasure`. Un piccolo harness
+.NET `tests/Omnia.WitnessPitrRehearsal` limitato a CI crea, con
+bootstrap esplicito, una prima ancora HMAC di prefisso in un database
+temporaneo `omnia_witness_pitr_anchor` sul TERZO cluster (15438).
+Questo database è distinto da `omnia_anchor` usato dagli xUnit e
+preserva l'indipendenza fisica dal witness, senza toccare le altre
+prove di regressione.
+
+Dopo backup e restore point, una cancellazione sintetica viene
+APPEND realmente al witness tramite login EXECUTE-only.
+L'orchestratore verifica l'ancora precedente, la avanza e conferma
+sul witness live che il nuovo HMAC corrisponda. Il test inserisce un
+marker WAL dopo la cancellazione, archivia il segmento richiesto e
+ripristina fisicamente un nuovo container dalla basebackup con
+`recovery.signal` e `recovery_target_name` sul porto 15439.
+`pg_verifybackup` deve accettare il manifest e, nel recupero,
+il marker prima-target è presente mentre quello dopo-target NON lo è.
+
+Il clone recuperato ha lo STESSO `system_identifier` del witness
+originale (è una copia fisica), ma non la ricevuta di cancellazione
+committata dopo il restore point; il terzo anchor cluster ha invece
+un identificativo diverso. Il test ruota la password del witness
+reader recuperato, nega il login con la password originaria,
+richiede che l'audit read-only RIFIUTI la storia regredita e, a
+confronto, che ACCETTI ancora il witness non recuperato. Verifica
+anche che checkpoint, count e byte HMAC nel terzo database siano
+identici prima e dopo la procedura. Nessuna operazione sull'API né
+promozione `ready` avviene durante il test.
+
+**Limiti:** è un WAL/PITR fisico REALE del witness, ma primario,
+witness, anchor, file WAL e segreti sono sul medesimo runner CI:
+NON è disponibilità offsite, Object Lock/WORM, quorum, vault/HSM
+o custody anti-rollback indipendente da un amministratore comune.
+La cancellazione che andasse persa PRIMA del primo append witness
+resterebbe indetectabile tramite questo metodo. Non esiste ancora
+un gate globale ingress/API/repliche/workers o la cancellazione
+verificata dei sistemi esterni e backup. #141/#109/#31 OPEN.

@@ -328,3 +328,20 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   avanzamenti preceduti dalla verifica HMAC del vecchio checkpoint.
 - [ ] Il flag booleano è SOLO un'assicurazione nel test sintetico,
   NON autenticazione reale di un operatore o autorizzazione di ripristino.
+
+## #141 — Real witness PITR with surviving third-cluster checkpoint (ADR 0030)
+
+- [x] TDD RED requires the new physical witness WAL/PITR rehearsal CI step.
+- [x] PostgreSQL 17 witness WAL archiving, `pg_basebackup` +
+  `pg_verifybackup`, restore point before synthetic erasure,
+  restricted append+anchor advancement, and a physical clone promoted
+  to the pre-erasure WAL point.
+- [x] Exact markers and missing post-point receipt verified; original
+  witness still authenticates, clone does not. Separate anchor PGDATA
+  remains unchanged; restored reader password rotated, stale login
+  denied; no API `ready` or user-facing recovery action.
+- [ ] Witness+anchor disaster in different hosts/regions, offsite WORM
+  and vault/HSM custodian, issuer authentication, independent
+  anti-rollback high-watermark, primary commit→witness source
+  completeness, global service fence, external store erase and GDPR
+  review remain OPEN (#141/#109/#31/#33).

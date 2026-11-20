@@ -384,3 +384,32 @@ synthetic initialization, rejects a preexisting head, and is NOT a
 production authorization mechanism. Neither method promotes API
 readiness. Operator approval/identity, independent monotonic custody
 and recovery-release signature remain unresolved.
+
+## Physical witness PITR detected by surviving third-cluster HMAC anchor (ADR 0030)
+
+CI now uses a real PostgreSQL 17 witness physical basebackup and
+archived WAL recovery to a named pre-erasure restore point. A restricted
+writer appends a synthetic deletion after that point; a separately
+stored HMAC checkpoint is advanced in an *unrestored* database on the
+third PGDATA. Recovery of witness PGDATA on another loopback port
+resurrects the older witness prefix. The test verifies WAL markers,
+distinct anchor system identifier, matching physical clone identifier,
+missing post-point receipt, rotation of the recovered reader credential,
+and rejection by the read-only checkpoint verifier; the unmodified
+live witness is accepted against the same checkpoint.
+
+A successful negative verification MUST NOT advance or bootstrap a
+checkpoint, authorize the `ready` marker or mutate the restored
+source's actor data. The test CLI is CI-only and restricted to fixed
+127.0.0.1 ports/database names, an approved synthetic erasure, a
+private temporary HMAC key and independent EXECUTE-only SQL logins.
+Witness/anchor bytes and backup artifacts must not be logged or
+published.
+
+This is an actual PITR **of the witness** (previously only simulated
+in-memory), but all three clusters share one disposable CI host and
+admin domain. Attacker rollback of both witness+anchor, key
+compromise, offsite disaster, primary erasure before first ACK,
+in-flight workers/replicas and external provider data remain
+unresolved. It proves neither source journal completeness nor GDPR
+Art. 17 compliance or safe release of production traffic.

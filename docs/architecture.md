@@ -158,3 +158,14 @@ A read-only verifier detects simulated rollback of a witness prefix.
 This remains on ONE CI runner and is NOT an independent offsite
 monotonic authority, vault/HSM, release signer, production worker, or
 complete DR/erasure gate.
+
+## CI witness physical PITR safety proof (ADR 0030)
+
+The three-PostgreSQL synthetic architecture now includes a real
+physical PITR regression of the witness: restore a basebackup/WAL
+clone to before a signed deletion while leaving the third-cluster
+checkpoint untouched, then reject that clone via a dedicated read-only
+auditor. The clone retains the witness's physical system identifier;
+the anchor cluster has another. No API integration, real offsite
+custodian, immutable store, global traffic release signer, or
+cross-provider erase guarantee is supplied by this test.

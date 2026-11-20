@@ -178,6 +178,16 @@ export OMNIA_PREERASE_PITR_HMAC_KEY_PATH="$private_dir/preerase-hmac.bin"
 openssl rand 32 > "$OMNIA_PREERASE_PITR_HMAC_KEY_PATH"
 chmod 600 "$OMNIA_PREERASE_PITR_HMAC_KEY_PATH"
 
+# Distinct THIRD-PGDATA attempt-consumption database. Unlike the primary
+# outbox UUID, this single-use claim is not rolled back with primary PITR.
+docker exec "$anchor_container" psql -X -v ON_ERROR_STOP=1 \
+  -U omnia -d postgres -c 'CREATE DATABASE omnia_pitr_execution_claims' >/dev/null
+docker exec -i "$anchor_container" psql -X -v ON_ERROR_STOP=1 \
+  -U omnia -d omnia_pitr_execution_claims \
+  < tests/restore/preerase-execution-claims.sql >/dev/null
+export OMNIA_PREERASE_PITR_CLAIM_WRITER_DB
+OMNIA_PREERASE_PITR_CLAIM_WRITER_DB="$(sed 's/Database=omnia_execution_claims;/Database=omnia_pitr_execution_claims;/' <<< "$OMNIA_TEST_EXECUTION_CLAIM_WRITER_DB")"
+
 # Explicit independent PRE-ERASE INTENT handshake. The request UUID is
 # NOT the later committed source event UUID. This operation must be
 # witnessed on the SECOND PGDATA BEFORE starting EraseAsync.
@@ -288,6 +298,15 @@ intent_source_id="$(cat "$OMNIA_PREERASE_INTENT_ID_PATH")"
   echo "Committed primary outbox did not reuse the remote intent request UUID." >&2
   exit 1
 }
+# Independent attempt was consumed BEFORE source COMMIT; only third
+# PGDATA keeps this fact after a source PITR, not the source outbox.
+claimed="$(docker exec "$anchor_container" psql -U omnia \
+  -d omnia_pitr_execution_claims -Atqc \
+  "SELECT count(*) FROM admission.execution_claims WHERE request_id = '$unwitnessed_id'")"
+[[ "$claimed" == 1 ]] || {
+  echo "Third-cluster one-shot attempt was not durably claimed." >&2; exit 1
+}
+echo "PREERASE_ONE_SHOT_THIRD_CLAIM_COMMITTED"
 unset intent_source_id
 export OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH="$private_dir/unwitnessed-event.id"
 printf '%s\n' "$unwitnessed_id" > "$OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH"
@@ -436,6 +455,25 @@ OMNIA_REHEARSAL_DB="$target_cs" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal \
   -- verify-unwitnessed-resurrected
+
+# A physical primary rollback has removed the original outbox UUID. Before
+# the recovered clone can re-DELETE resurrected consent/memory, its matching
+# request must be rejected by the surviving THIRD-PGDATA single-use claim.
+OMNIA_REHEARSAL_DB="$target_cs" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal \
+  -- verify-one-shot-replay-denied
+[[ "$(docker exec "$recovery_container" psql -U omnia -d omnia_test -Atqc \
+  "SELECT count(*) FROM public.erasure_outbox WHERE tenant_id = 'omnia-ci-unwitnessed-pitr-synthetic' AND owner_sub = 'synthetic-unwitnessed-pitr-owner'")" == 0 ]] || {
+  echo "Recovered primary unexpectedly wrote an outbox for consumed attempt." >&2
+  exit 1
+}
+[[ "$(docker exec "$anchor_container" psql -U omnia \
+  -d omnia_pitr_execution_claims -Atqc \
+  "SELECT count(*) FROM admission.execution_claims WHERE request_id = '$unwitnessed_id'")" == 1 ]] || {
+  echo "Independent one-shot claim changed during primary PITR." >&2; exit 1
+}
+echo "PHYSICAL_PRIMARY_PITR_OLD_ATTEMPT_STILL_CONSUMED"
 
 # Rotate the restored dispatcher password too, before any read-only
 # recovered-outbox scan; reject inherited source credentials.

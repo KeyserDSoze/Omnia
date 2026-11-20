@@ -63,6 +63,21 @@ export OMNIA_WITNESS_PITR_HMAC_KEY_PATH="$private_dir/hmac.key"
 openssl rand 32 > "$OMNIA_WITNESS_PITR_HMAC_KEY_PATH"
 chmod 600 "$OMNIA_WITNESS_PITR_HMAC_KEY_PATH"
 
+# A second dedicated database in the THIRD surviving PGDATA is a distinct
+# trust namespace for pre-erase intents, not for completed-erasure receipts.
+docker exec "$anchor_container" psql -X -v ON_ERROR_STOP=1 -U omnia -d postgres \
+  -c "CREATE DATABASE omnia_witness_pitr_intent_anchor" >/dev/null
+docker exec -i "$anchor_container" psql -X -v ON_ERROR_STOP=1 \
+  -U omnia -d omnia_witness_pitr_intent_anchor \
+  < tests/restore/independent-anchor.sql >/dev/null
+export OMNIA_WITNESS_PITR_INTENT_ANCHOR_WRITER_DB
+export OMNIA_WITNESS_PITR_INTENT_ANCHOR_READER_DB
+OMNIA_WITNESS_PITR_INTENT_ANCHOR_WRITER_DB="$(sed 's/Database=omnia_anchor;/Database=omnia_witness_pitr_intent_anchor;/' <<< "$OMNIA_TEST_ANCHOR_WRITER_DB")"
+OMNIA_WITNESS_PITR_INTENT_ANCHOR_READER_DB="$(sed 's/Database=omnia_anchor;/Database=omnia_witness_pitr_intent_anchor;/' <<< "$OMNIA_TEST_ANCHOR_READER_DB")"
+export OMNIA_WITNESS_PITR_INTENT_KEY_PATH="$private_dir/intent-hmac.key"
+openssl rand 32 > "$OMNIA_WITNESS_PITR_INTENT_KEY_PATH"
+chmod 600 "$OMNIA_WITNESS_PITR_INTENT_KEY_PATH"
+
 phase() {
   dotnet run --no-build -c Release \
     --project tests/Omnia.WitnessPitrRehearsal/Omnia.WitnessPitrRehearsal.csproj \
@@ -86,6 +101,20 @@ if phase --bootstrap >/dev/null 2>&1; then
   exit 1
 fi
 
+# At least one intent exists in the basebackup. Bootstrap of the third
+# intent anchor is explicit and must be refused on subsequent attempts.
+phase --intent-seed-before-backup
+if phase --intent-verify-source >/dev/null 2>&1; then
+  echo "Missing independent intent checkpoint was incorrectly accepted." >&2
+  exit 1
+fi
+phase --intent-bootstrap
+phase --intent-verify-source
+if phase --intent-bootstrap >/dev/null 2>&1; then
+  echo "Repeated intent checkpoint bootstrap was accepted." >&2
+  exit 1
+fi
+
 # Complete physical basebackup and verify its manifest. No restore files,
 # WAL, passwords or keys leave the disposable runner.
 docker exec -u postgres "$source_container" pg_basebackup \
@@ -104,6 +133,8 @@ docker exec "$source_container" psql -X -v ON_ERROR_STOP=1 -U omnia -d omnia_wit
 
 phase --append-and-anchor
 phase --verify-source
+phase --intent-append-and-anchor
+phase --intent-verify-source
 docker exec "$source_container" psql -X -v ON_ERROR_STOP=1 -U omnia -d omnia_witness \
   -c "INSERT INTO witness.omnia_ci_pitr_marker VALUES ('after-target')" >/dev/null
 
@@ -118,6 +149,25 @@ anchor_sequence="$(docker exec "$anchor_container" psql -U omnia -d omnia_witnes
   'SELECT checkpoint_count FROM anchor.head WHERE singleton = 1')"
 [[ "$source_sequence" == "$anchor_sequence" ]] || {
   echo "Third-cluster checkpoint did not attest the post-point event." >&2; exit 1
+}
+
+# Independent anchor for pre-erase intent stream must advance AFTER the
+# named physical recovery point, then survive untouched in third PGDATA.
+source_intent_count="$(docker exec "$source_container" psql -U omnia \
+  -d omnia_witness -Atqc 'SELECT count(*) FROM witness.erasure_intents')"
+intent_anchor_count="$(docker exec "$anchor_container" psql -U omnia \
+  -d omnia_witness_pitr_intent_anchor -Atqc \
+  'SELECT checkpoint_count FROM anchor.head WHERE singleton = 1')"
+[[ "$source_intent_count" == "$intent_anchor_count" &&
+   "$intent_anchor_count" -ge 2 ]] || {
+  echo "Third-cluster intent checkpoint did not attest the post-point intent." >&2
+  exit 1
+}
+intent_anchor_bytes="$(docker exec "$anchor_container" psql -U omnia \
+  -d omnia_witness_pitr_intent_anchor -Atqc \
+  "SELECT encode(checkpoint, 'hex') FROM anchor.checkpoints ORDER BY checkpoint_count DESC LIMIT 1")"
+[[ -n "$intent_anchor_bytes" ]] || {
+  echo "Independent intent checkpoint bytes were missing." >&2; exit 1
 }
 anchor_bytes="$(docker exec "$anchor_container" psql -U omnia -d omnia_witness_pitr_anchor -Atqc \
   'SELECT encode(checkpoint, '\''hex'\'') FROM anchor.checkpoints ORDER BY checkpoint_count DESC LIMIT 1')"
@@ -197,6 +247,13 @@ recovered_erasure="$(docker exec "$recovery_container" psql -U omnia -d omnia_wi
   "SELECT count(*) FROM witness.erasure_events WHERE tenant_id = 'omnia-ci-witness-pitr-synthetic'")"
 recovered_sequence="$(docker exec "$recovery_container" psql -U omnia -d omnia_witness -Atqc \
   'SELECT max(sequence) FROM witness.erasure_events')"
+recovered_intent_count="$(docker exec "$recovery_container" psql -U omnia -d omnia_witness -Atqc \
+  'SELECT count(*) FROM witness.erasure_intents')"
+[[ "$recovered_intent_count" -ge 1 &&
+   "$recovered_intent_count" -lt "$intent_anchor_count" ]] || {
+  echo "Physical intent PITR did not remove the exact post-point intent." >&2
+  exit 1
+}
 recovered_system="$(docker exec "$recovery_container" psql -U omnia -d omnia_witness -Atqc \
   'SELECT system_identifier FROM pg_control_system()')"
 recovery_status="$(docker exec "$recovery_container" psql -U omnia -d omnia_witness -Atqc \
@@ -222,11 +279,30 @@ if OMNIA_WITNESS_PITR_RECOVERED_READER_DB="$old_reader" \
 fi
 unset old_reader new_reader_password
 
+# Rotate the intent-reader login independently after physical recovery
+# (old credentials are inherited from the backup, and must be revoked).
+new_intent_reader_password="$(openssl rand -hex 24)"
+echo "::add-mask::$new_intent_reader_password"
+docker exec -i "$recovery_container" psql -X -v ON_ERROR_STOP=1 \
+  -U omnia -d omnia_witness -v intent_reader_password="$new_intent_reader_password" \
+  >/dev/null <<'SQL'
+SELECT format('ALTER ROLE omnia_witness_intent_reader PASSWORD %L', :'intent_reader_password') \gexec
+SQL
+export OMNIA_WITNESS_PITR_RECOVERED_INTENT_READER_DB="Host=127.0.0.1;Port=15439;Database=omnia_witness;Username=omnia_witness_intent_reader;Password=$new_intent_reader_password"
+old_intent_reader="$(sed 's/Port=15436;/Port=15439;/' <<< "$OMNIA_TEST_INTENT_READER_DB")"
+if OMNIA_WITNESS_PITR_RECOVERED_INTENT_READER_DB="$old_intent_reader" \
+  phase --intent-verify-recovered >/dev/null 2>&1; then
+  echo "Recovered witness accepted old intent-reader credentials." >&2; exit 1
+fi
+unset old_intent_reader new_intent_reader_password
+
 # Expected FAIL-CLOSED verification: the independent third-cluster anchor
 # is ahead of the recovered witness; no signing or readiness change.
 phase --verify-recovered
+phase --intent-verify-recovered
 # The LIVE witness remains valid. The third PGDATA was never recovered.
 phase --verify-source
+phase --intent-verify-source
 anchor_after="$(docker exec "$anchor_container" psql -U omnia -d omnia_witness_pitr_anchor -Atqc \
   'SELECT encode(checkpoint, '\''hex'\'') FROM anchor.checkpoints ORDER BY checkpoint_count DESC LIMIT 1')"
 anchor_seq_after="$(docker exec "$anchor_container" psql -U omnia -d omnia_witness_pitr_anchor -Atqc \
@@ -234,4 +310,16 @@ anchor_seq_after="$(docker exec "$anchor_container" psql -U omnia -d omnia_witne
 [[ "$anchor_bytes" == "$anchor_after" && "$anchor_seq_after" == "$anchor_sequence" ]] || {
   echo "Independent anchor was modified by physical witness recovery." >&2; exit 1
 }
+intent_anchor_after="$(docker exec "$anchor_container" psql -U omnia \
+  -d omnia_witness_pitr_intent_anchor -Atqc \
+  "SELECT encode(checkpoint, 'hex') FROM anchor.checkpoints ORDER BY checkpoint_count DESC LIMIT 1")"
+intent_anchor_count_after="$(docker exec "$anchor_container" psql -U omnia \
+  -d omnia_witness_pitr_intent_anchor -Atqc \
+  'SELECT checkpoint_count FROM anchor.head WHERE singleton = 1')"
+[[ "$intent_anchor_bytes" == "$intent_anchor_after" &&
+   "$intent_anchor_count" == "$intent_anchor_count_after" ]] || {
+  echo "Independent intent HMAC anchor changed during witness PITR." >&2
+  exit 1
+}
+echo "PHYSICAL_INTENT_PITR_ROLLBACK_DETECTED_WITH_SURVIVING_ANCHOR"
 echo "PHYSICAL_WITNESS_PITR_ROLLBACK_DETECTED_WITH_SURVIVING_ANCHOR"

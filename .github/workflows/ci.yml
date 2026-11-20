@@ -512,6 +512,9 @@ jobs:
       - name: Physical FOURTH-PGDATA claim WAL PITR must fail against surviving THIRD
         shell: bash
         run: bash tests/restore/physical-fourth-claim-pitr-rehearsal.sh
+      - name: Physical DUAL-PGDATA claim WAL PITR exposes unsafe replay without external fence
+        shell: bash
+        run: bash tests/restore/physical-dual-claim-pitr-rehearsal.sh
       - name: Stop disposable database
         if: always()
         run: |

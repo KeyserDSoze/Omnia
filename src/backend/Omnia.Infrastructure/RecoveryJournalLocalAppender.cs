@@ -49,9 +49,22 @@ public static class RecoveryJournalLocalAppender
     public static RecoveryJournalVerifier.Verification Append(
         string journalPath, string checkpointPath,
         ReadOnlySpan<byte> journalKey, ReadOnlySpan<byte> checkpointKey,
-        string tenantId, string ownerSubject)
+        string tenantId, string ownerSubject) =>
+        AppendKnownEvent(journalPath, checkpointPath, journalKey,
+            checkpointKey, Guid.NewGuid(), tenantId, ownerSubject);
+
+    /// <summary>
+    /// Idempotent synthetic delivery keyed by a real committed outbox UUID.
+    /// Replay of the SAME verified event is a no-op; conflicting reuse
+    /// of an event UUID fails closed, never silently overwrites history.
+    /// </summary>
+    public static RecoveryJournalVerifier.Verification AppendKnownEvent(
+        string journalPath, string checkpointPath,
+        ReadOnlySpan<byte> journalKey, ReadOnlySpan<byte> checkpointKey,
+        Guid committedEventId, string tenantId, string ownerSubject)
     {
-        if (journalKey.Length != 32 || checkpointKey.Length != 32 ||
+        if (committedEventId == Guid.Empty ||
+            journalKey.Length != 32 || checkpointKey.Length != 32 ||
             CryptographicOperations.FixedTimeEquals(journalKey, checkpointKey) ||
             !ValidActor(tenantId, 128) || !ValidActor(ownerSubject, 255))
             throw Invalid();
@@ -120,13 +133,32 @@ public static class RecoveryJournalLocalAppender
                     priorJournal, priorCheckpoint, journalKey, checkpointKey);
                 previousCount = checkedState.Count;
                 previousTip = checkedState.TipDigest;
+
+                // A verified entry with this UUID must represent EXACTLY
+                // the same actor and operation. Journal bytes were already
+                // MAC/chain checked; never trust an unverified entry.
+                var knownId = committedEventId.ToString("N");
+                var lines = System.Text.Encoding.UTF8.GetString(priorJournal)
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    using var record = JsonDocument.Parse(line);
+                    var item = record.RootElement;
+                    if (item.GetProperty("eventId").GetString() != knownId)
+                        continue;
+                    if (item.GetProperty("tenantId").GetString() != tenantId ||
+                        item.GetProperty("ownerSubject").GetString() != ownerSubject ||
+                        item.GetProperty("operation").GetString() != "erase-actor")
+                        throw Invalid();
+                    return checkedState; // Re-delivery has no side effects.
+                }
             }
 
             if (previousCount >= RecoveryJournalVerifier.MaxEntries)
                 throw Invalid();
 
             var sequence = previousCount + 1;
-            var eventId = Guid.NewGuid().ToString("N");
+            var eventId = committedEventId.ToString("N");
             const string operation = "erase-actor";
             var payload = RecoveryJournalVerifier.EntryPayload(
                 sequence, eventId, operation, tenantId, ownerSubject, previousTip);

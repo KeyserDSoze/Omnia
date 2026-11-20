@@ -34,7 +34,16 @@ public sealed class WitnessIndependentAnchorTests
 
         var issuer = new PostgresWitnessAnchorIssuer(witnessReader,
             anchorWriter, anchorReader);
-        var firstCount = await issuer.IssueAsync(key, default);
+        // A missing anchor must NEVER be silently treated as an empty
+        // authority after a disaster. First issuance needs explicit CI approval.
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            issuer.IssueAsync(key, default));
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            issuer.BootstrapAsync(key, operatorApproved: false, default));
+        var firstCount = await issuer.BootstrapAsync(
+            key, operatorApproved: true, default);
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            issuer.BootstrapAsync(key, operatorApproved: true, default));
         var stored = await new PostgresWitnessAnchorReader(anchorReader).ReadAsync(default);
         Assert.NotNull(stored);
         Assert.Equal(firstCount, stored!.Count);

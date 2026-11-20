@@ -73,13 +73,13 @@ public sealed class ErasureDispatchTests
 
         // This is a read-only primitive, not a durable cursor / ACK.
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            reader.ReadBatchAsync(0, null, null, default));
+            { _ = reader.ReadBatchAsync(0, null, null, default); });
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            reader.ReadBatchAsync(101, null, null, default));
+            { _ = reader.ReadBatchAsync(101, null, null, default); });
         Assert.Throws<ArgumentException>(() =>
-            reader.ReadBatchAsync(5, DateTimeOffset.UtcNow, null, default));
+            { _ = reader.ReadBatchAsync(5, DateTimeOffset.UtcNow, null, default); });
         Assert.Throws<ArgumentException>(() =>
-            reader.ReadBatchAsync(5, null, Guid.NewGuid(), default));
+            { _ = reader.ReadBatchAsync(5, null, Guid.NewGuid(), default); });
     }
 
     [Fact]

@@ -110,6 +110,8 @@ GRANT EXECUTE ON FUNCTION witness.find_erasure(uuid),
     witness.list_erasures(bigint,integer) TO omnia_witness_reader;
 
 
+-- Atomic SECURITY DEFINER creation + REVOKE avoids a PUBLIC EXECUTE window.
+BEGIN;
 -- ADR 0033: PRE-ERASE intent is a separately authorized, independent
 -- request marker. It is NOT the erasure's transactionally committed outbox
 -- row, NOT a completed-erasure receipt and NOT recovery-release evidence.
@@ -220,3 +222,4 @@ GRANT EXECUTE ON FUNCTION witness.append_erase_intent(uuid,varchar,varchar)
 GRANT EXECUTE ON FUNCTION witness.find_erase_intent(uuid),
     witness.list_erase_intents(bigint,integer)
     TO omnia_witness_intent_reader;
+COMMIT;

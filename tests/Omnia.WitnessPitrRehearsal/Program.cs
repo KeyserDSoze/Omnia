@@ -9,7 +9,10 @@ try
 {
     if (args.Length != 1 ||
         args[0] is not ("--bootstrap" or "--verify-source" or
-                       "--append-and-anchor" or "--verify-recovered") ||
+                       "--append-and-anchor" or "--verify-recovered" or
+                       "--intent-seed-before-backup" or "--intent-bootstrap" or
+                       "--intent-append-and-anchor" or "--intent-verify-source" or
+                       "--intent-verify-recovered") ||
         Environment.GetEnvironmentVariable("CI") != "true" ||
         Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
         Environment.GetEnvironmentVariable("OMNIA_WITNESS_PITR_CI_ONLY") != "1")
@@ -57,6 +60,95 @@ try
             throw new InvalidDataException();
         }
         return bytes;
+    }
+
+    if (args[0].StartsWith("--intent-", StringComparison.Ordinal))
+    {
+        // Separate from completed-erasure checkpoints: different signing key,
+        // domain-separated checkpoint payload and another DB in THIRD PGDATA.
+        // A surviving intent does NOT prove source DELETE/COMMIT.
+        var recoveredIntent = args[0] == "--intent-verify-recovered";
+        var intentReaderConnection = RestrictedConnection(
+            recoveredIntent
+                ? "OMNIA_WITNESS_PITR_RECOVERED_INTENT_READER_DB"
+                : "OMNIA_TEST_INTENT_READER_DB",
+            recoveredIntent ? 15439 : 15436,
+            "omnia_witness", "omnia_witness_intent_reader");
+        var keyIntent = ReadPrivateKey(
+            Required("OMNIA_WITNESS_PITR_INTENT_KEY_PATH"));
+        try
+        {
+            await using var reader = NpgsqlDataSource.Create(intentReaderConnection);
+            var targetAnchor = RestrictedConnection(
+                "OMNIA_WITNESS_PITR_INTENT_ANCHOR_READER_DB",
+                15438, "omnia_witness_pitr_intent_anchor", "omnia_anchor_reader");
+            await using var anchorReader = NpgsqlDataSource.Create(targetAnchor);
+            var verifier = new PostgresPreEraseIntentAnchorVerifier(
+                reader, anchorReader);
+            if (args[0] == "--intent-verify-recovered")
+            {
+                try
+                {
+                    await verifier.VerifyAsync(keyIntent, CancellationToken.None);
+                }
+                catch (InvalidDataException)
+                {
+                    Console.WriteLine("PHYSICAL_INTENT_PITR_ROLLBACK_REJECTED");
+                    return 0;
+                }
+                throw new InvalidDataException(
+                    "Recovered intent rollback was incorrectly accepted.");
+            }
+            if (args[0] == "--intent-verify-source")
+            {
+                await verifier.VerifyAsync(keyIntent, CancellationToken.None);
+                Console.WriteLine("INTENT_SOURCE_ANCHOR_VERIFIED");
+                return 0;
+            }
+
+            if (args[0] is "--intent-seed-before-backup" or
+                "--intent-append-and-anchor")
+            {
+                // The only intent mutation is a fresh synthetic fixture on
+                // the original witness; no real actor deletion is issued.
+                var writerDb = RestrictedConnection(
+                    "OMNIA_TEST_INTENT_WRITER_DB", 15436,
+                    "omnia_witness", "omnia_witness_intent_writer");
+                await using var intentWriter = NpgsqlDataSource.Create(writerDb);
+                await new PostgresPreEraseIntentWriter(intentWriter).RecordAsync(
+                    Guid.NewGuid(), "omnia-ci-physical-intent-pitr-synthetic",
+                    "synthetic-intent-pitr-owner", CancellationToken.None);
+                if (args[0] == "--intent-seed-before-backup")
+                {
+                    Console.WriteLine("INTENT_SOURCE_PREBACKUP_SEEDED");
+                    return 0;
+                }
+            }
+
+            var writerAnchor = RestrictedConnection(
+                "OMNIA_WITNESS_PITR_INTENT_ANCHOR_WRITER_DB",
+                15438, "omnia_witness_pitr_intent_anchor",
+                "omnia_anchor_writer");
+            await using var anchorWriter = NpgsqlDataSource.Create(writerAnchor);
+            var issuer = new PostgresPreEraseIntentAnchorIssuer(
+                reader, anchorWriter, anchorReader);
+            if (args[0] == "--intent-bootstrap")
+            {
+                await issuer.BootstrapAsync(keyIntent,
+                    operatorApproved: true, CancellationToken.None);
+                await verifier.VerifyAsync(keyIntent, CancellationToken.None);
+                Console.WriteLine("INTENT_THIRD_ANCHOR_BOOTSTRAPPED");
+                return 0;
+            }
+            await issuer.IssueAsync(keyIntent, CancellationToken.None);
+            await verifier.VerifyAsync(keyIntent, CancellationToken.None);
+            Console.WriteLine("INTENT_POST_RESTORE_POINT_ANCHORED");
+            return 0;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(keyIntent);
+        }
     }
 
     var recovered = args[0] == "--verify-recovered";

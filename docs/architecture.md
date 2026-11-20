@@ -232,3 +232,18 @@ and DELETE and leaves only an uncertain request intent,
 so this is not a production recovery release protocol.
 
 **Stale-request bound:** an old request UUID is rejected only while its original source outbox survives. Post-PITR a lost original row removes this local uniqueness memory, so recovery MUST NOT replay a pre-intent automatically. This experimental path is CI-only and is not registered by the API.
+
+## Read-only evidence triangulation for correlated erasure (#141 / ADR 0035)
+
+The CI-only infrastructure reconciler reads a pre-DELETE intent from
+the SECOND witness PGDATA, a correlated source outbox UUID using a
+bounded REPEATABLE READ source snapshot, and a post-commit completed
+receipt using the distinct witness reader. Each connection's
+EXECUTE-only role is checked independently. The result is only
+one of four visibility states; there is no cross-cluster snapshot,
+signer, monotonic source commit certificate or authorization to
+re-delete an actor. `MayReleaseRecovery` and `MayAutoReplay`
+are false for every observation. The source primary physical PITR
+drill shows that a previously observed source commit can appear
+as remote-intent-only after rollback, which necessarily remains
+`IntentOnlyCommitUnknown` rather than "never committed".

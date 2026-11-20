@@ -249,3 +249,18 @@ by the CI-only operation. Retention, access/export
 and deletion of intent metadata, providers/backup/
 device propagation and GDPR Art.17 review remain
 unresolved in #31/#32/#141.
+
+## Classificazione visibilità erasure non equivale a diritto all'oblio (ADR 0035)
+
+Il nuovo verificatore CI legge in memoria request UUID, tenant,
+subject e i soli metadati di delete già conservati nei registri
+pre-intent/outbox/witness, senza creare nuove tabelle o retention
+e senza stamparli nei log. Può descrivere l'osservazione in
+quattro stati tecnici, ma NON certifica autenticazione OIDC,
+consenso/base giuridica, completamento del DELETE,
+cancellazione dei backup e dei provider o diritto di accesso
+ai metadati conservati. In particolare pre-intent presente
+senza source outbox dopo PITR significa **commit sconosciuto**:
+non significa cancellazione mai avvenuta. Nessuno stato
+autorizza replay automatico o riapertura dei servizi.
+#31/#32/#141 restano OPEN.

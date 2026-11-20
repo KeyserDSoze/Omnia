@@ -537,3 +537,25 @@ the CI runner, and immutable offsite custody, global
 fencing and complete provider/device erasure remain open.
 
 **Source PITR caveat:** duplicate UUID protection relies on the original outbox row. Once WAL PITR removes it, the request may appear new again in the recovered primary. Do NOT auto-retry the pre-intent or use successful SQL execution as proof of historical authorization; global recovery quarantine and independent commit provenance remain mandatory.
+
+## Three-way correlated erasure evidence classifier (ADR 0035)
+
+A CI-only read-only inspector independently verifies the SQL capability
+of the source `omnia_dispatcher`, remote `omnia_witness_intent_reader`,
+and remote `omnia_witness_reader`. Intent UUID and scope MUST match both
+the source outbox event and the witness completed receipt when visible.
+Malformed intent, missing authorization to read, inconsistent actor/type,
+privileged connections, or source scan overflow are denied. The source
+snapshot is bounded and REPEATABLE READ READ ONLY; witness reads happen
+in a different PostgreSQL domain and are not transactionally coherent
+with source, so no result is a historical commit attestation.
+
+State is only a finite read-only observation: intent-only
+(commit unknown, including source PITR), source pending remote receipt,
+source+witness visible, or witness visible without source. ALL return
+`MayReleaseRecovery=false` and `MayAutoReplay=false`, including fully
+matching visible source+witness. No data mutation, user-facing endpoint
+or recovery marker is issued. Only the disposable CI runbook invokes
+this code. A live incident still needs independently authenticated
+source commit custody and a global ingress/worker/replica fence before
+considering any actor replay or traffic release.

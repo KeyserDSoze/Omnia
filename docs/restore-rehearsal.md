@@ -681,3 +681,35 @@ COMMIT e non deve autorizzare replay automatico.
 #141, #109 e #31 OPEN.
 
 **Importante:** la PK dell'outbox tutela dal riuso soltanto finché la sua riga originale non è stata persa. Dopo PITR del primario, il record originale può scomparire: **nessuna** ripetizione automatica di un pre-intent è sicura senza prove indipendenti e autorizzazione esplicita. Il clone rimane quarantinato.
+
+## Classificazione read-only delle evidenze pre/post PITR (ADR 0035)
+
+L'audit CI `PostgresCorrelatedErasureReconciliation` legge tre
+registri con account SQL separati: INTENTO pre-erase nel witness,
+outbox del primario ancora visibile e ricevuta erasure post-commit
+sul witness. Non usa permessi diretti sulle tabelle.
+Lo snapshot primario usa REPEATABLE READ e READ ONLY e scorre
+max 1000 eventi; overflow, scope divergenze, UUID non correlati
+o login privilegiati bloccano la prova. I tre cluster NON
+condividono uno snapshot distribuito, perciò nessun singolo
+risultato è una prova di commit storica.
+
+Il test reale crea un intento isolato: prima del DELETE l'audit
+lo classifica `IntentOnlyCommitUnknown` perché non può sapere
+se il commit sia avvenuto o no. Dopo `EraseWithWitnessedIntentAsync`,
+l'outbox primario contiene il medesimo UUID: `SourceEventPendingWitness`
+fino alla consegna. Dopo il publisher, se entrambi i registri
+corrispondono, `SourceAndWitnessVisible`. Una receipt witness
+ancora presente quando il source è assente produce
+`WitnessVisibleWithoutSource`, non un'autorizzazione a rimuovere
+dati sul clone.
+
+Il PITR fisico aggiunge segnali generici senza PII:
+`ERASURE_OBSERVED_SOURCE_PENDING_NOT_READY` prima del
+recovery, `ERASURE_OBSERVED_COMMIT_UNKNOWN_NOT_READY` dopo.
+Non c'è log di tenant/subject/UUID, nessun mutatore o
+`ready`. L'esito source-only `VerifyAllAsync` può
+apparire pulito dopo la perdita dell'outbox: il risultato
+del reconciler rimane esplicitamente INCERTO. Una vera
+indagine richiede attestazione esterna del commit, autorità
+del richiedente, custodia offsite e fencing globale.

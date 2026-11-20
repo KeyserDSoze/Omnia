@@ -565,3 +565,37 @@ this intent and no OIDC actor identity is verified here. Keep
 #141/#109/#31/#32 open; no production release or GDPR assurance.
 
 **PITR caveat:** source UUID uniqueness prevents stale retries ONLY while the original source outbox exists. Once primary PITR loses that row, the unique constraint CANNOT remember the prior commit. An orphaned remote intent MUST NEVER trigger automatic re-deletion on a recovered primary. Keep API quarantined pending independent commit provenance and authorization.
+
+## Read-only three-way erasure visibility inspection (ADR 0035/#141)
+
+`PostgresCorrelatedErasureReconciliation` is CI-ONLY, invoked via
+`InspectAsync(requestUuid)` with three unrelated EXECUTE-only
+identities: `omnia_dispatcher` for primary source, `omnia_witness_intent_reader`
+for the remote PRE-intent, and `omnia_witness_reader` for the remote
+POST-commit erasure receipt. Reject app, writer, owner and admin SQL
+identities before returning any observation. A known UUID must have
+a verified remote intent with exact actor scope; a missing, conflicting,
+wrong-type or null intent MUST throw and never masquerade as a completed
+erase. Source event inspection uses a single bounded
+`REPEATABLE READ`/`READ ONLY` primary transaction via the
+SECURITY DEFINER dispatch function, with overflow denial above 1000.
+Every source and witness UUID, tenant, subject and event type must match
+the intent; mismatches must be denied before any result is returned.
+The three PostgreSQL datasets are NOT in one distributed snapshot.
+
+Exactly four visibility outcomes are allowed:
+`IntentOnlyCommitUnknown`: remote request present, no source or ACK
+-- NEVER claim "not committed" since primary PITR can hide an earlier commit.
+`SourceEventPendingWitness`: source outbox visible, no remote ACK.
+`SourceAndWitnessVisible`: matching source and remote completed event
+observable, but NOT global cross-store erasure or user authorization.
+`WitnessVisibleWithoutSource`: remote completed receipt exists but
+source outbox not visible, e.g. primary PITR or forged witness history.
+ALL outcomes explicitly have `MayReleaseRecovery=false` and
+`MayAutoReplay=false`. No state, signatures, `ready` markers,
+HTTP endpoints, or actor DELETEs can be produced by the inspector.
+Physical primary PITR rehearsal MUST transition from pending witness
+to `IntentOnlyCommitUnknown` after rollback and leave API quarantined.
+The independent witness intent can itself roll back; this is not
+offsite monotonic authority or evidence of which source COMMIT occurred.
+Maintain #141/#109/#31/#32 OPEN.

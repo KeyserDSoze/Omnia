@@ -440,3 +440,28 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   worker/media/provider/backup o GDPR compliance.
 
 - [ ] **Warning:** after primary PITR removes the original outbox UUID, source PK uniqueness no longer prevents repeated use of that request; recovery MUST remain quarantined and never automatically replay an intent.
+
+## #141 — Triangolazione read-only stato intent / source outbox / witness (ADR 0035)
+
+- [x] RED test PostgreSQL richiede un nuovo reconciler, prima inesistente;
+  prova le 4 possibilità di osservazione senza autorizzare release/replay.
+- [x] GREEN: verifica 3 identità SQL EXECUTE-only distinte,
+  prefisso dell'intent di stesso UUID/tenant/subject e l'evento
+  source tramite snapshot primario unico REPEATABLE READ READ ONLY
+  (limit 1000 + overflow probe) e receipt witness post-commit.
+  Ogni mismatch/utente privilegiato fallisce.
+- [x] Classi di visibilità: `IntentOnlyCommitUnknown` (nessuna
+  distinzione tra non commit e commit perso nel PITR),
+  `SourceEventPendingWitness`,
+  `SourceAndWitnessVisible`,
+  `WitnessVisibleWithoutSource`.
+  Tutti negano permanentemente `MayReleaseRecovery` e
+  `MayAutoReplay`; nessuna mutazione, nessun endpoint API.
+- [x] Nel PITR fisico PostgreSQL il nuovo inspector vede
+  l'outbox pre-ACK prima del crash, poi vede soltanto
+  l'intent dopo il recovery mentre l'outbox non esiste più:
+  risultato esplicito `CommitUnknown`, API quarantinata.
+- [ ] Non è una prova di commit indipendente, immutabile/offsite;
+  non copre authority OIDC, nuovi eventi subito dopo
+  lo snapshot, 2PC, gating globale, cache/backup/provider,
+  vault/HSM e valutazione privacy. #141 resta OPEN P0.

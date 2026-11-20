@@ -162,9 +162,15 @@ jobs:
           witness_admin="$(openssl rand -hex 24)"
           witness_writer="$(openssl rand -hex 24)"
           witness_reader="$(openssl rand -hex 24)"
+          intent_writer="$(openssl rand -hex 24)"
+          intent_reader="$(openssl rand -hex 24)"
           echo "::add-mask::$witness_admin"
           echo "::add-mask::$witness_writer"
           echo "::add-mask::$witness_reader"
+          echo "::add-mask::$intent_writer"
+          echo "::add-mask::$intent_reader"
+          echo "OMNIA_TEST_INTENT_WRITER_DB=Host=127.0.0.1;Port=15436;Database=omnia_witness;Username=omnia_witness_intent_writer;Password=$intent_writer" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_INTENT_READER_DB=Host=127.0.0.1;Port=15436;Database=omnia_witness;Username=omnia_witness_intent_reader;Password=$intent_reader" >> "$GITHUB_ENV"
           echo "OMNIA_TEST_WITNESS_ADMIN_DB=Host=127.0.0.1;Port=15436;Database=omnia_witness;Username=omnia;Password=$witness_admin" >> "$GITHUB_ENV"
           echo "OMNIA_TEST_WITNESS_WRITER_DB=Host=127.0.0.1;Port=15436;Database=omnia_witness;Username=omnia_witness_writer;Password=$witness_writer" >> "$GITHUB_ENV"
           echo "OMNIA_TEST_WITNESS_READER_DB=Host=127.0.0.1;Port=15436;Database=omnia_witness;Username=omnia_witness_reader;Password=$witness_reader" >> "$GITHUB_ENV"
@@ -184,7 +190,9 @@ jobs:
           docker exec -i omnia-ci-erasure-witness psql -X -v ON_ERROR_STOP=1 \
             -U omnia -d omnia_witness \
             -v writer_password="$witness_writer" \
-            -v reader_password="$witness_reader" <<'SQL'
+            -v reader_password="$witness_reader" \
+            -v intent_writer_password="$intent_writer" \
+            -v intent_reader_password="$intent_reader" <<'SQL'
           SELECT format(
             'CREATE ROLE omnia_witness_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'writer_password'
@@ -192,6 +200,14 @@ jobs:
           SELECT format(
             'CREATE ROLE omnia_witness_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'reader_password'
+          ) \gexec
+          SELECT format(
+            'CREATE ROLE omnia_witness_intent_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            :'intent_writer_password'
+          ) \gexec
+          SELECT format(
+            'CREATE ROLE omnia_witness_intent_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            :'intent_reader_password'
           ) \gexec
           SQL
           docker exec -i omnia-ci-erasure-witness psql -X -v ON_ERROR_STOP=1 \

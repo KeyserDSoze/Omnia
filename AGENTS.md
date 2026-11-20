@@ -391,3 +391,15 @@ rollback of the third cluster or its loss, a stolen signer key, source
 erasure before first delivery, source-vs-witness completeness and
 third-party store reconciliation all remain OPEN. Do not claim actual
 offsite monotonic custody, GDPR compliance or full #141 completion.
+
+## Mandatory explicit anchor bootstrap (#141 / ADR 0029 hardening)
+
+Ordinary `PostgresWitnessAnchorIssuer.IssueAsync` MUST refuse a
+MISSING third-cluster anchor head; never interpret absence as proof of
+a clean/empty history after disaster. Only the separately named
+`BootstrapAsync(signingKey, operatorApproved: true, ct)` may issue the
+FIRST synthetic CI checkpoint, and MUST fail if a head already exists.
+`operatorApproved` in this test harness is NOT authenticated operator
+identity or a production release decision. Do not expose it via API,
+user input, or scheduled worker. Lost/truncated anchor requires
+out-of-band investigation, not re-bootstrap or auto-`ready`.

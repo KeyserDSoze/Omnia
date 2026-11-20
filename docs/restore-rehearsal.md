@@ -474,3 +474,15 @@ backup/restore della TERZA PGDATA o la compromissione della chiave
 può annullare la garanzia monotona. Nessun WORM/offsite, vault,
 proof of completeness prima del primo ACK, release gate globale,
 propagazione provider o approvazione GDPR. #141 / #109 OPEN.
+
+### Prima emissione esplicita, mai re-bootstrap implicito
+
+Se `anchor.current_checkpoint()` non restituisce una head,
+`IssueAsync` ora FALLISCE: non assume che la storia fosse vuota.
+Solo `BootstrapAsync` con approvazione esplicita del TEST sintetico
+può inizializzare una head ancora inesistente. Anche `BootstrapAsync`
+rifiuta una head già presente. In produzione un segnale booleano
+non sostituisce un'identità operatore autenticata, vault/WORM o
+attestazione di una storia mai inizializzata; dopo un incidente
+l'assenza di head comporta quarantena, non generazione di nuova
+baseline. Prova TDD nella issue #141.

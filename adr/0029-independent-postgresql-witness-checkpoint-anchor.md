@@ -39,10 +39,14 @@ o di un nuovo checkpoint firmato dopo il disastro.
    reader witness, reader anchor e writer anchor. Legge uno snapshot
    witness coerente (ADR 0028), recupera dalla TERZA PGDATA il
    checkpoint PREESISTENTE e lo verifica con `WitnessCheckpoint.Verify`
-   prima di creare/salvare un checkpoint nuovo. Se manca l'ancora
-   preesistente o il witness è regredito/divergente, non si crea
-   nessun nuovo attestato. L'inizializzazione senza vecchia head è
-   soltanto una funzione di test, non un workflow di recovery.
+   prima di creare/salvare un checkpoint nuovo. Se il witness è
+   regredito/divergente o non è più disponibile un checkpoint già
+   esistente, NON è consentito ri-firmare lo stato ripristinato.
+   L'emissione ordinaria `IssueAsync` nega una head assente: solo
+   `BootstrapAsync` con `operatorApproved=true` può creare il PRIMO
+   checkpoint del test quando l'ancora è vuota; un secondo bootstrap
+   viene rifiutato. Il flag booleano NON è un'identità operatore
+   autenticata e non è autorizzazione di recovery.
 5. `PostgresWitnessAnchorVerifier` è completamente read-only:
    valida il ruolo, recupera l'anchor persistito dal terzo cluster,
    verifica il prefisso rispetto allo snapshot witness e rifiuta

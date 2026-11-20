@@ -318,3 +318,13 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] SQL head lock and append-only checkpoint rows prevent regression and conflicting equal-count replay for restricted writer; exact retries are idempotent. Reader and writer get only their respective SECURITY DEFINER functions, never table rights. .NET verifies role inside standalone read/write operations.
 - [x] Issuer verifies previously anchored HMAC prefix against current witness before advancing; verifier compares current witness with independently stored checkpoint, fails closed on wrong key or simulated witness prefix truncation/alteration. TDD RED/GREEN Actions evidence is tracked in #141.
 - [ ] This is three DB **containers on one CI host**, not immutable/offsite/monotonic custody. Real witness PITR against independently surviving anchor, external signer/vault, key rotation, monitoring, failover, source delivery completeness, global release fence and GDPR data rights remain OPEN.
+
+### Guard contro il bootstrap silenzioso dell'ancora — ADR 0029
+
+- [x] TDD RED richiede che `IssueAsync` rifiuti head assente e che
+  `BootstrapAsync` sia invocabile solo con `operatorApproved=true`
+  e solo quando ancora inesistente. Un secondo bootstrap non sovrascrive.
+- [x] GREEN aggiorna il servizio e lascia `IssueAsync` per i soli
+  avanzamenti preceduti dalla verifica HMAC del vecchio checkpoint.
+- [ ] Il flag booleano è SOLO un'assicurazione nel test sintetico,
+  NON autenticazione reale di un operatore o autorizzazione di ripristino.

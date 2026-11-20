@@ -374,3 +374,13 @@ remains a DoS/trust risk. The test does not perform physical witness
 PITR or prove offsite immutable/monotonic custody, complete source
 outbox publication, traffic fencing across replicas, or GDPR erasure.
 The #141 production gate remains OPEN.
+
+### Anchor bootstrap must be explicit (ADR 0029 hardening)
+
+A missing third-cluster anchor head is ambiguous after disaster.
+`IssueAsync` now fails closed on absence; an explicit CI-only
+`BootstrapAsync(operatorApproved: true)` must be invoked for first
+synthetic initialization, rejects a preexisting head, and is NOT a
+production authorization mechanism. Neither method promotes API
+readiness. Operator approval/identity, independent monotonic custody
+and recovery-release signature remain unresolved.

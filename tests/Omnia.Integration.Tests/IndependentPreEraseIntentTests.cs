@@ -60,7 +60,7 @@ public sealed class IndependentPreEraseIntentTests
 
         var batch = await lookup.ReadBatchAsync(first - 1, 100, default);
         Assert.Contains(receipt, batch);
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             lookup.ReadBatchAsync(0, 101, default));
 
         // The independent intent cannot be mistaken for a post-commit

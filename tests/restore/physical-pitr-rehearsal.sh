@@ -158,6 +158,46 @@ OMNIA_REHEARSAL_WITNESS_WRITER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
 OMNIA_REHEARSAL_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_READER_DB" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- publish-source
 
+# The second synthetic EraseAsync commits AFTER the source restore point,
+# but strictly AFTER the last witness publisher cycle. It MUST remain
+# unacknowledged in the independent witness before physical source PITR.
+OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- erase-unwitnessed
+source_unwitnessed_remaining="$(docker exec "$source_container" psql \
+  -U omnia -d omnia_test -Atqc \
+  "SELECT count(*) FROM public.memory_entries WHERE tenant_id = 'omnia-ci-unwitnessed-pitr-synthetic' AND owner_sub = 'synthetic-unwitnessed-pitr-owner'")"
+[[ "$source_unwitnessed_remaining" == 0 ]] || {
+  echo "Unwitnessed synthetic source deletion was not committed." >&2; exit 1
+}
+unwitnessed_id="$(docker exec "$source_container" psql \
+  -U omnia -d omnia_test -Atqc \
+  "SELECT id FROM public.erasure_outbox WHERE tenant_id = 'omnia-ci-unwitnessed-pitr-synthetic' AND owner_sub = 'synthetic-unwitnessed-pitr-owner'")"
+[[ "$unwitnessed_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || {
+  echo "Missing or ambiguous committed unwitnessed synthetic UUID." >&2; exit 1
+}
+export OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH="$private_dir/unwitnessed-event.id"
+printf '%s\n' "$unwitnessed_id" > "$OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH"
+chmod 600 "$OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH"
+unset unwitnessed_id
+export OMNIA_UNWITNESSED_PITR_CI_ONLY=1
+unwitnessed_gap() {
+  dotnet run --no-build -c Release \
+    --project tests/Omnia.UnwitnessedPitrRehearsal/Omnia.UnwitnessedPitrRehearsal.csproj \
+    -- "$1"
+}
+if env -u OMNIA_UNWITNESSED_PITR_CI_ONLY \
+  dotnet run --no-build -c Release \
+    --project tests/Omnia.UnwitnessedPitrRehearsal/Omnia.UnwitnessedPitrRehearsal.csproj \
+    -- --live-gap >/dev/null 2>&1; then
+  echo "Unwitnessed gap observer accepted missing CI opt-in." >&2; exit 1
+fi
+if OMNIA_TEST_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
+   unwitnessed_gap --live-gap >/dev/null 2>&1; then
+  echo "Unwitnessed gap observer accepted witness writer credentials." >&2; exit 1
+fi
+unwitnessed_gap --live-gap
+
 # Ensure the segment containing the named restore point and the later
 # destructive action is durable in the WAL archive before copying.
 last_segment="$(docker exec "$source_container" psql -U omnia -d omnia_test -Atqc \
@@ -274,6 +314,39 @@ target_cs="Host=127.0.0.1;Port=15435;Database=omnia_test;Username=omnia_app;Pass
 OMNIA_REHEARSAL_DB="$target_cs" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- verify
+
+# This actor existed BEFORE physical basebackup, and was erased
+# AFTER the restore point without a remote ACK. Its data/consent and
+# ciphertext MUST resurrect in the recovered source while the event
+# UUID is missing from BOTH restored outbox and independent witness.
+OMNIA_REHEARSAL_DB="$target_cs" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal \
+  -- verify-unwitnessed-resurrected
+
+# Rotate the restored dispatcher password too, before any read-only
+# recovered-outbox scan; reject inherited source credentials.
+new_dispatch_password="$(openssl rand -hex 24)"
+echo "::add-mask::$new_dispatch_password"
+docker exec -i "$recovery_container" psql -X -v ON_ERROR_STOP=1 \
+  -U omnia -d omnia_test -v dispatcher_password="$new_dispatch_password" \
+  >/dev/null <<'SQL'
+SELECT format('ALTER ROLE omnia_dispatcher PASSWORD %L', :'dispatcher_password') \gexec
+SQL
+export OMNIA_UNWITNESSED_RECOVERED_DISPATCH_DB="Host=127.0.0.1;Port=15435;Database=omnia_test;Username=omnia_dispatcher;Password=$new_dispatch_password"
+old_dispatcher="$(sed 's/Port=15432;/Port=15435;/' <<< "$OMNIA_TEST_DISPATCH_DB")"
+if OMNIA_UNWITNESSED_RECOVERED_DISPATCH_DB="$old_dispatcher" \
+   unwitnessed_gap --recovered-gap >/dev/null 2>&1; then
+  echo "PITR gap observer accepted stale source dispatcher credentials." >&2
+  exit 1
+fi
+unset old_dispatcher new_dispatch_password
+
+# The restored source-only audit can return GREEN because the lost
+# outbox UUID no longer exists; the independently remembered private
+# test UUID demonstrates that this is NOT recovery release evidence.
+# This command cannot issue 'ready' and never mutates actor state.
+unwitnessed_gap --recovered-gap
 
 # A PITR backup does not contain KEKs; losing the historical KEK must
 # produce a cryptographic failure, not an alternative plaintext response.

@@ -25,6 +25,7 @@ jobs:
           dotnet build src/backend/Omnia.WitnessAudit/Omnia.WitnessAudit.csproj -c Release
           dotnet build src/backend/Omnia.ErasureDeliveryAudit/Omnia.ErasureDeliveryAudit.csproj -c Release
           dotnet build tests/Omnia.RestoreRehearsal/Omnia.RestoreRehearsal.csproj -c Release
+          dotnet build tests/Omnia.UnwitnessedPitrRehearsal/Omnia.UnwitnessedPitrRehearsal.csproj -c Release
           dotnet build tests/Omnia.WitnessPitrRehearsal/Omnia.WitnessPitrRehearsal.csproj -c Release
       - name: Recovery audit CLI denies missing external journal and checkpoint
         shell: bash

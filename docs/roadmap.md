@@ -495,3 +495,39 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   primary o di legal authorization del richiedente.
   Nessun release gate globale/API/worker/replica e
   provider/backup/device erasure. #141/#109/#31 OPEN.
+
+## #141 — Gating sintetico dell'erase su pre-intent già ancorato (ADR 0037)
+
+- [x] TDD RED: nuovo integration test PostgreSQL richiede
+  `EraseWithAnchoredIntentAsync` e `VerifyRequestAsync`
+  assenti; compilazione volutamente negativa.
+- [x] GREEN: su SECONDA PGDATA il reader EXECUTE-only
+  legge snapshot `REPEATABLE READ READ ONLY`, il verifier
+  autentica il prefisso HMAC tramite checkpoint sulla
+  TERZA PGDATA e controlla UUID/tenant/owner e sequence
+  entro il count ancorato. Intent mancante, fuori ambito,
+  chiave errata, ruolo admin/writer o record successivo
+  all'anchor → DELETE e outbox negati.
+- [x] Fonte primaria: memoria e consensi vengono
+  cancellati e lo stesso request UUID inserito in
+  outbox in una singola transazione actor-scoped/RLS.
+  Replay UUID con record ancora presente → unique
+  violation 23505 e rollback di dati più recenti.
+- [x] Rehearsal fisico del PITR primario: database
+  `omnia_pitr_preflight_anchor` separato sul terzo
+  PGDATA, chiave HMAC privata temporanea, intento
+  remoto registrato ma NON ancora ancorato → tentativo
+  `erase-unwitnessed` rifiutato senza cancellazione
+  e senza outbox; dopo checkpoint ACK il DELETE
+  sintetico può committare, ma manca l'ACK witness
+  post-commit. Il PITR fa riapparire i dati e scomparire
+  l'outbox; l'anchor HMAC resta identico, il source
+  commit è INDETERMINATO e API resta quarantinata.
+- [ ] Metodo confinato ai test GitHub CI, non integrato
+  nell'API/OIDC, non garanzia atomica cross-cluster,
+  non attestazione del commit source dopo un rollback,
+  non custodia WORM/offsite/vault/HSM né possibilità
+  di riaprire ingress/worker/repliche. L'intento può
+  esistere anche se la cancellazione fallisce; nuove
+  acquisizioni dopo PITR richiedono decisioni autorizzate
+  fuori banda. #141/#109/#31/#32 ancora OPEN.

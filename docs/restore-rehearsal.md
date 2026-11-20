@@ -754,3 +754,42 @@ prima della sua ancora. L'intent non dimostra
 che la cancellazione primaria abbia committato:
 non è auth OIDC, DR offsite, WORM o GDPR ready.
 #141/#109/#31 rimangono aperte.
+
+## Cancellazione sintetica permessa solo dopo ACK dell'anchor intenti (ADR 0037)
+
+Il runbook di PITR fisico del PRIMARIO non si accontenta
+più di un pre-intent visibile sulla seconda PGDATA. Il
+test crea un database `omnia_pitr_preflight_anchor`
+sulla TERZA PGDATA, con chiave HMAC random di 32 byte
+conservata soltanto in file privato 0600 del runner.
+Dopo la scrittura dell'intento, la CLI offline rifiuta
+una chiamata `erase-unwitnessed` mentre il checkpoint
+non è ancora stato pubblicato: PostgreSQL verifica che
+la memoria dell'attore resti presente e la sua outbox
+vuota. Un successivo bootstrap esplicito dell'anchor
+è possibile soltanto una volta; lo stesso UUID/tenant/
+owner deve essere verificato all'interno del prefisso
+HMAC già durabile usando la password reader limitata.
+
+Solo DOPO l'ACK sul terzo cluster, il percorso
+`EraseWithAnchoredIntentAsync` può aprire la transazione
+RLS del primario: elimina memoria e consenso ed emette
+lo stesso UUID correlato nell'outbox. Questa cancellazione
+deliberatamente NON viene consegnata al witness completato
+prima del PITR del primario, riproducendo il limite
+commit→post-commit ACK della ADR 0032.
+Dopo ripristino fisico `pg_basebackup`/WAL al restore
+point, il clone contiene nuovamente i dati ma non
+l'outbox; la CLI verifica il checkpoint terzo ancora
+valido e il valore byte-per-byte invariato. L'audit
+read-only resta `IntentOnlyCommitUnknown`, API
+quarantinata; nessun `ready` o auto-delete.
+
+Il nuovo controllo NON dimostra che il DELETE abbia
+committato in un DR reale, non copre ogni writer/API
+pubblico e non rende atomiche la seconda e terza
+PGDATA con il source. Un attore malintenzionato
+con accesso all'HMAC key, al terzo DB admin o
+al restore di entrambi i cluster può aggirare
+l'autorità. Non dichiarare conformità GDPR,
+RPO/RTO, disponibilità offsite, WORM o chiusura #141.

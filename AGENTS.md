@@ -643,3 +643,48 @@ CI host/DB admin, can itself be rolled back, and new intents can be
 lost before the anchor advance: no offsite/WORM commit authority,
 global release gate, real OIDC authorization or GDPR readiness.
 Keep #141, #109, #31 and #32 open.
+
+## Anchored PRE-ERASE intent required before synthetic source DELETE (#141 / ADR 0037)
+
+The strict `PostgresPersonalDataService.EraseWithAnchoredIntentAsync` is an
+experimental GitHub-CI-only method (checks `CI=true` and
+`GITHUB_ACTIONS=true`, which are **NOT** a production authentication
+mechanism). It is NOT registered with the REST API or the
+`IPersonalDataService` port and cannot act on real user content.
+Its input is request UUID, tenant, owner, restricted intent-reader
+connection to SECOND PGDATA, restricted checkpoint-reader connection
+to THIRD PGDATA, and a private 32-byte HMAC signing key. It MUST
+refuse an absent intent, missing third-cluster anchor, invalid HMAC,
+incorrect tenant/owner, wrong SQL role, or an intent with sequence
+**GREATER THAN the authenticated high-watermark**. The exact actor
+must be located within the same REPEATABLE READ witness snapshot
+used to verify the entire anchored HMAC prefix; the same verified
+request UUID is then inserted into the source erasure outbox in the
+transaction that removes synthetic memory and consent. Denied
+preflight MUST NOT open a source actor transaction or change an
+outbox row, memory or consent. A duplicate UUID on a still-intact
+primary outbox MUST cause 23505 and rollback any attempted later
+deletion. After source PITR that UUID may disappear, so NEVER replay
+automatically. The earlier weaker CI-only
+`EraseWithWitnessedIntentAsync` remains for backward-compatible
+tests and is NOT an anchored operation. Do not treat it as the new gate.
+
+In real physical PRIMARY WAL PITR drill, provision an isolated
+`omnia_pitr_preflight_anchor` database on the THIRD PGDATA; use
+separately randomized 32-byte HMAC key held in a 0600 temporary
+runner file. Require a denied pre-delete invocation after remote
+intent append but BEFORE checkpoint issuance, and prove source
+memory and outbox unchanged; only after explicit third-cluster
+checkpoint ACK may the correlated synthetic DELETE succeed.
+The old reader/writer identity and missing/privileged credentials
+must be rejected; witness post-commit ACK is deliberately absent.
+After physical PITR the actor data must resurrect and the outbox
+disappear while the separately verified intent prefix/third PGDATA
+checkpoint remains unchanged. API remains quarantined. This
+demonstrates the pre-ack gate only within CI and DOES NOT confer
+a source COMMIT certificate, independent offsite/WORM custody,
+user-signed OIDC consent or global ingress/worker/replica fencing.
+The two remote databases do not share a serializable distributed
+transaction; concurrent recovery or a rollback of the THIRD
+cluster can invalidate the safety assumption. #141 and GDPR/DR
+dependencies remain OPEN.

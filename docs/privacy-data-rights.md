@@ -280,3 +280,21 @@ All storage and keys remain on a temporary CI host.
 No production consent, retention, offsite custodian,
 provider/cache/media/device deletion or global recovery
 release is implemented. #31/#32/#141 remain OPEN.
+
+## Pre-erase anchor acknowledgement is not GDPR Article 17 completion (ADR 0037)
+
+In the synthetic GitHub CI flow an attempted DELETE is
+denied unless request UUID, tenant and subject already
+appear in a verified independent pre-intent HMAC
+high-watermark. This protects against one class of
+lost-unanchored request preceding deletion in the
+test but proves neither the requester's legal identity
+nor that the later primary DELETE committed; after
+physical PITR the record may disappear despite an
+earlier success. The checkpoint stores only count,
+digest and HMAC, but the underlying witness contains
+personal metadata and still requires documented
+retention, access/export and deletion policies.
+No customer data, real OIDC authorization, provider/
+cache/backup/device erasure, offsite custody or
+GDPR certification is established. #31/#32/#141 OPEN.

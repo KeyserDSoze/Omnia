@@ -263,3 +263,22 @@ share one disposable CI host; no independent offsite
 custody, OIDC requester identity, source COMMIT evidence,
 global ingress/worker/replica fence or legal GDPR guarantee
 is provided.
+
+## Gated synthetic pre-erase: independent anchor ACK first (ADR 0037)
+
+The strict CI-only synthetic erasure method verifies
+a matching pre-intent within the domain-separated
+HMAC prefix held in a THIRD-PGDATA checkpoint database
+before opening any actor-scoped primary transaction.
+It refuses a remote intent that has not yet reached
+the externally stored checkpoint. After validation,
+primary DELETE+outbox are atomic with identical UUID,
+but witness intent, third anchor and source transactions
+are NOT globally atomic. The real primary WAL PITR
+rehearsal demonstrates the pre-checkpoint denial and
+post-checkpoint commit, and that an intent may survive
+as `CommitUnknown` when the primary rolls back.
+The production public erasure endpoint and API
+interface remain unchanged. This is not global DR
+release authorization, offsite signer custody or
+authenticated GDPR request handling.

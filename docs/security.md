@@ -585,3 +585,42 @@ not an immutable offsite high-watermark and not a license to
 release API/worker traffic or auto-replay erasure. New intents
 remain vulnerable before being signed/anchored. All clusters
 share CI admin and failure domain; #141 stays OPEN.
+
+## Signed pre-intent high-watermark as a synthetic PRE-DELETE gate (ADR 0037)
+
+A new opt-in `EraseWithAnchoredIntentAsync` path rejects a
+remote pre-erase intent unless it is included in the
+previously authenticated, monotonic HMAC prefix stored
+in the THIRD PostgreSQL database, not just appended to
+the witness's SECOND PGDATA. The verifier reads the
+exact UUID+tenant+subject from the SAME
+`REPEATABLE READ READ ONLY` snapshot used to validate
+the full prefix, and requires sequence <= anchored count.
+A missing anchor, wrong 32-byte key, invalid/tampered
+payload, wrong EXECUTE-only identities or an unanchored
+suffix returns denial BEFORE the source actor lock,
+DELETE or transactional outbox insert.
+
+The physical primary WAL PITR drill now asserts a
+rejected DELETE after intent append but BEFORE
+independent anchor acknowledgement, then a successful
+correlated source DELETE only after the independent
+HMAC checkpoint is acknowledged. The test proves no
+source memory/outbox mutation on denial, protects the
+HMAC key in private CI temporary files and checks the
+independent checkpoint is identical after restoring the
+primary. The post-commit witness receipt is intentionally
+absent, so source-commit provenance remains UNKNOWN
+after physical PITR and the API remains quarantined.
+
+**Trust boundary:** `CI=true` and `GITHUB_ACTIONS=true`
+are only test-mode guards, not identity proof or real
+permission controls. The weaker prior CI-only
+`EraseWithWitnessedIntentAsync` continues to exist
+for older tests; the public API remains UNCHANGED and
+does not enforce anchored preflight. Multiple PGDATA
+still share admin/host/runner; external WORM, signer
+custody, authenticated real requester, global
+ingress/API/worker/replica fence and cross-store GDPR
+rights are not implemented. The source UUID PK
+does NOT protect retries after physical rollback.

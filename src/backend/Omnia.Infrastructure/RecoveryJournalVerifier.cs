@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Encodings.Web;
 using System.Text;
 using System.Text.Json;
 
@@ -16,6 +17,15 @@ public static class RecoveryJournalVerifier
     public const int MaxJournalBytes = 1024 * 1024;
     public const int MaxAnchorBytes = 4096;
     private const int MaxEntryBytes = 1024;
+    // Cross-language version-1 payload bytes: compact UTF-8 JSON, insertion
+    // property order, unescaped printable characters such as '+' and '='.
+    // UnsafeRelaxed is used ONLY for authenticated offline payload bytes,
+    // never for HTML or browser output. Otherwise default System.Text.Json
+    // escaping would differ from JSON generators used by recovery operators.
+    private static readonly JsonSerializerOptions CanonicalJson = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     public static string GenesisDigest { get; } = Convert.ToBase64String(
         SHA256.HashData("omnia-recovery-journal-v1/genesis"u8));
@@ -27,13 +37,13 @@ public static class RecoveryJournalVerifier
         {
             schemaVersion = 1, sequence, eventId, operation,
             tenantId, ownerSubject, previousDigest
-        });
+        }, CanonicalJson);
 
     public static byte[] AnchorPayload(int count, string tipDigest) =>
         JsonSerializer.SerializeToUtf8Bytes(new
         {
             schemaVersion = 1, count, tipDigest
-        });
+        }, CanonicalJson);
 
     public sealed record Verification(int Count, string TipDigest);
 

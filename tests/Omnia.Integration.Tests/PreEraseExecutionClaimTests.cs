@@ -133,6 +133,50 @@ public sealed class PreEraseExecutionClaimTests
         Assert.Equal("42501", forbidden.SqlState);
     }
 
+    [Fact]
+    public async Task ConcurrentSameUuidClaimsAllowExactlyOneDurableAttempt()
+    {
+        await using var writerDb = NpgsqlDataSource.Create(
+            Required("OMNIA_TEST_EXECUTION_CLAIM_WRITER_DB"));
+        await using var readerDb = NpgsqlDataSource.Create(
+            Required("OMNIA_TEST_EXECUTION_CLAIM_READER_DB"));
+        var writer = new PostgresPreEraseExecutionClaimWriter(writerDb);
+        var id = Guid.NewGuid();
+        var key = RandomNumberGenerator.GetBytes(32);
+        var results = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(async _ =>
+            {
+                try
+                {
+                    await writer.ClaimOnceAsync(id,
+                        "concurrent-claim-test", "synthetic-owner", key, default);
+                    return true;
+                }
+                catch (PostgresException ex) when (ex.SqlState == "23505")
+                {
+                    return false;
+                }
+            }));
+        Assert.Single(results.Where(x => x));
+        Assert.True(await new PostgresPreEraseExecutionClaimReader(readerDb)
+            .HasClaimAsync(id, default));
+
+        await using var invalid = writerDb.CreateCommand(
+            "SELECT admission.claim_once(@id,@scope)");
+        invalid.Parameters.AddWithValue("id", Guid.NewGuid());
+        invalid.Parameters.AddWithValue("scope", new byte[31]);
+        var invalidScope = await Assert.ThrowsAsync<PostgresException>(() =>
+            invalid.ExecuteScalarAsync());
+        Assert.Equal("22023", invalidScope.SqlState);
+
+        await using var unauthorizedRead = writerDb.CreateCommand(
+            "SELECT admission.has_claim(@id)");
+        unauthorizedRead.Parameters.AddWithValue("id", id);
+        var denied = await Assert.ThrowsAsync<PostgresException>(() =>
+            unauthorizedRead.ExecuteScalarAsync());
+        Assert.Equal("42501", denied.SqlState);
+    }
+
     private static string Required(string key) =>
         Environment.GetEnvironmentVariable(key) is { Length: > 0 } value
             ? value : throw new InvalidOperationException("Synthetic CI connection missing.");

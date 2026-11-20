@@ -213,3 +213,20 @@ witness publication. No production API integrates
 the handshake; it does not guarantee primary commit
 atomicity, authorize automatic DR re-deletion, or
 serve as external offsite/immutable evidence.
+
+## Request UUID → source outbox UUID linkage (ADR 0034)
+
+CI-only `PostgresPersonalDataService.EraseWithWitnessedIntentAsync`
+reads an immutable pre-erase request from the SECOND PostgreSQL
+witness through a restricted intent reader and checks its
+UUID and actor scope before executing the source RLS erasure.
+The source outbox row is inserted in the same transaction
+under that identical request UUID; the existing publisher
+uses it as the independently persisted post-commit
+`erasure_events.event_id`. Uncorrelated `EraseAsync`
+remains unchanged. Replaying an old request UUID cannot
+delete subsequently re-acquired data, because the second
+source transaction aborts on unique_violation.
+Physical source PITR still drops pre-ACK committed outbox
+and DELETE and leaves only an uncertain request intent,
+so this is not a production recovery release protocol.

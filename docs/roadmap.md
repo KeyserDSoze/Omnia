@@ -415,3 +415,26 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   the intent stream, vault custody, traffic fence,
   data rights review, production API integration or
   Azure/on-prem parity. #141 remains OPEN.
+
+## #141 — Correlazione opt-in intent UUID → COMMIT outbox (ADR 0034)
+
+- [x] RED reale: test PostgreSQL richiede `EraseWithWitnessedIntentAsync`
+  inizialmente inesistente, segnala metadati invalidi prima della
+  cancellazione e test del retry su nuova acquisizione.
+- [x] GREEN: verifica sul secondo PGDATA il pre-intent con login
+  solo EXECUTE e ambito UUID/tenant/soggetto, poi cancella memoria
+  e consenso e scrive esattamente lo STESSO UUID dell'intento
+  nell'outbox transazionale PostgreSQL primario.
+- [x] Il publisher esistente trasmette un completamento
+  `erase-actor` con il medesimo UUID alla tabella erasure witness;
+  un UUID già consumato fallisce con 23505 e rollback di nuovi
+  consensi/memorie, non permette un erase retroattivo.
+- [x] PITR fisico del primario usa il percorso correlato in
+  scenario CI: il pre-intent sopravvive nel secondo PGDATA
+  mentre il commit dell'outbox e dei DELETE sparisce dopo WAL
+  recovery e non c'è ACK post-commit. Quarantena invariata.
+- [ ] Il percorso è SOLO CI, non autenticazione/OIDC utente,
+  non integrazione API, non durable proof che il DELETE abbia
+  committato dopo crash, non ancoraggio degli intenti sulla
+  terza PGDATA/offsite WORM, non fencing globale/repliche/
+  worker/media/provider/backup o GDPR compliance.

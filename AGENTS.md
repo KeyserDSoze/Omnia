@@ -531,3 +531,35 @@ authorization and commit proof. No API hook, automatic reconciliation
 or signed `ready` release is provided. Intent PGDATA itself can
 roll back (not third-cluster-anchored), and the whole test shares
 one CI host. Keep #141, #31, #109, #32 OPEN.
+
+## Correlated remote intent UUID and source erasure event (#141 / ADR 0034)
+
+The opt-in `PostgresPersonalDataService.EraseWithWitnessedIntentAsync`
+is STRICTLY for synthetic CI experiments (`CI=true` and
+`GITHUB_ACTIONS=true`) and MUST NOT be wired into the public API.
+It requires a nonempty request UUID and validates the independent
+`omnia_witness_intent_reader` EXECUTE-only login and exact
+`requestId`, tenant, owner and `erase-actor-intent` BEFORE
+opening any primary actor transaction. A missing, foreign-scope
+or forged intent MUST NOT delete memory/consent or enqueue an
+outbox event. The SAME request UUID must be inserted into
+`public.erasure_outbox.id` IN THE SAME actor-scoped transaction
+that deletes consent and memory. The existing uncorrelated public
+`EraseAsync` MUST keep its old behavior, and the existing
+bounded source→witness publisher must preserve the same event UUID
+in `witness.erasure_events`.
+
+Do NOT `ON CONFLICT DO NOTHING`, silently re-delete or replay
+old intents: duplicate source UUID MUST throw 23505 and rollback
+all changes in the second source transaction, including attempted
+deletion of any newer data. Do not auto-retry ambiguous commits.
+The real CI primary WAL PITR now uses the pre-intent UUID to call
+the correlated synthetic delete, compares live source outbox UUID
+against the immutable independent intent UUID BEFORE PITR, then
+proves the source event can disappear while the pre-intent persists
+on the SECOND PGDATA. The pre-intent still NEVER proves source COMMIT
+once source WAL rolls back, and a missing post-commit ACK must keep
+API in quarantine. Synthetic CI file with UUID is NOT an
+independent signed commit authority. Third anchor does not cover
+this intent and no OIDC actor identity is verified here. Keep
+#141/#109/#31/#32 open; no production release or GDPR assurance.

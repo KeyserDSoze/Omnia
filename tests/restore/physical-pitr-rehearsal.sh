@@ -229,7 +229,7 @@ unwitnessed_id="$(docker exec "$source_container" psql \
 [[ "$unwitnessed_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || {
   echo "Missing or ambiguous committed unwitnessed synthetic UUID." >&2; exit 1
 }
-intent_source_id="$(tr -d '\\n' < "$OMNIA_PREERASE_INTENT_ID_PATH")"
+intent_source_id="$(cat "$OMNIA_PREERASE_INTENT_ID_PATH")"
 [[ "$unwitnessed_id" == "$intent_source_id" ]] || {
   echo "Committed primary outbox did not reuse the remote intent request UUID." >&2
   exit 1

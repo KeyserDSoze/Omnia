@@ -231,3 +231,21 @@ rectification, exception handling, data controller
 sign-off or multi-provider erasure propagation has
 been verified. All such requirements stay OPEN
 (#31/#32/#141).
+
+## Correlation does not confer GDPR erasure authorization (ADR 0034)
+
+The synthetic CI path now uses the same UUID for a
+pre-erase witness intent and a source transaction's
+outbox event. Tenant and subject metadata are validated
+through restricted PostgreSQL roles. This removes
+ambiguity **within the test** about which source event
+was intended, but it does not identify the legal
+requester, prove consent or lawful basis, or certify
+that a DELETE committed after a crash/PITR.
+The public HTTP/API erasure endpoint still uses its
+existing behavior and has no production external
+intent handshake. No new user data may be processed
+by the CI-only operation. Retention, access/export
+and deletion of intent metadata, providers/backup/
+device propagation and GDPR Art.17 review remain
+unresolved in #31/#32/#141.

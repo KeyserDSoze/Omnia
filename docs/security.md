@@ -504,3 +504,34 @@ credentials. No signer identity, externally immutable
 intent retention, monotonic third-cluster anchor for
 intent, crash-atomic two-DB transaction, global fencing
 or GDPR readiness is provided. #141 remains OPEN.
+
+## Opt-in correlated pre-intent erasure request (ADR 0034)
+
+An explicit CI-only `EraseWithWitnessedIntentAsync` checks
+the independent role-gated witness pre-intent and exact UUID,
+tenant, owner, operation before any actor RLS transaction.
+The DELETE of consent and sealed memory and primary outbox
+INSERT with **the same request UUID** occur atomically.
+The existing publisher preserves the UUID in the completed
+witness receipt. Invalid remote credentials, absent intent
+or foreign tenant/subject are denied without source mutation.
+
+The source outbox primary key is also a stale-request guard:
+a second use of the same request ID cannot delete a later
+re-grant/capture; the PostgreSQL unique violation 23505
+rolls back all earlier DELETEs in that transaction.
+Do not treat a replay as idempotent erasure of future data,
+swallow PK errors or automatically retry ambiguous commits.
+The normal `EraseAsync` API method remains unchanged.
+
+The CI physical PITR deliberately loses a committed
+pre-ACK DELETE despite the matched remote intent UUID.
+After recovery the same remote request exists but cannot
+prove commit, and the API remains quarantined. This
+experimental method is explicitly blocked outside
+GitHub CI; it is NOT wired to OIDC/JWT/HTTP. The intent
+role is an SQL capability, not an authenticated GDPR
+erasure request or signer. The third checkpoint doesn't
+yet anchor the pre-intent stream, all clusters share
+the CI runner, and immutable offsite custody, global
+fencing and complete provider/device erasure remain open.

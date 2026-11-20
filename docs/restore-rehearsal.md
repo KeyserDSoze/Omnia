@@ -640,3 +640,42 @@ autorizza un erase automatico dopo PITR. Gli intenti
 non sono ancorati nel terzo cluster e possono a loro
 volta retrocedere con il witness; tutte le PGDATA sono
 sullo stesso runner temporaneo. #141 e #109 OPEN.
+
+## Correlazione UUID dell'intento e transazione del primario (ADR 0034)
+
+Il percorso di prova dell'ADR 0033 precedeva `EraseAsync` con
+un request intent remoto, ma il servizio generava un nuovo
+UUID outbox senza correlazione. Ora il metodo **opt-in SOLO CI**
+`EraseWithWitnessedIntentAsync` richiede un intent
+sul witness seconda PGDATA, leggibile soltanto dall'identità
+`omnia_witness_intent_reader` EXECUTE-only. Verifica request
+UUID non vuoto e corrispondenza esatta di tenant, owner e tipo
+PRIMA di aprire la transazione del primario. Errori di
+connessione, credenziali errate, intent assente o scope forgiato
+bloccano la cancellazione.
+
+Il metodo cancella memoria e consenso con lock actor/RLS e
+inserisce `erasure_outbox.id = request UUID` nella **stessa
+transazione**. L'outbox conserva l'UUID nel publisher e nella
+ricevuta `witness.erasure_events` post-commit quando il
+publisher viene eseguito. Un secondo tentativo con lo stesso
+UUID non deve mai cancellare nuova memoria: la PK UUID
+produce errore 23505 e l'intera seconda transazione viene
+rollbackata, preservando dati/consensi nuovi.
+
+Il PITR fisico realizzato nel runbook usa l'intento remoto
+dello stesso UUID del COMMIT source, ne verifica la
+corrispondenza PRIMA del recovery e poi dimostra che, dopo
+rollback WAL, l'intento è ancora leggibile ma il source
+outbox e il post-commit ACK non lo sono. I dati cancellati
+ricompaiono, quindi il risultato resta incerto e l'API
+rimane in quarantena. La prova del COMMIT prima del disastro
+è osservabile nel test e non diventa una prova indipendente
+affidabile in produzione.
+
+**Non è un protocollo distributed exactly-once:**
+nessun binding a identity OIDC reale o HTTP API, nessun 2PC,
+quorum o WORM/vault, nessuna firma offsite, nessuna attestazione
+di commit nel witness. Il pre-intent può esistere senza
+COMMIT e non deve autorizzare replay automatico.
+#141, #109 e #31 OPEN.

@@ -40,3 +40,25 @@ Each issue links a commit with passing required jobs and relevant logs. Mark as 
 ## RLS integration gate (#30)
 
 The CI runs xUnit against disposable pgvector PostgreSQL with a randomized schema-owner password and a separate randomized `omnia_app` password. Tests use the real non-owner connection for all repository queries, never the migration admin. `RlsIsolationTests` deliberately sends SELECT without tenant WHERE and checks fail-closed SELECT/INSERT/UPDATE, no bypass of `row_security`, and no transaction actor-context leakage across a single pooled connection. The full OIDC browser workflow provisions the same app role and confirms JWT → consent → persisted note and cross-owner isolation. An API process with privileged runtime credentials must refuse to start.
+
+## GitHub Pages artifact handoff reliability (#142, 2026-11-20)
+
+Failure injection evidenced by [run 44824935287](https://github.com/KeyserDSoze/Omnia/actions/runs/44824935287):
+upload succeeded, but deploy immediately observed zero artifacts; rerunning the
+whole job uploaded a second same-named `github-pages` artifact, making deploy
+fail with `Multiple artifacts named ... count is 2`. The Expo build was
+successful; this is an artifact metadata/deploy race.
+
+Pages now uploads under `omnia-pages-<run_id>-<run_attempt>`, and the
+deploy action targets exactly that name. With read-only Actions permission,
+a bounded wait checks that exactly one unexpired artifact is indexed by
+GitHub before deployment. Zero until timeout or more than one is
+fail-closed. No secret is displayed and no publication is authorized when
+Pages is disabled. The workflow is still tested by real GitHub Actions,
+not a mocked local runner. Consult issue #142 for observed GREEN evidence;
+do not infer deployment health solely from a successful static export.
+
+- Official upload action: https://github.com/actions/upload-pages-artifact
+- Official deploy action: https://github.com/actions/deploy-pages
+- GitHub Pages custom workflows:
+  https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages

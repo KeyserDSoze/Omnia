@@ -21,6 +21,7 @@ jobs:
           dotnet build src/backend/Omnia.Backfill/Omnia.Backfill.csproj -c Release
           dotnet build src/backend/Omnia.BackfillAudit/Omnia.BackfillAudit.csproj -c Release
           dotnet build src/backend/Omnia.RecoveryAudit/Omnia.RecoveryAudit.csproj -c Release
+          dotnet build src/backend/Omnia.ErasurePublisher/Omnia.ErasurePublisher.csproj -c Release
           dotnet build tests/Omnia.RestoreRehearsal/Omnia.RestoreRehearsal.csproj -c Release
       - name: Recovery audit CLI denies missing external journal and checkpoint
         shell: bash
@@ -199,6 +200,31 @@ jobs:
           }
       - name: xUnit real PostgreSQL integration
         run: dotnet test tests/Omnia.Integration.Tests/Omnia.Integration.Tests.csproj -c Release
+      - name: Isolated witness publisher CLI denies unsafe mode and confirms a test-only scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$(mktemp "$RUNNER_TEMP/omnia-publisher.XXXXXX")"
+          trap 'rm -f "$log"' EXIT
+          if env -u OMNIA_ERASURE_PUBLISHER_CI_ONLY \
+             dotnet run --no-build -c Release \
+               --project src/backend/Omnia.ErasurePublisher/Omnia.ErasurePublisher.csproj \
+               -- --once > "$log" 2>&1; then
+            echo "Witness publisher unexpectedly accepted unapproved mode." >&2
+            exit 1
+          fi
+          grep -Fq 'ERASURE_PUBLISHER_DENIED' "$log" || {
+            echo "Publisher denial was not verified." >&2
+            exit 1
+          }
+          OMNIA_ERASURE_PUBLISHER_CI_ONLY=1 \
+            dotnet run --no-build -c Release \
+              --project src/backend/Omnia.ErasurePublisher/Omnia.ErasurePublisher.csproj \
+              -- --once > "$log" 2>&1
+          grep -Fq 'ERASURE_PUBLISHER_CYCLE_CONFIRMED' "$log" || {
+            echo "Witness publisher did not confirm delivery." >&2
+            exit 1
+          }
       - name: Restore rehearsal — real PostgreSQL dump/restore, retained and missing KEKs
         shell: bash
         run: bash tests/restore/restore-rehearsal.sh

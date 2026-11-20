@@ -197,6 +197,20 @@ intent_preflight --record-intent
 intent_preflight --record-intent
 intent_preflight --verify-intent
 
+# An already recorded intent is still not a license to accept
+# unauthorized SQL readers. Fail BEFORE the primary deletion.
+if OMNIA_TEST_INTENT_READER_DB="$OMNIA_TEST_WITNESS_READER_DB" \
+  OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
+  OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+    dotnet run --no-build -c Release \
+      --project tests/Omnia.RestoreRehearsal -- erase-unwitnessed >/dev/null 2>&1; then
+  echo "Untrusted intent reader authorized a source DELETE." >&2; exit 1
+fi
+[[ "$(docker exec "$source_container" psql -U omnia -d omnia_test -Atqc \
+  "SELECT count(*) FROM public.memory_entries WHERE tenant_id = 'omnia-ci-unwitnessed-pitr-synthetic' AND owner_sub = 'synthetic-unwitnessed-pitr-owner'")" == 1 ]] || {
+  echo "Denied correlated preflight changed the primary actor." >&2; exit 1
+}
+
 # The second synthetic EraseAsync commits AFTER the source restore point,
 # but strictly AFTER the last witness publisher cycle. It MUST remain
 # unacknowledged in the independent witness before physical source PITR.
@@ -215,6 +229,12 @@ unwitnessed_id="$(docker exec "$source_container" psql \
 [[ "$unwitnessed_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || {
   echo "Missing or ambiguous committed unwitnessed synthetic UUID." >&2; exit 1
 }
+intent_source_id="$(tr -d '\\n' < "$OMNIA_PREERASE_INTENT_ID_PATH")"
+[[ "$unwitnessed_id" == "$intent_source_id" ]] || {
+  echo "Committed primary outbox did not reuse the remote intent request UUID." >&2
+  exit 1
+}
+unset intent_source_id
 export OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH="$private_dir/unwitnessed-event.id"
 printf '%s\n' "$unwitnessed_id" > "$OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH"
 chmod 600 "$OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH"

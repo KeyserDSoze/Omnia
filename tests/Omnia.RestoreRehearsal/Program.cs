@@ -330,8 +330,34 @@ internal static class Program
     private static async Task EraseUnwitnessedAsync(NpgsqlDataSource db,
         AesGcmEnvelopeEncryption crypto)
     {
+        // CI-only correlated transaction: use the SAME synthetic request
+        // UUID authenticated via the independent witness intent reader as
+        // source outbox ID. This is not a proof of completed deletion after
+        // PITR and never authorizes replay from an orphaned intent.
+        var privatePath = Required("OMNIA_PREERASE_INTENT_ID_PATH");
+        var root = Path.GetFullPath(Required("RUNNER_TEMP"))
+            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!Path.IsPathFullyQualified(privatePath) ||
+            !Path.GetFullPath(privatePath).StartsWith(root,
+                StringComparison.Ordinal))
+            throw new InvalidDataException("Unsafe synthetic intent ID path.");
+        var raw = System.Text.Encoding.UTF8.GetString(
+            ReadPrivate(privatePath, expectedMax: 37, exactSize: 37)).Trim();
+        if (!Guid.TryParseExact(raw, "D", out var requestId) ||
+            requestId == Guid.Empty || raw != requestId.ToString("D"))
+            throw new InvalidDataException("Invalid synthetic intent UUID.");
+
+        var readerConnection = Required("OMNIA_TEST_INTENT_READER_DB");
+        var target = new NpgsqlConnectionStringBuilder(readerConnection);
+        if (target.Host != "127.0.0.1" || target.Port != 15436 ||
+            target.Database != "omnia_witness" ||
+            target.Username != "omnia_witness_intent_reader")
+            throw new InvalidOperationException("Untrusted remote intent role.");
+        await using var remote = NpgsqlDataSource.Create(readerConnection);
         var result = await new PostgresPersonalDataService(db, crypto)
-            .EraseAsync(UnwitnessedTenant, UnwitnessedOwner, default);
+            .EraseWithWitnessedIntentAsync(
+                requestId, UnwitnessedTenant, UnwitnessedOwner,
+                remote, default);
         if (result.DeletedMemories != 1 || result.DeletedConsents != 1 ||
             (await new PostgresMemoryRepository(db, crypto)
                 .RecentAsync(UnwitnessedTenant, UnwitnessedOwner, 10, default))

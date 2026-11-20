@@ -140,6 +140,10 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
         Guid requestId, string tenantId, string ownerSubject,
         NpgsqlDataSource intentReader, CancellationToken ct)
     {
+        if (Environment.GetEnvironmentVariable("CI") != "true" ||
+            Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true")
+            throw new InvalidOperationException(
+                "Correlated pre-erase test mode is restricted to CI.");
         if (requestId == Guid.Empty)
             throw new ArgumentException("An intent UUID is required.", nameof(requestId));
         ArgumentNullException.ThrowIfNull(intentReader);

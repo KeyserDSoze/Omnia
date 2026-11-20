@@ -109,6 +109,9 @@ try
     var witness = Restricted("OMNIA_TEST_WITNESS_READER_DB",
         15436, "omnia_witness", "omnia_witness_reader");
     var id = ReadPrivateEventId("OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH");
+    if (id != intentId)
+        throw new InvalidDataException(
+            "Source commit UUID is not correlated to the remote pre-intent.");
     await using var sourceDb = NpgsqlDataSource.Create(dispatcher);
     await using var witnessDb = NpgsqlDataSource.Create(witness);
     await PostgresErasureDispatchReader.VerifyRoleAsync(sourceDb);
@@ -157,6 +160,7 @@ try
         }
         catch (InvalidDataException)
         {
+            Console.WriteLine("CORRELATED_ERASURE_SOURCE_COMMIT_PENDING");
             Console.WriteLine("UNWITNESSED_SOURCE_COMMIT_PENDING");
             return 0;
         }
@@ -178,6 +182,7 @@ try
         // The independently remembered event identifier proves this
         // particular run's false-green risk, but an unsigned local
         // CI file is NOT a trustworthy external source commit ledger.
+        Console.WriteLine("CORRELATED_INTENT_ID_SURVIVED_PRIMARY_PITR");
         Console.WriteLine("PREERASE_INTENT_SURVIVED_PRIMARY_PITR");
         Console.WriteLine("UNWITNESSED_PITR_FALSE_GREEN_SOURCE_ONLY_DENIED");
         return 0;

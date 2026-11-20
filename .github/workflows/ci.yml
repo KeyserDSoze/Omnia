@@ -23,6 +23,7 @@ jobs:
           dotnet build src/backend/Omnia.RecoveryAudit/Omnia.RecoveryAudit.csproj -c Release
           dotnet build src/backend/Omnia.ErasurePublisher/Omnia.ErasurePublisher.csproj -c Release
           dotnet build src/backend/Omnia.WitnessAudit/Omnia.WitnessAudit.csproj -c Release
+          dotnet build src/backend/Omnia.ErasureDeliveryAudit/Omnia.ErasureDeliveryAudit.csproj -c Release
           dotnet build tests/Omnia.RestoreRehearsal/Omnia.RestoreRehearsal.csproj -c Release
           dotnet build tests/Omnia.WitnessPitrRehearsal/Omnia.WitnessPitrRehearsal.csproj -c Release
       - name: Recovery audit CLI denies missing external journal and checkpoint
@@ -281,6 +282,36 @@ jobs:
             echo "Witness publisher did not confirm delivery." >&2
             exit 1
           }
+      - name: Live source outbox must have exact witnessed receipts after publisher
+        shell: bash
+        run: |
+          set -euo pipefail
+          project=src/backend/Omnia.ErasureDeliveryAudit/Omnia.ErasureDeliveryAudit.csproj
+          log="$(mktemp "$RUNNER_TEMP/omnia-live-audit.XXXXXX")"
+          trap 'rm -f "$log"' EXIT
+          if env -u OMNIA_ERASURE_LIVE_AUDIT_CI_ONLY \
+             dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1; then
+            echo "Live delivery audit accepted unapproved mode." >&2
+            exit 1
+          fi
+          grep -Fq 'ERASURE_LIVE_DELIVERY_DENIED' "$log"
+          if OMNIA_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
+             OMNIA_TEST_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
+             dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1; then
+            echo "Live delivery audit accepted witness writer identity." >&2
+            exit 1
+          fi
+          grep -Fq 'ERASURE_LIVE_DELIVERY_DENIED' "$log"
+          if OMNIA_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
+             OMNIA_TEST_DISPATCH_DB="$OMNIA_TEST_APP_DB" \
+             dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1; then
+            echo "Live delivery audit accepted application SQL identity." >&2
+            exit 1
+          fi
+          grep -Fq 'ERASURE_LIVE_DELIVERY_DENIED' "$log"
+          OMNIA_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
+             dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1
+          grep -Fq 'ERASURE_LIVE_DELIVERY_CONFIRMED' "$log"
       - name: HMAC witness anchor requires private external checkpoint and consistent reader
         shell: bash
         run: |

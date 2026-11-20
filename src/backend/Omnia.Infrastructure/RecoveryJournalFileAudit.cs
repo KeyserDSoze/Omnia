@@ -34,7 +34,7 @@ public static class RecoveryJournalFileAudit
         }
     }
 
-    private static byte[] ReadPrivate(string path, int maximum)
+    internal static byte[] ReadPrivate(string path, int maximum)
     {
         try
         {

@@ -235,3 +235,20 @@ non può attestare la completezza globale. Il risultato non promuove
 l'API, non esegue `EraseAsync` e non soddisfa il gate #141.
 
 Vedi [ADR 0021](../adr/0021-recovery-journal-checkpoint-verifier.md).
+
+
+### Collegamento con il PITR sintetico (ADR 0021)
+
+Lo script `tests/restore/physical-pitr-rehearsal.sh` genera ora
+**nel runner usa-e-getta**, dopo la cancellazione della fixture,
+un singolo evento erase-actor HMAC, un checkpoint con chiave separata
+e due file binari delle chiavi. La CLI offline li verifica prima
+del replay HMAC della ricevuta descritto in ADR 0018. Il test svuota
+poi il journal e richiede il rifiuto del troncamento senza cambiare
+il checkpoint, prima di ripristinare il file e proseguire.
+
+Questo dimostra il wiring in CI del verificatore e del checkpoint
+su dati sintetici; la generazione avviene **nello stesso runner**
+e non fornisce durabilità, autenticazione di un operatore esterno
+o protezione contro rollback simultaneo di journal e checkpoint.
+Il tool non autorizza `ready`, non ferma servizi e non cancella dati.

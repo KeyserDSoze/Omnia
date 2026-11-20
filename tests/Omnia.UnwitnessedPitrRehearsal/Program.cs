@@ -8,7 +8,8 @@ using Omnia.Infrastructure;
 try
 {
     if (args.Length != 1 ||
-        args[0] is not ("--live-gap" or "--recovered-gap") ||
+        args[0] is not ("--live-gap" or "--recovered-gap" or
+                        "--record-intent" or "--verify-intent") ||
         Environment.GetEnvironmentVariable("CI") != "true" ||
         Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
         Environment.GetEnvironmentVariable("OMNIA_UNWITNESSED_PITR_CI_ONLY") != "1")
@@ -26,10 +27,9 @@ try
         return value;
     }
 
-    static Guid ReadPrivateEventId()
+    static Guid ReadPrivateEventId(string variable)
     {
-        var filePath = Environment.GetEnvironmentVariable(
-            "OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH")
+        var filePath = Environment.GetEnvironmentVariable(variable)
             ?? throw new InvalidDataException("Missing synthetic event evidence.");
         var runnerTemp = Environment.GetEnvironmentVariable("RUNNER_TEMP")
             ?? throw new InvalidDataException("Missing CI runner path.");
@@ -61,6 +61,46 @@ try
         return id;
     }
 
+    // PRE-COMMIT intent is a request marker recorded in a distinct
+    // PostgreSQL PGDATA. It cannot prove the later source DELETE committed.
+    const string syntheticTenant = "omnia-ci-unwitnessed-pitr-synthetic";
+    const string syntheticOwner = "synthetic-unwitnessed-pitr-owner";
+    var intentId = ReadPrivateEventId("OMNIA_PREERASE_INTENT_ID_PATH");
+    if (args[0] == "--record-intent")
+    {
+        await using var writer = NpgsqlDataSource.Create(Restricted(
+            "OMNIA_TEST_INTENT_WRITER_DB", 15436,
+            "omnia_witness", "omnia_witness_intent_writer"));
+        var recorded = await new PostgresPreEraseIntentWriter(writer)
+            .RecordAsync(intentId, syntheticTenant, syntheticOwner,
+                CancellationToken.None);
+        if (recorded < 1)
+            throw new InvalidDataException("Pre-erase intent was not acknowledged.");
+        Console.WriteLine("PREERASE_INTENT_PERSISTED");
+        return 0;
+    }
+
+    // All read-only phases MUST find the exact independent intent before
+    // consulting any source outbox (live or rolled back).
+    await using (var reader = NpgsqlDataSource.Create(Restricted(
+        "OMNIA_TEST_INTENT_READER_DB", 15436,
+        "omnia_witness", "omnia_witness_intent_reader")))
+    {
+        var receipt = await new PostgresPreEraseIntentReader(reader)
+            .FindAsync(intentId, CancellationToken.None)
+            ?? throw new InvalidDataException("Pre-erase intent missing.");
+        if (receipt.Sequence <= 0 || receipt.RequestId != intentId ||
+            receipt.TenantId != syntheticTenant ||
+            receipt.OwnerSubject != syntheticOwner ||
+            receipt.IntentType != "erase-actor-intent")
+            throw new InvalidDataException("Pre-erase intent scope mismatch.");
+    }
+    if (args[0] == "--verify-intent")
+    {
+        Console.WriteLine("PREERASE_INTENT_PRESENT_NOT_COMMITTED");
+        return 0;
+    }
+
     var recovered = args[0] == "--recovered-gap";
     var dispatcher = Restricted(
         recovered ? "OMNIA_UNWITNESSED_RECOVERED_DISPATCH_DB"
@@ -68,7 +108,7 @@ try
         recovered ? 15435 : 15432, "omnia_test", "omnia_dispatcher");
     var witness = Restricted("OMNIA_TEST_WITNESS_READER_DB",
         15436, "omnia_witness", "omnia_witness_reader");
-    var id = ReadPrivateEventId();
+    var id = ReadPrivateEventId("OMNIA_UNWITNESSED_PITR_EVENT_ID_PATH");
     await using var sourceDb = NpgsqlDataSource.Create(dispatcher);
     await using var witnessDb = NpgsqlDataSource.Create(witness);
     await PostgresErasureDispatchReader.VerifyRoleAsync(sourceDb);
@@ -90,8 +130,8 @@ try
         if (page.Any(e => e.Id == id))
         {
             var item = page.Single(e => e.Id == id);
-            if (item.TenantId != "omnia-ci-unwitnessed-pitr-synthetic" ||
-                item.OwnerSubject != "synthetic-unwitnessed-pitr-owner" ||
+            if (item.TenantId != syntheticTenant ||
+                item.OwnerSubject != syntheticOwner ||
                 item.EventType != "erase-actor")
                 throw new InvalidDataException("Source synthetic scope mismatch.");
             foundInSource = true;
@@ -138,6 +178,7 @@ try
         // The independently remembered event identifier proves this
         // particular run's false-green risk, but an unsigned local
         // CI file is NOT a trustworthy external source commit ledger.
+        Console.WriteLine("PREERASE_INTENT_SURVIVED_PRIMARY_PITR");
         Console.WriteLine("UNWITNESSED_PITR_FALSE_GREEN_SOURCE_ONLY_DENIED");
         return 0;
     }

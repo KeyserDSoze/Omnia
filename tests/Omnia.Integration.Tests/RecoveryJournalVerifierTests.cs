@@ -112,6 +112,83 @@ public sealed class RecoveryJournalVerifierTests
             Encoding.UTF8.GetString(journal) + "\n"), anchor);
     }
 
+    [Fact]
+    public void FileAuditRequiresAbsolutePrivateRegularFilesAndKeepsSecretsOutOfResult()
+    {
+        var fixture = new JournalFixture();
+        fixture.Add("synthetic-tenant-a", "synthetic-owner-a");
+        using var files = new PrivateJournalFiles(fixture);
+        var verified = RecoveryJournalFileAudit.VerifyFiles(
+            files.Journal, files.Anchor, files.JournalKey, files.AnchorKey);
+        Assert.Equal(1, verified.Count);
+
+        Assert.Throws<InvalidDataException>(() =>
+            RecoveryJournalFileAudit.VerifyFiles(
+                "relative.jsonl", files.Anchor, files.JournalKey, files.AnchorKey));
+        Assert.Throws<InvalidDataException>(() =>
+            RecoveryJournalFileAudit.VerifyFiles(
+                files.Journal + ".missing", files.Anchor,
+                files.JournalKey, files.AnchorKey));
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(files.Anchor,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead);
+            Assert.Throws<InvalidDataException>(() =>
+                RecoveryJournalFileAudit.VerifyFiles(
+                    files.Journal, files.Anchor, files.JournalKey, files.AnchorKey));
+            File.SetUnixFileMode(files.Anchor,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            var symlink = files.Journal + ".link";
+            File.CreateSymbolicLink(symlink, files.Journal);
+            try
+            {
+                Assert.Throws<InvalidDataException>(() =>
+                    RecoveryJournalFileAudit.VerifyFiles(
+                        symlink, files.Anchor, files.JournalKey, files.AnchorKey));
+            }
+            finally { File.Delete(symlink); }
+        }
+    }
+
+    private sealed class PrivateJournalFiles : IDisposable
+    {
+        private readonly string _directory = Path.Combine(Path.GetTempPath(),
+            "omnia-audit-fixture-" + Guid.NewGuid().ToString("N"));
+        public string Journal { get; }
+        public string Anchor { get; }
+        public string JournalKey { get; }
+        public string AnchorKey { get; }
+
+        public PrivateJournalFiles(JournalFixture f)
+        {
+            Directory.CreateDirectory(_directory);
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(_directory,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                    UnixFileMode.UserExecute);
+            Journal = Path.Combine(_directory, "journal.jsonl");
+            Anchor = Path.Combine(_directory, "checkpoint.json");
+            JournalKey = Path.Combine(_directory, "journal.key");
+            AnchorKey = Path.Combine(_directory, "anchor.key");
+            var (journal, anchor) = f.GetArtifacts();
+            Write(Journal, journal);
+            Write(Anchor, anchor);
+            Write(JournalKey, f.JournalKey);
+            Write(AnchorKey, f.AnchorKey);
+        }
+
+        private static void Write(string path, byte[] bytes)
+        {
+            File.WriteAllBytes(path, bytes);
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(path,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        public void Dispose() => Directory.Delete(_directory, recursive: true);
+    }
+
     private static void Reject(JournalFixture f, byte[] journal, byte[] anchor) =>
         Assert.Throws<InvalidDataException>(() =>
             RecoveryJournalVerifier.Verify(journal, anchor, f.JournalKey, f.AnchorKey));

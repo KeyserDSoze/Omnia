@@ -316,3 +316,23 @@ Only loopback test-only connections and no HTTP release endpoints.
 This does NOT prove capture of erasures that were not delivered
 before source loss, nor production DR, crypto trust or GDPR compliance.
 
+## Isolated CI-only retrying witness publisher (#141 / ADR 0027)
+
+`Omnia.ErasurePublisher` is NOT an HTTP API service or a production
+deletion guarantee. For this slice it MUST require CI=true plus explicit
+`OMNIA_ERASURE_PUBLISHER_CI_ONLY=1`, and accept ONLY the fixed loopback
+synthetic databases/ports/roles (primary omnia_test:15432/omnia_dispatcher,
+witness omnia_witness:15436/omnia_witness_writer). Do not expose
+credentials, actor IDs or SQL exception details in logs. Verify both
+EXECUTE-only identities before any dispatch. `--once` is for CI smoke;
+normal operation continuously rescans the full bounded source outbox,
+retrying errors with backoff while no local cursor or success ACK is
+advanced. The witness's transactional UUID/sequence receipt is the only
+persisted acknowledgement, surviving retry/worker restart IF its
+separate PostgreSQL cluster survives. UUID conflict must fail closed.
+Do not persist a timestamp/id cursor as commit-order or delete source
+outbox rows on acknowledgement. Bounded scans >1000 must fail and signal
+an operator; the loop may retry but does not prove complete delivery.
+This does NOT cover the primary-outbox commit-to-witness loss window,
+offsite/WORM/vault/anti-rollback, traffic release, external stores,
+consent/legal verification or GDPR readiness. #141 remains OPEN.

@@ -375,3 +375,29 @@ o autorizzazione a togliere la quarantena. Solo runner sintetico,
 nessun dato reale o endpoint di produzione. ADR 0026:
 ../adr/0026-witness-reconciliation-after-physical-pitr.md
 
+## Publisher isolato con retry verso il witness (ADR 0027)
+
+La CI compila ora `src/backend/Omnia.ErasurePublisher` e ne invoca
+`--once` per verificare sia il rifiuto senza abilitazione esplicita,
+sia una scansione effettiva dell'outbox e il commit delle ricevute sul
+witness. L'eseguibile non viene avviato nell'API e non configura un
+servizio produttivo: accetta solo `CI=true`,
+`OMNIA_ERASURE_PUBLISHER_CI_ONLY=1`, 127.0.0.1 e i database/ruoli
+sintetici fissi delle due istanze di test.
+
+Senza `--once`, esegue cicli autonomi ogni cinque secondi; errori
+di rete o SQL producono un retry con backoff massimo di un minuto.
+Un test PostgreSQL simula il witness su porta non raggiungibile,
+verifica che la ricevuta manchi, quindi usa il writer corretto,
+controlla la conferma persistita sul secondo cluster e ripete
+l'invio con una nuova istanza del publisher senza duplicare l'evento.
+L'outbox rimane intatta e viene riletta dall'inizio a ogni ciclo.
+Il cursor temporale serve SOLO a paginare una scansione; NON è ordine
+di commit o watermark affidabile.
+
+Se il sorgente subisce PITR **prima** del primo append riuscito,
+l'evento è perduto. Anche dopo una ricevuta non vi è alcuna prova di
+completezza globale, né storage offsite, promozione `ready`,
+checkpoint anti-rollback indipendente o recovery produzione.
+Non considerare il messaggio di ciclo confermato una garanzia di
+consegna di ogni cancellazione. #141 rimane aperta.

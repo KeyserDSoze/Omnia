@@ -296,3 +296,26 @@ This is NOT evidence that every deletion would reach the witness
 before disaster, or that its database is immutable/offsite, nor
 a production recovery release token or GDPR conformity assessment.
 
+## CI-only autonomous erasure witness publisher (#141 / ADR 0027)
+
+An independent offline .NET process now repeatedly scans the committed
+source outbox and appends each bounded event through the restricted
+witness writer. It explicitly rejects non-CI usage and anything other
+than the fixed synthetic loopback test databases and roles. Both SQL
+role guards are checked before dispatch. Failures are logged only as
+generic pending retries; no personal actor data, SQL exceptions or
+connection strings. Backoff never exceeds one minute. The stable event
+UUID and locked witness append return a persistent witness sequence
+after SQL commit; a repeated delivery or worker restart does not create
+a second receipt. This ACK is durable only within the second CI
+PostgreSQL instance; an uncertain network response causes safe replay.
+
+There is no local persisted cursor/ACK, source-pruning, commit-order
+watermark or independent source-event completeness proof. A crash after
+primary erasure commit but before witness append can permanently lose
+the deletion during PITR. Exceeding the 1000-event scan bound is
+reported as an unsuccessful cycle and requires intervention; no
+unbounded scans or data exposure. Privileged witness owners can still
+roll back receipts, and both clusters share a single temporary runner.
+No offsite WORM, vault signer, production worker, alert SLO, fully
+coordinated quarantine/release, external erasure or GDPR readiness.

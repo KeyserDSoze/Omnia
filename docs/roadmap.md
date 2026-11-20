@@ -298,3 +298,9 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   anti-rollback checkpoint, vault custody, production publisher,
   global quarantine/traffic coordination, GDPR cross-store rights.
 
+## #141 — CI-only autonomous witness publisher and retry (ADR 0027, 2026-11-20)
+
+- [x] Offline `Omnia.ErasurePublisher` process, separate from public API, rejects anything but fixed synthetic loopback CI identities; validates dispatch and witness EXECUTE-only SQL roles.
+- [x] Continuous bounded rescans with 5-second normal interval, capped exponential backoff after failure, and no logs of actors/connection details. A one-shot CLI smoke is in CI.
+- [x] Test RED specified witness outage, automatic retry, external receipt persistence across a fresh publisher invocation; witness dedup keeps the same UUID/sequence. Actual PostgreSQL CI GREEN evidence is required before marking test gates complete.
+- [ ] Production-grade publisher deployment, independently durable/attested ACK and source lag alerting, monotonic completeness proof across primary failures, replay release authority, offsite WORM/vault, replicas/workers ingress fencing, and GDPR review remain OPEN in #141 / #31 / #109 / #125.

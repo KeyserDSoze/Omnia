@@ -134,3 +134,15 @@ nor erase backups, provider stores, local devices, caches or
 analytics, nor establish GDPR completeness, legal basis, retention
 of witness metadata, or a signed API release decision.
 
+## Outbox-to-witness automatic retry — synthetic CI only (ADR 0027)
+
+A separate test-only CLI now retries delivery of already-committed
+erasure-outbox events to a second PostgreSQL instance. The witness
+stores receipt UUID/sequence with tenant and actor metadata: those
+identifiers remain personal data and their retention, lawful basis,
+access, export and deletion/exception policy are still unresolved.
+Retry and idempotency do not prove that every deletion was transmitted
+before a disaster. The primary and witness are not an independent
+WORM/offsite ledger. No GDPR art. 17 or backup-erasure completion claim,
+no automatic release of the recovery quarantine, and no real-person
+data handling is authorized by this implementation. #31/#141 OPEN.

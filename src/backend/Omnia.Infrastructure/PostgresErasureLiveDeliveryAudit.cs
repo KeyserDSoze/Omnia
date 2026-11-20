@@ -33,6 +33,21 @@ public sealed class PostgresErasureLiveDeliveryAudit(
     }
 
     /// <summary>
+    /// Internal read-only lookup for a correlated request. A missing source
+    /// row is NOT evidence that an earlier primary COMMIT never occurred.
+    /// Uses the same bounded, REPEATABLE READ snapshot as VerifyAllAsync.
+    /// </summary>
+    internal async Task<ErasureDispatchEvent?> FindVisibleSourceEventAsync(
+        Guid eventId, CancellationToken ct)
+    {
+        if (eventId == Guid.Empty)
+            throw new ArgumentException("An event UUID is required.", nameof(eventId));
+        await PostgresErasureDispatchReader.VerifyRoleAsync(sourceDispatch, ct);
+        var source = await ReadSourceSnapshotAsync(ct);
+        return source.SingleOrDefault(x => x.Id == eventId);
+    }
+
+    /// <summary>
     /// Live bounded health gate. Verifies EVERY event present in a
     /// consistent primary snapshot; the witness can accept events meanwhile.
     /// It cannot detect erasures absent from the PRIMARY after disaster

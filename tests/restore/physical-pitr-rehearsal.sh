@@ -158,6 +158,45 @@ OMNIA_REHEARSAL_WITNESS_WRITER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
 OMNIA_REHEARSAL_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_READER_DB" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- publish-source
 
+# Explicit independent PRE-ERASE INTENT handshake. The request UUID is
+# NOT the later committed source event UUID. This operation must be
+# witnessed on the SECOND PGDATA BEFORE starting EraseAsync.
+# A rejected/absent remote intent MUST stop this synthetic workflow
+# without deleting the actor or mutating recovery-ready state.
+export OMNIA_PREERASE_INTENT_ID_PATH="$private_dir/preerase-intent.id"
+cat /proc/sys/kernel/random/uuid > "$OMNIA_PREERASE_INTENT_ID_PATH"
+chmod 600 "$OMNIA_PREERASE_INTENT_ID_PATH"
+export OMNIA_UNWITNESSED_PITR_CI_ONLY=1
+intent_preflight() {
+  dotnet run --no-build -c Release \
+    --project tests/Omnia.UnwitnessedPitrRehearsal/Omnia.UnwitnessedPitrRehearsal.csproj \
+    -- "$1"
+}
+if env -u OMNIA_UNWITNESSED_PITR_CI_ONLY \
+   dotnet run --no-build -c Release \
+    --project tests/Omnia.UnwitnessedPitrRehearsal/Omnia.UnwitnessedPitrRehearsal.csproj \
+    -- --record-intent >/dev/null 2>&1; then
+  echo "Pre-erase intent accepted execution without CI opt-in." >&2; exit 1
+fi
+if OMNIA_TEST_INTENT_WRITER_DB="$OMNIA_TEST_INTENT_READER_DB" \
+   intent_preflight --record-intent >/dev/null 2>&1; then
+  echo "Pre-erase intent accepted an unauthorized writer role." >&2; exit 1
+fi
+if OMNIA_TEST_INTENT_READER_DB="$OMNIA_TEST_WITNESS_READER_DB" \
+   intent_preflight --verify-intent >/dev/null 2>&1; then
+  echo "Pre-erase intent accepted a completed-erasure reader as intent reader." >&2
+  exit 1
+fi
+# Failed intent preflight cannot have deleted the actor on source.
+pending_before="$(docker exec "$source_container" psql -U omnia -d omnia_test -Atqc \
+  "SELECT count(*) FROM public.memory_entries WHERE tenant_id = 'omnia-ci-unwitnessed-pitr-synthetic' AND owner_sub = 'synthetic-unwitnessed-pitr-owner'")"
+[[ "$pending_before" == 1 ]] || {
+  echo "Unauthorized preflight changed source actor before deletion." >&2; exit 1
+}
+intent_preflight --record-intent
+intent_preflight --record-intent
+intent_preflight --verify-intent
+
 # The second synthetic EraseAsync commits AFTER the source restore point,
 # but strictly AFTER the last witness publisher cycle. It MUST remain
 # unacknowledged in the independent witness before physical source PITR.
@@ -450,6 +489,7 @@ OMNIA_REHEARSAL_DB="$target_cs" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal \
     -- verify-unwitnessed-resurrected
+intent_preflight --verify-intent
 echo "UNWITNESSED_PITR_REMAINS_UNRESOLVED_AFTER_WITNESSED_REPLAY"
 
 echo "Physical PITR plus authenticated out-of-backup erasure replay verified."

@@ -75,3 +75,19 @@ common-mode vulnerability without mistaking a successful
 replay for a safe recovery. All source actor/tenant values
 are hardcoded synthetic test fixtures; neither the primary
 personal data DB nor the REST endpoint is modified.
+
+### Pages artifact-service consistency follow-up (#142)
+
+The initial single-job REST polling was insufficient. Run
+[44828446417](https://github.com/KeyserDSoze/Omnia/actions/runs/44828446417)
+showed REST `Pages artifact visible` while
+`actions/deploy-pages@v4` immediately observed 0 artifacts through
+the internal `@actions/artifact` artifact-service API. The workflow
+therefore separates `build` and `deploy` jobs, ensures upload
+finishes before deploy job starts, passes the build job's exact artifact
+name through a job output (important for partial reruns), and applies
+a bounded metadata propagation grace period. Permissions are split:
+build has read access; deployment alone has `pages:write` and
+`id-token:write`. This is not a guarantee of GitHub infrastructure
+availability; verify the REAL latest Actions run before closing #142.
+Source: https://github.com/actions/deploy-pages/blob/v4/src/internal/api-client.js

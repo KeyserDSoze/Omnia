@@ -149,6 +149,7 @@ OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
 OMNIA_REHEARSAL_DISPATCH_DB="$OMNIA_TEST_DISPATCH_DB" \
 OMNIA_REHEARSAL_WITNESS_WRITER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
+OMNIA_REHEARSAL_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_READER_DB" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- publish-source
 
 # Ensure the segment containing the named restore point and the later

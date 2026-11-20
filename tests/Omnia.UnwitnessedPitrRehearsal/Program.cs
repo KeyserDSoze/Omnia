@@ -11,7 +11,8 @@ try
     if (args.Length != 1 ||
         args[0] is not ("--live-gap" or "--recovered-gap" or
                         "--record-intent" or "--verify-intent" or
-                        "--anchor-intent" or "--verify-intent-anchor") ||
+                        "--anchor-intent" or "--verify-intent-anchor" or
+                        "--verify-claim-scope" or "--verify-claim-foreign-scope") ||
         Environment.GetEnvironmentVariable("CI") != "true" ||
         Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
         Environment.GetEnvironmentVariable("OMNIA_UNWITNESSED_PITR_CI_ONLY") != "1")
@@ -129,6 +130,44 @@ try
     {
         Console.WriteLine("PREERASE_INTENT_PRESENT_NOT_COMMITTED");
         return 0;
+    }
+    if (args[0] is "--verify-claim-scope" or "--verify-claim-foreign-scope")
+    {
+        // Read-only HMAC-bound attempt audit on THIRD PGDATA. Presence by
+        // UUID alone is insufficient; the claimed tenant/owner must match
+        // and no source DELETE, mutation, retry or ready marker is emitted.
+        var readerConnection = Restricted(
+            "OMNIA_PREERASE_PITR_CLAIM_READER_DB", 15438,
+            "omnia_pitr_execution_claims", "omnia_claim_reader");
+        var signingKey = ReadPrivateKey("OMNIA_PREERASE_PITR_HMAC_KEY_PATH");
+        try
+        {
+            await using var claimReader = NpgsqlDataSource.Create(readerConnection);
+            var verifier = new PostgresPreEraseExecutionClaimReader(claimReader);
+            if (args[0] == "--verify-claim-foreign-scope")
+            {
+                try
+                {
+                    await verifier.VerifyClaimAsync(intentId, syntheticTenant,
+                        syntheticOwner + "-foreign", signingKey, CancellationToken.None);
+                }
+                catch (InvalidDataException)
+                {
+                    Console.WriteLine("PREERASE_ONE_SHOT_FOREIGN_SCOPE_DENIED");
+                    return 0;
+                }
+                throw new InvalidDataException(
+                    "Foreign actor unexpectedly matched the third-cluster claim.");
+            }
+            await verifier.VerifyClaimAsync(intentId, syntheticTenant,
+                syntheticOwner, signingKey, CancellationToken.None);
+            Console.WriteLine("PREERASE_ONE_SHOT_CLAIM_SCOPE_VERIFIED");
+            return 0;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(signingKey);
+        }
     }
     if (args[0] is "--anchor-intent" or "--verify-intent-anchor")
     {

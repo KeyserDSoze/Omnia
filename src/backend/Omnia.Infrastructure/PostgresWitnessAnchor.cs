@@ -128,7 +128,25 @@ public sealed class PostgresWitnessAnchorIssuer(
     NpgsqlDataSource anchorWriter,
     NpgsqlDataSource anchorReader)
 {
-    public async Task<int> IssueAsync(byte[] signingKey, CancellationToken ct)
+    // A disappeared anchor is NOT proof of an empty history: ordinary
+    // issuance must fail closed, never silently re-sign after disaster.
+    public Task<int> IssueAsync(byte[] signingKey, CancellationToken ct) =>
+        IssueCoreAsync(signingKey, allowBootstrap: false, ct);
+
+    /// <summary>
+    /// Explicit first-time synthetic bootstrap only. No recovery caller may
+    /// infer authorization from an absent or rolled-back anchor.
+    /// </summary>
+    public Task<int> BootstrapAsync(byte[] signingKey,
+        bool operatorApproved, CancellationToken ct)
+    {
+        if (!operatorApproved)
+            throw new InvalidDataException("ANCHOR_BOOTSTRAP_NOT_APPROVED.");
+        return IssueCoreAsync(signingKey, allowBootstrap: true, ct);
+    }
+
+    private async Task<int> IssueCoreAsync(byte[] signingKey,
+        bool allowBootstrap, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(signingKey);
         if (signingKey.Length != 32)
@@ -139,6 +157,8 @@ public sealed class PostgresWitnessAnchorIssuer(
 
         var current = await new PostgresWitnessAnchorReader(anchorReader)
             .ReadAsync(ct);
+        if (allowBootstrap != (current is null))
+            throw new InvalidDataException("ANCHOR_BOOTSTRAP_OR_HEAD_MISMATCH.");
         var snapshot = await PostgresErasureWitnessSnapshot.ReadAsync(
             witnessReader, WitnessCheckpoint.MaxReceipts, ct);
         if (current is not null)

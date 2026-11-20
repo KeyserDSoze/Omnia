@@ -22,6 +22,7 @@ jobs:
           dotnet build src/backend/Omnia.BackfillAudit/Omnia.BackfillAudit.csproj -c Release
           dotnet build src/backend/Omnia.RecoveryAudit/Omnia.RecoveryAudit.csproj -c Release
           dotnet build src/backend/Omnia.ErasurePublisher/Omnia.ErasurePublisher.csproj -c Release
+          dotnet build src/backend/Omnia.WitnessAudit/Omnia.WitnessAudit.csproj -c Release
           dotnet build tests/Omnia.RestoreRehearsal/Omnia.RestoreRehearsal.csproj -c Release
       - name: Recovery audit CLI denies missing external journal and checkpoint
         shell: bash
@@ -225,6 +226,56 @@ jobs:
             echo "Witness publisher did not confirm delivery." >&2
             exit 1
           }
+      - name: HMAC witness anchor requires private external checkpoint and consistent reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$(mktemp "$RUNNER_TEMP/omnia-witness-audit.XXXXXX")"
+          private="$(mktemp -d "$RUNNER_TEMP/omnia-witness-anchor.XXXXXX")"
+          trap 'rm -f "$log"; rm -rf "$private"' EXIT
+          chmod 700 "$private"
+          openssl rand 32 > "$private/key"
+          chmod 600 "$private/key"
+          export OMNIA_WITNESS_CHECKPOINT_KEY_PATH="$private/key"
+          export OMNIA_WITNESS_CHECKPOINT_PATH="$private/anchor"
+          project=src/backend/Omnia.WitnessAudit/Omnia.WitnessAudit.csproj
+          if env -u OMNIA_WITNESS_AUDIT_CI_ONLY \
+             dotnet run --no-build -c Release --project "$project" -- --issue > "$log" 2>&1; then
+            echo "Witness checkpoint issuer allowed unapproved execution." >&2
+            exit 1
+          fi
+          grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
+          export OMNIA_WITNESS_AUDIT_CI_ONLY=1
+          if dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1; then
+            echo "Witness checkpoint audit accepted an absent anchor." >&2
+            exit 1
+          fi
+          grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
+          dotnet run --no-build -c Release --project "$project" -- --issue > "$log" 2>&1
+          grep -Fq 'WITNESS_CHECKPOINT_ISSUED' "$log"
+          dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1
+          grep -Fq 'WITNESS_CHECKPOINT_VERIFIED' "$log"
+          if dotnet run --no-build -c Release --project "$project" -- --issue > "$log" 2>&1; then
+            echo "Witness checkpoint issuer overwrote an existing anchor." >&2
+            exit 1
+          fi
+          grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
+          cp -p "$private/anchor" "$private/saved"
+          printf 'truncated' > "$private/anchor"
+          if dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1; then
+            echo "Witness audit accepted a truncated anchor." >&2
+            exit 1
+          fi
+          grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
+          mv "$private/saved" "$private/anchor"
+          if OMNIA_TEST_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
+             dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1; then
+            echo "Witness audit accepted a writer as reader." >&2
+            exit 1
+          fi
+          grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
+          dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1
+          grep -Fq 'WITNESS_CHECKPOINT_VERIFIED' "$log"
       - name: Restore rehearsal — real PostgreSQL dump/restore, retained and missing KEKs
         shell: bash
         run: bash tests/restore/restore-rehearsal.sh

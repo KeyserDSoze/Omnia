@@ -96,58 +96,22 @@ chmod 600 "$receipt_mac"
 # both artifacts still live on the same disposable CI runner.
 audit_dir="$private_dir/offline-journal"
 mkdir -m 700 "$audit_dir"
-python3 - "$audit_dir" <<'PY'
-import base64
-import hashlib
-import hmac
-import json
-import os
-import pathlib
-import secrets
-import sys
-import uuid
-
-folder = pathlib.Path(sys.argv[1])
-journal_key = secrets.token_bytes(32)
-checkpoint_key = secrets.token_bytes(32)
-genesis = base64.b64encode(hashlib.sha256(
-    b"omnia-recovery-journal-v1/genesis").digest()).decode("ascii")
-canonical = lambda obj: json.dumps(
-    obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-event = {
-    "schemaVersion": 1,
-    "sequence": 1,
-    "eventId": uuid.uuid4().hex,
-    "operation": "erase-actor",
-    "tenantId": "omnia-restore-drill-synthetic",
-    "ownerSubject": "synthetic-owner-only",
-    "previousDigest": genesis,
-}
-payload = canonical(event)
-signature = hmac.new(journal_key, payload, hashlib.sha256).digest()
-tip = base64.b64encode(hashlib.sha256(payload + signature).digest()).decode("ascii")
-entry = dict(event, mac=base64.b64encode(signature).decode("ascii"))
-checkpoint = {"schemaVersion": 1, "count": 1, "tipDigest": tip}
-checkpoint_signature = hmac.new(
-    checkpoint_key, canonical(checkpoint), hashlib.sha256).digest()
-checkpoint["mac"] = base64.b64encode(checkpoint_signature).decode("ascii")
-files = {
-    "journal.jsonl": canonical(entry) + b"\n",
-    "checkpoint.json": canonical(checkpoint),
-    "journal.key": journal_key,
-    "checkpoint.key": checkpoint_key,
-}
-for filename, raw in files.items():
-    path = folder / filename
-    with path.open("wb") as output:
-        os.fchmod(output.fileno(), 0o600)
-        output.write(raw)
-PY
-
+# Private keys are generated only on the ephemeral runner; no
+# journal key or checkpoint key lives inside the restored PGDATA.
+openssl rand -out "$audit_dir/journal.key" 32
+openssl rand -out "$audit_dir/checkpoint.key" 32
+chmod 600 "$audit_dir/journal.key" "$audit_dir/checkpoint.key"
 export OMNIA_RECOVERY_JOURNAL_PATH="$audit_dir/journal.jsonl"
 export OMNIA_RECOVERY_CHECKPOINT_PATH="$audit_dir/checkpoint.json"
 export OMNIA_RECOVERY_JOURNAL_KEY_PATH="$audit_dir/journal.key"
 export OMNIA_RECOVERY_CHECKPOINT_KEY_PATH="$audit_dir/checkpoint.key"
+# The actual .NET local append writer creates journal.jsonl and
+# checkpoint.json, verified against independent HMAC keys. CI-only phase
+# requires the known synthetic source DB and actor; no HTTP publisher.
+OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  dotnet run --no-build -c Release \
+    --project tests/Omnia.RestoreRehearsal -- append-journal
 audit_journal() {
   dotnet run --no-build -c Release \
     --project src/backend/Omnia.RecoveryAudit/Omnia.RecoveryAudit.csproj

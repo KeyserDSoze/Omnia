@@ -42,13 +42,28 @@ AS $function$
     );
 $function$;
 
+-- Only the restricted reader can retrieve an individual persisted scope
+-- HMAC. The reader verifies it in constant time with a private signing key;
+-- the writer MUST NOT be able to query it, and neither role can SELECT rows.
+-- A missing UUID yields SQL NULL: NEVER interpret it as "not committed".
+CREATE FUNCTION admission.claim_scope(p_id uuid)
+RETURNS bytea LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+    SELECT scope_hmac FROM admission.execution_claims
+     WHERE request_id = p_id;
+$function$;
+
 -- REVOKE and GRANT belong to the SAME transaction as CREATE FUNCTION
 -- to avoid the default PUBLIC EXECUTE gap of SECURITY DEFINER.
 REVOKE ALL ON FUNCTION admission.claim_once(uuid,bytea) FROM PUBLIC;
 REVOKE ALL ON FUNCTION admission.has_claim(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION admission.claim_scope(uuid) FROM PUBLIC;
 GRANT USAGE ON SCHEMA admission TO omnia_claim_writer, omnia_claim_reader;
 GRANT EXECUTE ON FUNCTION admission.claim_once(uuid,bytea)
     TO omnia_claim_writer;
 GRANT EXECUTE ON FUNCTION admission.has_claim(uuid)
+    TO omnia_claim_reader;
+GRANT EXECUTE ON FUNCTION admission.claim_scope(uuid)
     TO omnia_claim_reader;
 COMMIT;

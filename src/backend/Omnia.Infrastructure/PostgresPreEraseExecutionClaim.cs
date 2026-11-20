@@ -16,29 +16,12 @@ public sealed class PostgresPreEraseExecutionClaimWriter(NpgsqlDataSource thirdC
     public async Task ClaimOnceAsync(Guid requestId, string tenantId,
         string ownerSubject, byte[] signingKey, CancellationToken ct)
     {
-        if (requestId == Guid.Empty ||
-            !ValidScope(tenantId, 128) || !ValidScope(ownerSubject, 255))
-            throw new ArgumentException("Invalid synthetic claim scope.");
-        ArgumentNullException.ThrowIfNull(signingKey);
-        if (signingKey.Length != 32)
-            throw new InvalidDataException("EXECUTION_CLAIM_SIGNING_KEY_INVALID.");
-        await PreEraseExecutionClaimRoleGuard.VerifyAsync(
-            thirdCluster, writer: true, ct);
-
-        // Domain separation avoids treating this MAC as an intent checkpoint
-        // MAC or as a completed erasure receipt. No raw tenant/owner in the
-        // THIRD database; digest still constitutes regulated metadata.
-        var payload = JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            schemaVersion = 1,
-            purpose = "omnia-preerase-single-use-claim-v1",
-            requestId = requestId.ToString("N"),
-            tenantId,
-            ownerSubject
-        });
-        var scopeHmac = HMACSHA256.HashData(signingKey, payload);
+        var scopeHmac = PreEraseExecutionClaimScope.Compute(
+            requestId, tenantId, ownerSubject, signingKey);
         try
         {
+            await PreEraseExecutionClaimRoleGuard.VerifyAsync(
+                thirdCluster, writer: true, ct);
             await using var command = thirdCluster.CreateCommand("""
                 SELECT admission.claim_once(@id, @scope)
                 """);
@@ -53,12 +36,46 @@ public sealed class PostgresPreEraseExecutionClaimWriter(NpgsqlDataSource thirdC
         }
         // Do NOT retry on timeout or ambiguous commit; the claim may have
         // persisted remotely even if the client did not receive the ACK.
+
     }
 
     public static Task VerifyWriterAsync(NpgsqlDataSource connection,
         CancellationToken ct = default) =>
         PreEraseExecutionClaimRoleGuard.VerifyAsync(
             connection, writer: true, ct);
+
+}
+
+internal static class PreEraseExecutionClaimScope
+{
+    internal static byte[] Compute(Guid requestId, string tenantId,
+        string ownerSubject, byte[] signingKey)
+    {
+        if (requestId == Guid.Empty ||
+            !ValidScope(tenantId, 128) || !ValidScope(ownerSubject, 255))
+            throw new ArgumentException("Invalid synthetic claim scope.");
+        ArgumentNullException.ThrowIfNull(signingKey);
+        if (signingKey.Length != 32)
+            throw new InvalidDataException("EXECUTION_CLAIM_SIGNING_KEY_INVALID.");
+        // One canonical payload for both the insert and independent reader:
+        // no owner or tenant plaintext is persisted on THIRD PGDATA.
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            schemaVersion = 1,
+            purpose = "omnia-preerase-single-use-claim-v1",
+            requestId = requestId.ToString("N"),
+            tenantId,
+            ownerSubject
+        });
+        try
+        {
+            return HMACSHA256.HashData(signingKey, payload);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(payload);
+        }
+    }
 
     private static bool ValidScope(string? value, int max) =>
         !string.IsNullOrWhiteSpace(value) && value.Length <= max &&
@@ -81,6 +98,45 @@ public sealed class PostgresPreEraseExecutionClaimReader(NpgsqlDataSource thirdC
             """);
         command.Parameters.AddWithValue("id", requestId);
         return await command.ExecuteScalarAsync(ct) is true;
+    }
+
+    /// <summary>
+    /// Authenticates a consumed attempt's exact request, tenant and owner.
+    /// Unlike HasClaimAsync(UUID), this rejects a foreign/tampered scope
+    /// while using only the restricted EXECUTE-only third-cluster reader.
+    /// This proves attempted admission, NEVER source DELETE commit.
+    /// </summary>
+    public async Task VerifyClaimAsync(Guid requestId, string tenantId,
+        string ownerSubject, byte[] signingKey, CancellationToken ct)
+    {
+        var expected = PreEraseExecutionClaimScope.Compute(
+            requestId, tenantId, ownerSubject, signingKey);
+        try
+        {
+            await PreEraseExecutionClaimRoleGuard.VerifyAsync(
+                thirdCluster, writer: false, ct);
+            await using var command = thirdCluster.CreateCommand("""
+                SELECT admission.claim_scope(@id)
+                """);
+            command.Parameters.AddWithValue("id", requestId);
+            var observed = await command.ExecuteScalarAsync(ct) as byte[];
+            if (observed is null)
+                throw new InvalidDataException("EXECUTION_CLAIM_MISSING.");
+            try
+            {
+                if (observed.Length != 32 ||
+                    !CryptographicOperations.FixedTimeEquals(expected, observed))
+                    throw new InvalidDataException("EXECUTION_CLAIM_SCOPE_INVALID.");
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(observed);
+            }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(expected);
+        }
     }
 
     public static Task VerifyReaderAsync(NpgsqlDataSource connection,
@@ -119,6 +175,9 @@ internal static class PreEraseExecutionClaimRoleGuard
                 = @writer
             AND has_function_privilege(r.oid,
                 'admission.has_claim(uuid)'::regprocedure, 'EXECUTE')
+                <> @writer
+            AND has_function_privilege(r.oid,
+                'admission.claim_scope(uuid)'::regprocedure, 'EXECUTE')
                 <> @writer
             FROM pg_roles r WHERE r.rolname = current_user
             """);

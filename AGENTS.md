@@ -336,3 +336,26 @@ an operator; the loop may retry but does not prove complete delivery.
 This does NOT cover the primary-outbox commit-to-witness loss window,
 offsite/WORM/vault/anti-rollback, traffic release, external stores,
 consent/legal verification or GDPR readiness. #141 remains OPEN.
+
+## Read-only witness prefix checkpoint audit (#141 / ADR 0028)
+
+`PostgresErasureWitnessSnapshot` MUST use only the restricted witness
+READER identity, one REPEATABLE READ + READ ONLY transaction, strict
+sequence/UUID checks and a bounded 10000-entry scan with an extra-row
+overflow probe. Never read witness tables directly from the API. The
+version-1 `WitnessCheckpoint` authenticates the exact 1..N witness
+prefix (UUID, tenant, subject, event type) by ordered SHA-256 links and
+a separate HMAC-SHA256 checkpoint key, with strict canonical JSON and
+constant-time tag comparison. Output checkpoint contains only count,
+digest and MAC; it is NOT proof of complete source-to-witness delivery.
+An earlier signed prefix may be valid even when there are later
+UNATTESTED events. A saved checkpoint detects witness rollback only
+if its storage, monotonic freshness and key custody truly survive that
+rollback. NEVER issue a new checkpoint after disaster to replace the
+last independently trusted checkpoint; never auto-authorize `ready`.
+`Omnia.WitnessAudit` is CI-ONLY (CI=true plus explicit opt-in, fixed
+loopback/DB/reader login), offline and no HTTP. Issue only NEW private
+checkpoint files; verify requires separately private 32-byte key
+file and role guard; fail closed on missing, truncated or tampered files.
+No production WORM/offsite/vault, signer authority, high-watermark,
+global release gate, source completeness, or GDPR approval. Keep #141 open.

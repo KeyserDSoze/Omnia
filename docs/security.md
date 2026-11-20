@@ -319,3 +319,29 @@ unbounded scans or data exposure. Privileged witness owners can still
 roll back receipts, and both clusters share a single temporary runner.
 No offsite WORM, vault signer, production worker, alert SLO, fully
 coordinated quarantine/release, external erasure or GDPR readiness.
+
+## Synthetic witness HMAC prefix checkpoint (#141 / ADR 0028)
+
+A separately provisioned EXECUTE-only witness reader now obtains a
+bounded read-only REPEATABLE READ snapshot, preventing mixed-page reads
+during concurrent witness appends. The auditor rejects sequence gaps,
+duplicate UUIDs, overflow and wrong SQL roles. A versioned SHA-256
+hash chain over each event's UUID, actor scope and type is bound to
+an HMAC-SHA256 checkpoint with a separate 32-byte key. The checkpoint
+itself contains only count, digest and MAC; no raw actor identifiers.
+Canonical JSON and fixed-time MAC comparison reject malformed,
+forged or ambiguously encoded anchors. An older valid prefix is
+accepted even if the witness has later events: the newer tail is
+explicitly NOT audited by that checkpoint.
+
+The CLI is offline/CI-only, with strict loopback reader identity,
+private external files and create-new-only issuance. It never emits
+a recovery-ready token. **It is not a production anti-rollback
+authority:** checkpoint and key are ephemeral files in the SAME
+CI runner as both PostgreSQL clusters. A privileged rollback of
+witness plus checkpoint, compromised signing key, stale checkpoint,
+or erasure lost before witness append remains undetectable.
+There are no vault/HSM, offsite WORM, true independent monotonic
+checkpoint, global traffic fence, complete third-party erasure,
+legal basis/retention review, or production key rotation. See ADR
+0028; #141 remains a blocker.

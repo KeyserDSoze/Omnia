@@ -134,3 +134,15 @@ Migration `0005_memory_sealed_payload.sql` adds nullable `memory_entries.sealed_
 `RecentAsync` decrypts summary/tag only for authorized current rows; `PostgresPersonalDataService` decrypts full payload for an authenticated user's JSON export and marks rows `sealed-v1` or `legacy-plaintext`. Data from older DB records is read by the legacy decoder **only when sealed_payload IS NULL**; a corrupted ciphertext must never use that fallback. Erasure and expiration DELETE whole rows, so encrypted payload and pgvector vector are removed together in the DB primary. API startup requires `Crypto:KeyRingPath` external key-ring (none in code/repository); Docker mounts local secret and CI generates random per-job KEK.
 
 **This is not a complete encrypted database:** `embedding vector(768)`, model, IDs, source/type, timestamps and old rows are visible as previously. Backfill, key rotation of persisted notes, encrypted vector search tradeoff, read/write migration cutover, provider vault and backup recovery remain in the open parent #138/#33.
+
+## Offline witness prefix audit — synthetic security slice (ADR 0028)
+
+An additional **offline** .NET 10 tool `Omnia.WitnessAudit` validates a
+bounded and snapshot-consistent prefix of erasure receipts from an
+independent PostgreSQL witness using the EXECUTE-only reader, and an
+HMAC checkpoint outside that PGDATA. This is not an application
+service, API endpoint, production vault/ledger, or readiness
+authorization. A checkpoint is evidence of a known prefix ONLY
+if external custody preserves a newer authoritative version;
+neither source transaction completeness nor rollback resistance of
+both stores is established by the prototype.

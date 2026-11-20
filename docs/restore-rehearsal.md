@@ -401,3 +401,38 @@ completezza globale, né storage offsite, promozione `ready`,
 checkpoint anti-rollback indipendente o recovery produzione.
 Non considerare il messaggio di ciclo confermato una garanzia di
 consegna di ogni cancellazione. #141 rimane aperta.
+
+## Audit di prefisso witness con checkpoint HMAC (ADR 0028)
+
+Una nuova prova CI verifica un prefisso completo delle receipt del
+SECONDO cluster PostgreSQL senza accedere alle tabelle come proprietario:
+`PostgresErasureWitnessSnapshot.ReadAsync` richiede la identità
+`omnia_witness_reader` con sole funzioni EXECUTE, apre una transazione
+`REPEATABLE READ, READ ONLY` e scansiona ricevute ordinate con
+100 righe per pagina. Rifiuta gap, UUID ripetuti e oltre 10000
+righe (sonda della riga in eccesso). Gli append concorrenti non
+cambiano lo snapshot in corso.
+
+`WitnessCheckpoint` firma con una chiave HMAC distinta un oggetto JSON
+canonico versione 1 contenente SOLO count, tipDigest e mac. Il digest
+è il risultato della catena SHA-256 su sequenza e contenuto di ogni
+receipt fino a N; tenant e owner non vengono salvati nel checkpoint,
+anche se i due sono presenti nel witness e nella memoria transitoria.
+La verifica rifiuta chiavi errate, payload alterati, UUID duplicati,
+riordino, troncamento e formati JSON ambigui. Un checkpoint di N
+eventi NON autentica gli eventi successivi N+1...
+
+Per esercitare l'adapter, la CI usa `Omnia.WitnessAudit --issue` una
+sola volta su un file nuovo all'esterno di PGDATA, in directory 0700,
+con chiave separata 0600; `--verify` rifiuta checkpoint assente o
+manomesso, scrittura ripetuta, uso del ruolo writer al posto di reader
+e modalità fuori CI. Nessuna delle due modalità modifica il witness,
+promuove un file `ready`, o sblocca la replica restaurata.
+
+**Limite critico:** tutti i file risiedono ancora nel runner temporaneo
+CI. L'operatore o un attaccante che ripristini sia witness sia file
+checkpoint, oppure possieda la chiave di firma, può occultare la
+cancellazione. Un checkpoint emesso DOPO un disastro non prova che lo
+stato precedente fosse autentico. Non esiste qui custodia monotona
+indipendente, prova della completezza dei DELETE sul primario, o
+gestione produzione Azure/on-prem. #141 rimane OPEN.

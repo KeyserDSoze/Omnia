@@ -146,3 +146,17 @@ before a disaster. The primary and witness are not an independent
 WORM/offsite ledger. No GDPR art. 17 or backup-erasure completion claim,
 no automatic release of the recovery quarantine, and no real-person
 data handling is authorized by this implementation. #31/#141 OPEN.
+
+## Witness prefix checkpoint — CI-only (ADR 0028)
+
+The offline test checkpoint contains count plus authenticated hashes,
+not plaintext tenant or owner identifiers. Its digest is still derived
+from personally identifying metadata held by the PostgreSQL witness;
+pseudonymization and HMAC do not automatically remove obligations
+for storage limitation, access control, erasure and lawful basis.
+The witness retains tenant/owner metadata with no implemented
+retention/export/erasure exception policy, and the new checkpoint is
+not a legal erasure receipt. Both PostgreSQL databases and the
+checkpoint files are on a disposable CI host. No proof of all
+deletions delivered before PITR or of GDPR Article 17 end-to-end
+completion; #31/#32/#141 remain OPEN.

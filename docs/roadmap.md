@@ -304,3 +304,10 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Continuous bounded rescans with 5-second normal interval, capped exponential backoff after failure, and no logs of actors/connection details. A one-shot CLI smoke is in CI.
 - [x] Test RED specified witness outage, automatic retry, external receipt persistence across a fresh publisher invocation; witness dedup keeps the same UUID/sequence. Actual PostgreSQL CI GREEN evidence is required before marking test gates complete.
 - [ ] Production-grade publisher deployment, independently durable/attested ACK and source lag alerting, monotonic completeness proof across primary failures, replay release authority, offsite WORM/vault, replicas/workers ingress fencing, and GDPR review remain OPEN in #141 / #31 / #109 / #125.
+
+## #141 — Witness HMAC prefix checkpoint (ADR 0028, 2026-11-20)
+
+- [x] New offline reader on the independent synthetic PostgreSQL witness: one REPEATABLE READ / READ ONLY snapshot, EXECUTE-only login, ordered sequence 1..N/UUID validation and a hard 10000-receipt bound (plus overflow probe).
+- [x] Versioned canonical checkpoint with count, chained SHA-256 witness digest and HMAC-SHA256. Tests specify failure for truncated, reordered, mutated, repeated and tampered prefixes and for a wrong key. A later witness suffix remains UNATTESTED until a new independent checkpoint.
+- [x] CI-only private-file issue/verify CLI; refuses absent, modified or overwritten checkpoint and wrong witness role; no API readiness promotion. RED test commit and CI evidence are recorded in #141 after verification.
+- [ ] Still missing **independently durable and monotonic custody** (vault/offsite/WORM), authenticated issuer, commit→witness completeness across primary failure, fencing all services, end-to-end erasure across external stores, GDPR retention and Azure/on-prem parity. #141/#109/#31 remain OPEN.

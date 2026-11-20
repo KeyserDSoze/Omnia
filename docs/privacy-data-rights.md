@@ -264,3 +264,19 @@ senza source outbox dopo PITR significa **commit sconosciuto**:
 non significa cancellazione mai avvenuta. Nessuno stato
 autorizza replay automatico o riapertura dei servizi.
 #31/#32/#141 restano OPEN.
+
+## Third-cluster intent checkpoint contains no direct actor metadata (ADR 0036)
+
+The separate synthetic HMAC intent checkpoint stores count,
+prefix SHA-256 digest and HMAC only, with no plaintext
+tenant, owner, UUID or note fields. The canonical digest
+is computed from those fields on the SECOND PGDATA:
+reduced exposure is not anonymous by declaration and its
+retention, access, erasure and legal bases still require
+GDPR Article 5/17 examination. The test detects rollback
+of an ALREADY ANCHORED pre-erase request, not the
+authorization, performance or legal finality of a DELETE.
+All storage and keys remain on a temporary CI host.
+No production consent, retention, offsite custodian,
+provider/cache/media/device deletion or global recovery
+release is implemented. #31/#32/#141 remain OPEN.

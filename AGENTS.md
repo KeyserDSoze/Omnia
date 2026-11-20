@@ -599,3 +599,47 @@ to `IntentOnlyCommitUnknown` after rollback and leave API quarantined.
 The independent witness intent can itself roll back; this is not
 offsite monotonic authority or evidence of which source COMMIT occurred.
 Maintain #141/#109/#31/#32 OPEN.
+
+## Third-PGDATA HMAC anchor for PRE-ERASE intent prefix (#141 / ADR 0036)
+
+The CI-only pre-intent stream now has its OWN domain-separated
+`IntentCheckpoint` (purpose `pre-erase-intent-prefix`,
+different genesis, event type, JSON canonical form and signing key
+from completed `WitnessCheckpoint`). A checkpoint stores only
+count, digest and HMAC; tenant/subject live only in the SECOND PGDATA
+witness, not the THIRD PGDATA checkpoint. An intent is NOT an
+attestation of the primary DELETE/COMMIT or post-commit witness ACK.
+
+`PostgresPreEraseIntentSnapshot.ReadAsync` MUST require the independent
+`omnia_witness_intent_reader` EXECUTE-only identity, scan the
+witness under ONE PostgreSQL REPEATABLE READ + READ ONLY transaction,
+enforce a continuous sequence, UUID uniqueness, max 10000 intents
+plus a one-row probe to reject overflow, and never read raw tables.
+`PostgresPreEraseIntentAnchorIssuer` MUST verify an already signed
+prefix against the current intent snapshot BEFORE advancing the
+external monotonic checkpoint. A missing anchor is NOT proof of empty
+history: ordinary IssueAsync must deny; BootstrapAsync needs explicit
+synthetic operator approval only at first-time initialisation.
+The existing third-cluster `anchor.advance_checkpoint` SQL enforces
+non-decreasing count and byte-for-byte replay at equal count, with
+EXECUTE-only roles and no direct table grants. Isolate anchors in
+separate databases on the THIRD PGDATA: `omnia_anchor` for completed
+erasure events and `omnia_intent_anchor` for xUnit intent prefix,
+with distinct signing keys/payloads. Never mix the formats, silently
+re-bootstrap, overwrite old checkpoints, or auto-issue after PITR.
+
+The real WITNESS physical WAL PITR rehearsal must create yet another
+third-cluster database `omnia_witness_pitr_intent_anchor`, seed an
+intent BEFORE basebackup, issue an explicit intent checkpoint, append
+and anchor a new intent AFTER the named WAL restore point, recover a
+physical witness clone missing that intent while leaving THIRD PGDATA
+untouched, rotate the recovered intent-reader credential and confirm
+the OLD credential fails. A read-only verifier MUST REJECT the
+recovered intent prefix yet ACCEPT the live stream, and compare exact
+third-cluster checkpoint count and bytes before/after the physical
+recovery. It must still refuse recovery `ready`, actor re-deletion
+or replay of ambiguous requests. The separate anchor shares the same
+CI host/DB admin, can itself be rolled back, and new intents can be
+lost before the anchor advance: no offsite/WORM commit authority,
+global release gate, real OIDC authorization or GDPR readiness.
+Keep #141, #109, #31 and #32 open.

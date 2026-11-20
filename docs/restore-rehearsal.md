@@ -713,3 +713,44 @@ apparire pulito dopo la perdita dell'outbox: il risultato
 del reconciler rimane esplicitamente INCERTO. Una vera
 indagine richiede attestazione esterna del commit, autorità
 del richiedente, custodia offsite e fencing globale.
+
+## PITR fisico del witness con pre-intent HMAC anchor sulla TERZA PGDATA (ADR 0036)
+
+Oltre alla prova del rollback del completed erase witness
+(ADR 0030), la CI esegue un secondo checkpoint HMAC su
+`witness.erasure_intents` con PURPOSE e chiave DIVERSI
+dalle ricevute di cancellazione. Lo snapshot read-only
+del witness usa il login EXECUTE-only
+`omnia_witness_intent_reader`, transazione `REPEATABLE READ`,
+sequenze e UUID rigorosi e limite 10000 con una pagina
+di overflow. Il checkpoint non contiene tenant, owner,
+UUID o contenuto della nota, soltanto count, digest e MAC.
+
+Un database separato `omnia_intent_anchor` vive sul terzo
+cluster di PostgreSQL CI, distinto da `omnia_anchor`.
+Un altro database `omnia_witness_pitr_intent_anchor`
+appartiene al medesimo terzo PGDATA ma è dedicato alla
+prova fisica; riceve un checkpoint esplicito prima
+di `pg_basebackup`, poi il checkpoint viene avanzato
+soltanto dopo un ulteriore intento sintetico aggiunto
+DOPO un restore point WAL nominato.
+
+Il clone di witness PostgreSQL 17 ripristinato con WAL
+fino al punto nominato NON contiene l'ultimo intento,
+ma l'ancora sul terzo PGDATA è ancora intatta.
+La prova verifica il contatore witness/anchor,
+cambia la password dell'intent reader recuperato,
+nega la password pre-ripristino, richiede che
+`PostgresPreEraseIntentAnchorVerifier` RIFIUTI
+il clone fisico e ACCETTI il witness LIVE e verifica
+che i byte HMAC e count dell'ancora non siano cambiati.
+Non crea marker `ready` né un erase automatico.
+
+**Limite:** DB diversi ma tutti sulla stessa macchina
+GitHub Actions e un solo superuser PostgreSQL terzo.
+Un amministratore può riportare indietro l'ancora,
+rubare la chiave di firma o perdere un nuovo intento
+prima della sua ancora. L'intent non dimostra
+che la cancellazione primaria abbia committato:
+non è auth OIDC, DR offsite, WORM o GDPR ready.
+#141/#109/#31 rimangono aperte.

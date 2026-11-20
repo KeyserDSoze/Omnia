@@ -465,3 +465,33 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   non copre authority OIDC, nuovi eventi subito dopo
   lo snapshot, 2PC, gating globale, cache/backup/provider,
   vault/HSM e valutazione privacy. #141 resta OPEN P0.
+
+## #141 — HMAC checkpoint indipendente per rollback intenti (ADR 0036, 2026-11-20)
+
+- [x] TDD RED: test PostgreSQL richiede `IntentCheckpoint`,
+  `PostgresPreEraseIntentSnapshot` e issuer/verifier del
+  terzo cluster inizialmente mancanti.
+- [x] GREEN: checkpoint HMAC-SHA256 con PURPOSE distinto dai
+  completed erasure receipts, prefisso sequence/UUID/scope
+  continuo, max 10000 e overflow probe nello snapshot
+  `REPEATABLE READ READ ONLY` della SECONDA PGDATA.
+- [x] Terza PGDATA PostgreSQL 17, database separato
+  `omnia_intent_anchor`, controllo EXECUTE-only con
+  SQL monotonic high-watermark; bootstrapping primo
+  esplicito, nuovi checkpoint solo dopo verifica
+  autenticata del prefisso precedente, reissue/regressione
+  o chiave errata negati.
+- [x] PITR FISICO witness aggiunge una seconda database
+  `omnia_witness_pitr_intent_anchor` e chiave indipendente:
+  checkpoint antesignano su intent pre-backup,
+  nuovo intent dopo restore point WAL, ripristino clone
+  prima del nuovo intent, credenziali reader ruotate,
+  verifica contro ancora superstite con rifiuto del
+  rollback e conta+byte HMAC invariati.
+- [ ] Tutto condivide runner GitHub e operatore DB;
+  non è ancora custodia offsite/WORM, key vault/HSM
+  o prova dell'INTENT arrivato al terzo cluster prima
+  di una perdita del witness, né prova di COMMIT
+  primary o di legal authorization del richiedente.
+  Nessun release gate globale/API/worker/replica e
+  provider/backup/device erasure. #141/#109/#31 OPEN.

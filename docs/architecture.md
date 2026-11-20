@@ -247,3 +247,19 @@ are false for every observation. The source primary physical PITR
 drill shows that a previously observed source commit can appear
 as remote-intent-only after rollback, which necessarily remains
 `IntentOnlyCommitUnknown` rather than "never committed".
+
+## Independent anchored PRE-intent prefix, distinct from erasure ACK (ADR 0036)
+
+The witness's pre-delete intent stream now has a dedicated
+`IntentCheckpoint` HMAC domain and consistent EXECUTE-only
+snapshot reader. It is anchored in a SECOND database within
+the THIRD physical PostgreSQL 17 cluster, distinct from
+the completed-erasure HMAC anchor database. The real
+physical PITR regression of the WITNESS now loses a new
+pre-intent while the THIRD database stays alive, so the
+read-only verifier rejects the recovered clone and
+accepts the original stream. All three clusters still
+share one disposable CI host; no independent offsite
+custody, OIDC requester identity, source COMMIT evidence,
+global ingress/worker/replica fence or legal GDPR guarantee
+is provided.

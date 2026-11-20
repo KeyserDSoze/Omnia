@@ -559,3 +559,29 @@ or recovery marker is issued. Only the disposable CI runbook invokes
 this code. A live incident still needs independently authenticated
 source commit custody and a global ingress/worker/replica fence before
 considering any actor replay or traffic release.
+
+## Intent-prefix HMAC anti-rollback rehearsal (ADR 0036)
+
+A distinct HMAC domain (`pre-erase-intent-prefix`, independent
+genesis, canonical JSON and secret key) now protects a bounded,
+contiguous prefix of the independent witness's pre-erase intents.
+The read-only source snapshot is PostgreSQL REPEATABLE READ,
+READ ONLY with separate EXECUTE-only identity and 10000-event
+plus one-row overflow detection. The THIRD PGDATA stores only
+the count, prefix digest and MAC in a SEPARATE anchor database,
+not the witness actor metadata; its SQL head advances only
+monotonically and rejects conflicting equal-count reissue.
+No missing/unverifiable anchor may silently be replaced.
+
+The CI physical witness PITR now deliberately rolls back an
+intent added after a named WAL recovery point while retaining
+its signed prefix on the third cluster. The recovered intent
+reader login is rotated and its old credential is denied;
+the read-only verifier rejects the cloned history and still
+accepts the live witness. The checkpoint count and exact
+bytes in the third DB are unchanged by recovery. This is
+NOT a proof of source DELETE commit or user authentication,
+not an immutable offsite high-watermark and not a license to
+release API/worker traffic or auto-replay erasure. New intents
+remain vulnerable before being signed/anchored. All clusters
+share CI admin and failure domain; #141 stays OPEN.

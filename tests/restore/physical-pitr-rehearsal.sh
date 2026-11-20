@@ -348,6 +348,27 @@ unset old_dispatcher new_dispatch_password
 # This command cannot issue 'ready' and never mutates actor state.
 unwitnessed_gap --recovered-gap
 
+# A source-only clean scan is never enough to release traffic. The
+# recovered API still MUST refuse startup while explicitly quarantined;
+# the negative diagnostic does not sign or write a 'ready' marker.
+quarantine_file="$private_dir/unwitnessed-quarantine.state"
+api_denial_log="$private_dir/unwitnessed-api-denied.log"
+printf 'quarantined\n' > "$quarantine_file"
+chmod 600 "$quarantine_file" "$api_denial_log" 2>/dev/null || chmod 600 "$quarantine_file"
+if Recovery__AccessStateFile="$quarantine_file" ASPNETCORE_ENVIRONMENT=Development \
+   dotnet run --no-build --no-launch-profile -c Release \
+     --project src/backend/Omnia.Api/Omnia.Api.csproj \
+     > "$api_denial_log" 2>&1; then
+  echo "Recovered source gap unexpectedly allowed API startup." >&2; exit 1
+fi
+grep -Fq 'RECOVERY_QUARANTINED' "$api_denial_log" || {
+  echo "API failed for reasons other than active recovery quarantine." >&2; exit 1
+}
+[[ "$(cat "$quarantine_file")" == quarantined ]] || {
+  echo "Recovery quarantine marker was mutated by diagnostic." >&2; exit 1
+}
+echo "UNWITNESSED_PITR_RECOVERY_STILL_QUARANTINED"
+
 # A PITR backup does not contain KEKs; losing the historical KEK must
 # produce a cryptographic failure, not an alternative plaintext response.
 lost_ring="$private_dir/only-new-key.json"
@@ -420,5 +441,14 @@ OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
 OMNIA_REHEARSAL_DB="$target_cs" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- verify-peer
+
+# Reconciliation of the separately WITNESSED actor MUST NOT erase the
+# lost-ACK actor. Its data remains resurrected and requires external
+# source-commit provenance and authorization before any real release.
+OMNIA_REHEARSAL_DB="$target_cs" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal \
+    -- verify-unwitnessed-resurrected
+echo "UNWITNESSED_PITR_REMAINS_UNRESOLVED_AFTER_WITNESSED_REPLAY"
 
 echo "Physical PITR plus authenticated out-of-backup erasure replay verified."

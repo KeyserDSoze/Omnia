@@ -280,6 +280,39 @@ jobs:
           echo "OMNIA_TEST_PREFLIGHT_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=omnia_preflight_anchor;Username=omnia;Password=$anchor_admin" >> "$GITHUB_ENV"
           echo "OMNIA_TEST_PREFLIGHT_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_preflight_anchor;Username=omnia_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
           echo "OMNIA_TEST_PREFLIGHT_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_preflight_anchor;Username=omnia_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
+          # The attempt-consumption authority lives in another database on
+          # the surviving THIRD PGDATA. Its writer cannot change checkpoint
+          # heads, raw tables, or completed-erasure receipts.
+          claim_writer_password="$(openssl rand -hex 24)"
+          claim_reader_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$claim_writer_password"
+          echo "::add-mask::$claim_reader_password"
+          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U omnia -d postgres \
+            -v claim_writer_password="$claim_writer_password" \
+            -v claim_reader_password="$claim_reader_password" <<'SQL'
+          SELECT format(
+            'CREATE ROLE omnia_claim_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            :'claim_writer_password'
+          ) \gexec
+          SELECT format(
+            'CREATE ROLE omnia_claim_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            :'claim_reader_password'
+          ) \gexec
+          SQL
+          docker exec omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U omnia -d postgres -c 'CREATE DATABASE omnia_claim_preflight_anchor' >/dev/null
+          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U omnia -d omnia_claim_preflight_anchor < tests/restore/independent-anchor.sql
+          echo "OMNIA_TEST_CLAIM_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_claim_preflight_anchor;Username=omnia_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_CLAIM_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_claim_preflight_anchor;Username=omnia_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
+          docker exec omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U omnia -d postgres -c 'CREATE DATABASE omnia_execution_claims' >/dev/null
+          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U omnia -d omnia_execution_claims < tests/restore/preerase-execution-claims.sql
+          echo "OMNIA_TEST_EXECUTION_CLAIM_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=omnia_execution_claims;Username=omnia;Password=$anchor_admin" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_EXECUTION_CLAIM_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_execution_claims;Username=omnia_claim_writer;Password=$claim_writer_password" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_EXECUTION_CLAIM_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_execution_claims;Username=omnia_claim_reader;Password=$claim_reader_password" >> "$GITHUB_ENV"
           source_id="$(docker exec omnia-ci-pg psql -U omnia -d omnia_test -Atqc \
             'SELECT system_identifier FROM pg_control_system()')"
           witness_id="$(docker exec omnia-ci-erasure-witness psql \

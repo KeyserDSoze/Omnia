@@ -354,16 +354,38 @@ internal static class Program
             target.Username != "omnia_witness_intent_reader")
             throw new InvalidOperationException("Untrusted remote intent role.");
         await using var remote = NpgsqlDataSource.Create(readerConnection);
-        var result = await new PostgresPersonalDataService(db, crypto)
-            .EraseWithWitnessedIntentAsync(
-                requestId, UnwitnessedTenant, UnwitnessedOwner,
-                remote, default);
-        if (result.DeletedMemories != 1 || result.DeletedConsents != 1 ||
-            (await new PostgresMemoryRepository(db, crypto)
-                .RecentAsync(UnwitnessedTenant, UnwitnessedOwner, 10, default))
-                .Count != 0)
-            throw new InvalidOperationException(
-                "Unwitnessed erasure did not atomically commit.");
+        var anchorConnection = Required("OMNIA_PREERASE_PITR_ANCHOR_READER_DB");
+        var anchor = new NpgsqlConnectionStringBuilder(anchorConnection);
+        if (anchor.Host != "127.0.0.1" || anchor.Port != 15438 ||
+            anchor.Database != "omnia_pitr_preflight_anchor" ||
+            anchor.Username != "omnia_anchor_reader")
+            throw new InvalidOperationException("Untrusted independent intent anchor.");
+        var keyPath = Required("OMNIA_PREERASE_PITR_HMAC_KEY_PATH");
+        if (!Path.IsPathFullyQualified(keyPath) ||
+            !Path.GetFullPath(keyPath).StartsWith(root,
+                StringComparison.Ordinal))
+            throw new InvalidDataException("Unsafe intent signing key path.");
+        var signingKey = ReadPrivate(keyPath, expectedMax: 32, exactSize: 32);
+        try
+        {
+            await using var anchorReader = NpgsqlDataSource.Create(anchorConnection);
+            var result = await new PostgresPersonalDataService(db, crypto)
+                .EraseWithAnchoredIntentAsync(requestId,
+                    UnwitnessedTenant, UnwitnessedOwner,
+                    remote, anchorReader, signingKey, default);
+            if (result.DeletedMemories != 1 || result.DeletedConsents != 1 ||
+                (await new PostgresMemoryRepository(db, crypto)
+                    .RecentAsync(UnwitnessedTenant, UnwitnessedOwner, 10, default))
+                    .Count != 0)
+                throw new InvalidOperationException(
+                    "Unwitnessed erasure did not atomically commit.");
+        }
+        finally
+        {
+            System.Security.Cryptography.CryptographicOperations
+                .ZeroMemory(signingKey);
+        }
+
     }
 
     private static async Task VerifyUnwitnessedResurrectedAsync(

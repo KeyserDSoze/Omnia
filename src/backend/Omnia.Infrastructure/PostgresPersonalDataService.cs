@@ -152,6 +152,20 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
         memoryDelete.Parameters.AddWithValue("owner", ownerSubject);
         var memories = await memoryDelete.ExecuteNonQueryAsync(ct);
 
+        // Insert the erasure event in the SAME actor-scoped transaction
+        // as deleting consent + memory. Any failure rolls back all three.
+        // Record also zero-row requests: other stores or PITR may hold data.
+        // Request-level dedup and external publication are separate gates.
+        await using var outbox = new NpgsqlCommand("""
+            INSERT INTO public.erasure_outbox
+                (id, tenant_id, owner_sub, event_type)
+            VALUES (@id, @tenant, @owner, 'erase-actor')
+            """, actor.Connection, actor.Transaction);
+        outbox.Parameters.AddWithValue("id", Guid.NewGuid());
+        outbox.Parameters.AddWithValue("tenant", tenantId);
+        outbox.Parameters.AddWithValue("owner", ownerSubject);
+        await outbox.ExecuteNonQueryAsync(ct);
+
         await actor.CommitAsync(ct);
         return new PersonalDataErasureResult(memories, consents, DateTimeOffset.UtcNow);
     }

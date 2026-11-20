@@ -139,10 +139,10 @@ public sealed class ErasureOutboxTests
             await using (var add = admin.CreateCommand($"""
                 ALTER TABLE public.erasure_outbox
                 ADD CONSTRAINT {constraint}
-                CHECK (tenant_id <> @tenant) NOT VALID
+                CHECK (tenant_id <> '${tenant}') NOT VALID
                 """))
             {
-                add.Parameters.AddWithValue("tenant", tenant);
+                // tenant is a locally generated prefixed UUID, never input.
                 await add.ExecuteNonQueryAsync();
             }
             var service = new PostgresPersonalDataService(

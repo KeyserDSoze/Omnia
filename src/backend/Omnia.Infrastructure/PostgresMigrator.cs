@@ -60,6 +60,10 @@ public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = 
                 GRANT USAGE ON SCHEMA public TO {quoted};
                 GRANT SELECT, INSERT, UPDATE, DELETE
                     ON TABLE public.memory_entries, public.consent_grants TO {quoted};
+                -- Runtime can append actor-scoped events, never read or
+                -- modify outbox history or override its server timestamps.
+                GRANT INSERT (id, tenant_id, owner_sub, event_type)
+                    ON TABLE public.erasure_outbox TO {quoted};
                 """, conn, tx);
             await grant.ExecuteNonQueryAsync(ct);
         }

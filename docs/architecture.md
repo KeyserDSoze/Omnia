@@ -336,3 +336,15 @@ a claim and proves fourth-PGDATA HMAC still blocks reuse.
 All admission records prove an ATTEMPT, not historical
 source COMMIT, global GDPR erasure or release permission.
 Production REST/OIDC integration remains untouched.
+
+
+## CI-only rollback symmetry of third/fourth claim authorities (ADR 0041)
+
+Le claim di ammissione sintetiche sono conservate in PGDATA
+separate: la QUARTA è verificata anche come *target di PITR fisico*,
+non solo come superstite del rollback della TERZA. Il test verifica
+che il TERZO rifiuti l'UUID riaccettato sul clone QUARTA con `23505`
+prima di qualunque mutazione primario. L'implementazione REST non
+adotta questa catena; non esiste commit attestation, consenso reale,
+custodia WORM/offsite né garanzia in caso di rollback simultaneo.
+Non disegnare la topologia di CI come architettura produttiva.

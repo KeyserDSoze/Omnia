@@ -160,3 +160,16 @@ not a legal erasure receipt. Both PostgreSQL databases and the
 checkpoint files are on a disposable CI host. No proof of all
 deletions delivered before PITR or of GDPR Article 17 end-to-end
 completion; #31/#32/#141 remain OPEN.
+
+## Third independent checkpoint SQL cluster (ADR 0029)
+
+The synthetic third PostgreSQL database only stores checkpoint
+count and authenticated digest/MAC bytes; it does not store plaintext
+tenant/subject identifiers. Those digests are still derived from
+personal metadata and may remain regulated/pseudonymous information.
+The witness still stores actor identifiers and has NO completed
+retention/export/erasure and legal-exception design. Database and
+checkpoint key are confined to synthetic CI. This proof does not
+establish lawful basis, storage limitation, or exercise of GDPR
+Article 17 across backups, witness, provider data or devices.
+#31/#32/#141 remain OPEN.

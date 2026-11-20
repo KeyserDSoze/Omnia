@@ -311,3 +311,10 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Versioned canonical checkpoint with count, chained SHA-256 witness digest and HMAC-SHA256. Tests specify failure for truncated, reordered, mutated, repeated and tampered prefixes and for a wrong key. A later witness suffix remains UNATTESTED until a new independent checkpoint.
 - [x] CI-only private-file issue/verify CLI; refuses absent, modified or overwritten checkpoint and wrong witness role; no API readiness promotion. RED test commit and CI evidence are recorded in #141 after verification.
 - [ ] Still missing **independently durable and monotonic custody** (vault/offsite/WORM), authenticated issuer, commit→witness completeness across primary failure, fencing all services, end-to-end erasure across external stores, GDPR retention and Azure/on-prem parity. #141/#109/#31 remain OPEN.
+
+## #141 — Third PostgreSQL witness checkpoint anchor (ADR 0029, 2026-11-20)
+
+- [x] CI provisions a THIRD PostgreSQL 17 instance with distinct PGDATA, system identifier and random login secrets (127.0.0.1:15438, `omnia_anchor`), beyond the primary and the erasure witness. It stores only the signed checkpoint bytes/count, not raw actors.
+- [x] SQL head lock and append-only checkpoint rows prevent regression and conflicting equal-count replay for restricted writer; exact retries are idempotent. Reader and writer get only their respective SECURITY DEFINER functions, never table rights. .NET verifies role inside standalone read/write operations.
+- [x] Issuer verifies previously anchored HMAC prefix against current witness before advancing; verifier compares current witness with independently stored checkpoint, fails closed on wrong key or simulated witness prefix truncation/alteration. TDD RED/GREEN Actions evidence is tracked in #141.
+- [ ] This is three DB **containers on one CI host**, not immutable/offsite/monotonic custody. Real witness PITR against independently surviving anchor, external signer/vault, key rotation, monitoring, failover, source delivery completeness, global release fence and GDPR data rights remain OPEN.

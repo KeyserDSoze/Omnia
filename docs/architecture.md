@@ -146,3 +146,15 @@ authorization. A checkpoint is evidence of a known prefix ONLY
 if external custody preserves a newer authoritative version;
 neither source transaction completeness nor rollback resistance of
 both stores is established by the prototype.
+
+## Synthetic third-cluster checkpoint custody (ADR 0029)
+
+The recovery-protection prototype now separates primary PostgreSQL,
+erasure witness and checkpoint anchor into THREE distinct disposable
+PG17 databases and roles. SQL-only function permissions implement a
+nonregressing appendable checkpoint count inside the third cluster;
+an offline .NET issuer verifies the old HMAC prefix before advancing.
+A read-only verifier detects simulated rollback of a witness prefix.
+This remains on ONE CI runner and is NOT an independent offsite
+monotonic authority, vault/HSM, release signer, production worker, or
+complete DR/erasure gate.

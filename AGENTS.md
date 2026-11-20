@@ -359,3 +359,35 @@ checkpoint files; verify requires separately private 32-byte key
 file and role guard; fail closed on missing, truncated or tampered files.
 No production WORM/offsite/vault, signer authority, high-watermark,
 global release gate, source completeness, or GDPR approval. Keep #141 open.
+
+## Third independent synthetic checkpoint anchor (#141 / ADR 0029)
+
+`tests/restore/independent-anchor.sql` MUST be used ONLY on a third
+disposable PostgreSQL 17 cluster at 127.0.0.1:15438, database
+`omnia_anchor`, with a DIFFERENT `system_identifier`, PGDATA, roles
+and randomized credentials from both primary and witness. No production
+or remote host selectors. The separate restricted `omnia_anchor_writer`
+has EXECUTE only on a fixed `anchor.advance_checkpoint(integer,bytea)`,
+and `omnia_anchor_reader` only on `anchor.current_checkpoint()`.
+Neither can access raw anchor tables. SECURITY DEFINER functions require
+fully qualified names, locked singleton head, strictly increasing counts,
+immutable append-only history, idempotent exact-retry and conflict
+denial; no default PUBLIC grants. Always validate roles INSIDE every
+standalone .NET adapter operation, not only in the issuer. Never trust
+schema-owner/admin as normal reader/writer.
+
+`PostgresWitnessAnchorIssuer` MUST verify the existing third-cluster
+HMAC checkpoint AGAINST the full bounded repeatable-read witness snapshot
+using externally supplied 32-byte signing key BEFORE issuing a newer
+signed prefix. If the prior anchor is unavailable, stale, invalid or
+higher than witness, fail closed; never auto-reanchor after disaster.
+`PostgresWitnessAnchorVerifier` is strictly read-only and does not
+promote a recovery `ready` marker. No unverified new signing,
+plaintext actor identifiers in anchor, source outbox pruning, timestamp
+commit cursor or API release. The rollback-negative integration test
+uses a truncated *in-memory* witness snapshot, not a real witness PITR.
+The 3 databases are still on ONE temporary CI runner: privileged owner
+rollback of the third cluster or its loss, a stolen signer key, source
+erasure before first delivery, source-vs-witness completeness and
+third-party store reconciliation all remain OPEN. Do not claim actual
+offsite monotonic custody, GDPR compliance or full #141 completion.

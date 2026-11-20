@@ -436,3 +436,41 @@ cancellazione. Un checkpoint emesso DOPO un disastro non prova che lo
 stato precedente fosse autentico. Non esiste qui custodia monotona
 indipendente, prova della completezza dei DELETE sul primario, o
 gestione produzione Azure/on-prem. #141 rimane OPEN.
+
+## Terza PGDATA per checkpoint del witness — ADR 0029
+
+La CI avvia un terzo PostgreSQL 17 (`omnia-ci-witness-anchor`,
+127.0.0.1:15438, `omnia_anchor`) con `system_identifier` distinto
+sia dal primario sia dal witness. Account `omnia_anchor_writer` e
+`omnia_anchor_reader` hanno password indipendenti e soltanto EXECUTE
+su due funzioni SECURITY DEFINER, senza accesso diretto alle tabelle.
+
+`anchor.advance_checkpoint(count, payload)` blocca la riga singleton
+con `SELECT FOR UPDATE` e scrive append-only il checkpoint in una
+transazione assieme al nuovo massimo. Un retry identico restituisce lo
+stesso count senza scrivere; un count inferiore o un payload diverso
+per lo stesso count viene rifiutato. L'accesso con credenziali owner
+agli adapter .NET è negato anche se il chiamante omette l'orchestratore.
+Una routine separata, read-only, restituisce l'ultima ricevuta HMAC
+(count/bytes) senza esporre tenant o subject.
+
+`PostgresWitnessAnchorIssuer` legge il checkpoint esistente dalla
+terza PGDATA e confronta il suo MAC/prefisso con una scansione
+REPEATABLE READ del witness prima di firmare o avanzare. Una
+riconciliazione negata NON rilascia la quarantena. La prova
+PostgreSQL genera un evento sintetico nel witness, ancora il prefisso
+nel terzo cluster, ripete l'append senza duplicazione, rifiuta
+conflitti/regressioni e verifica la negazione dei privilegi. Simula
+poi in memoria il rollback con un prefisso di receipt più corto o
+alterato, che deve fallire il confronto con l'ancora sopravvissuta.
+Una nuova cancellazione sintetica può incrementare il checkpoint
+solo dopo aver autenticato il prefisso precedente.
+
+**Questo NON è un PITR fisico del witness:** il test di rollback è
+un confronto con uno snapshot in memoria alterato, mentre il PITR
+fisico del primario rimane provato dagli script precedenti. I tre
+container condividono host, amministratore e ciclo di vita CI. Un
+backup/restore della TERZA PGDATA o la compromissione della chiave
+può annullare la garanzia monotona. Nessun WORM/offsite, vault,
+proof of completeness prima del primo ACK, release gate globale,
+propagazione provider o approvazione GDPR. #141 / #109 OPEN.

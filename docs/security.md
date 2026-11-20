@@ -345,3 +345,32 @@ There are no vault/HSM, offsite WORM, true independent monotonic
 checkpoint, global traffic fence, complete third-party erasure,
 legal basis/retention review, or production key rotation. See ADR
 0028; #141 remains a blocker.
+
+## Third-cluster witness checkpoint anchor — synthetic only (ADR 0029)
+
+CI now checks distinct PostgreSQL system identifiers across primary,
+independent witness and a THIRD anchor cluster. The anchor has no
+plaintext actor IDs; it stores a bounded HMAC-protected canonical
+checkpoint count/digest/MAC from ADR 0028. Restricted EXECUTE-only
+reader/writer roles cannot SELECT or mutate raw anchor tables.
+`anchor.advance_checkpoint` locks a singleton head to serialize
+writers; count regression and same-count hash conflicts fail, while
+exact retries remain idempotent. Each .NET adapter guards its own
+login, denying owner/admin and wrong roles before any SQL operation.
+
+The issuer first verifies the *previous* independently stored prefix
+against a consistent witness snapshot using the external 32-byte HMAC
+key; it refuses to "repair" a witness rollback by signing anew.
+The auditor verifies an anchored prefix without changing primary,
+witness, or API recovery readiness. Integration tests exercise direct
+table denial, owner-credential rejection, conflicting reissue, and
+truncated/tampered witness snapshots.
+
+**Boundary:** all 3 clusters share one ephemeral Actions runner, and
+the HMAC key is not protected by a vault/HSM. PostgreSQL owner can
+rollback the anchor itself. A malicious writer can attempt false
+checkpoint advances; without independent signer/key custody this
+remains a DoS/trust risk. The test does not perform physical witness
+PITR or prove offsite immutable/monotonic custody, complete source
+outbox publication, traffic fencing across replicas, or GDPR erasure.
+The #141 production gate remains OPEN.

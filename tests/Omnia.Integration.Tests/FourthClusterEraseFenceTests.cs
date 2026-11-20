@@ -106,39 +106,26 @@ public sealed class FourthClusterEraseFenceTests
         Assert.Single(await memory.RecentAsync(tenant, actor, 10, default));
         Assert.Single((await consents.ListAsync(tenant, actor, default))
             .Where(x => x.RevokedAt is null));
-        // The fourth fence is a separate administrative/failure domain only
-        // within this synthetic CI topology, not actual offsite WORM.
-    }
-
-    [Fact]
-    public async Task FourthFenceClaimIsConsumedEvenWhenThirdCommitNeverOccurs()
-    {
-        await using var intentWriter = NpgsqlDataSource.Create(Required("OMNIA_TEST_INTENT_WRITER_DB"));
-        await using var intentReader = NpgsqlDataSource.Create(Required("OMNIA_TEST_INTENT_READER_DB"));
-        await using var anchorWriter = NpgsqlDataSource.Create(Required("OMNIA_TEST_FOURTH_ANCHOR_WRITER_DB"));
-        await using var anchorReader = NpgsqlDataSource.Create(Required("OMNIA_TEST_FOURTH_ANCHOR_READER_DB"));
-        await using var primary = NpgsqlDataSource.Create(Required("OMNIA_TEST_APP_DB"));
-        await using var thirdReader = NpgsqlDataSource.Create(Required("OMNIA_TEST_EXECUTION_CLAIM_READER_DB"));
-        await using var fourthWriter = NpgsqlDataSource.Create(Required("OMNIA_TEST_FOURTH_CLAIM_WRITER_DB"));
-        await using var fourthReader = NpgsqlDataSource.Create(Required("OMNIA_TEST_FOURTH_CLAIM_READER_DB"));
-        var id = Guid.NewGuid();
-        var tenant = "fourth-stranded-" + Guid.NewGuid().ToString("N");
-        const string owner = "synthetic-stranded-owner";
-        var key = RandomNumberGenerator.GetBytes(32);
+        // An admitted fourth-cluster attempt can be consumed even when the
+        // THIRD SQL writer is wrong and source mutation never begins.
+        // Such a stranded claim is deliberately NOT retried.
+        var orphan = Guid.NewGuid();
         await new PostgresPreEraseIntentWriter(intentWriter)
-            .RecordAsync(id, tenant, owner, default);
-        // The prior test class shares one anchor DB; serialize tests within
-        // class via xUnit class execution and advance the existing prefix.
-        var issuer = new PostgresPreEraseIntentAnchorIssuer(
-            intentReader, anchorWriter, anchorReader);
-        // This test has its own freshly initialized anchor (see workflow).
-        // If another test has bootstrapped it first, issuing with another
-        // signing key is intentionally refused. Use independent DB.
+            .RecordAsync(orphan, tenant, actor, default);
+        await new PostgresPreEraseIntentAnchorIssuer(
+            intentReader, anchorWriter, anchorReader).IssueAsync(key, default);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new PostgresPersonalDataService(primary, TestEnvelopeCrypto.Create())
-                .EraseWithFourthFenceAsync(id, tenant, owner,
-                    intentReader, anchorReader, thirdReader, fourthWriter,
-                    key, default));
+            service.EraseWithFourthFenceAsync(orphan, tenant, actor,
+                intentReader, anchorReader, thirdReader, fourthWriter,
+                key, default));
+        await fourth.VerifyClaimAsync(orphan, tenant, actor, key, default);
+        Assert.False(await third.HasClaimAsync(orphan, default));
+        await Assert.ThrowsAsync<PostgresException>(() =>
+            new PostgresPreEraseExecutionClaimWriter(fourthWriter)
+                .ClaimOnceAsync(orphan, tenant, actor, key, default));
+
+        // The fourth fence is a separate PostgreSQL PGDATA on the SAME
+        // synthetic CI runner, not an actual offsite WORM authority.
     }
 
     private static string Required(string name) =>

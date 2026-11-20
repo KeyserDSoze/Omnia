@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Npgsql;
 using Omnia.Infrastructure;
 
@@ -9,7 +10,8 @@ try
 {
     if (args.Length != 1 ||
         args[0] is not ("--live-gap" or "--recovered-gap" or
-                        "--record-intent" or "--verify-intent") ||
+                        "--record-intent" or "--verify-intent" or
+                        "--anchor-intent" or "--verify-intent-anchor") ||
         Environment.GetEnvironmentVariable("CI") != "true" ||
         Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
         Environment.GetEnvironmentVariable("OMNIA_UNWITNESSED_PITR_CI_ONLY") != "1")
@@ -61,6 +63,34 @@ try
         return id;
     }
 
+    static byte[] ReadPrivateKey(string variable)
+    {
+        var filePath = Environment.GetEnvironmentVariable(variable)
+            ?? throw new InvalidDataException("Missing synthetic checkpoint key.");
+        var runnerTemp = Environment.GetEnvironmentVariable("RUNNER_TEMP")
+            ?? throw new InvalidDataException("Missing runner directory.");
+        var root = Path.GetFullPath(runnerTemp)
+            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!Path.IsPathFullyQualified(filePath) ||
+            !Path.GetFullPath(filePath).StartsWith(root,
+                StringComparison.Ordinal))
+            throw new InvalidDataException("Unsafe synthetic signing key path.");
+        var info = new FileInfo(filePath);
+        if (!info.Exists || info.Length != 32 ||
+            info.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            throw new InvalidDataException("Private signing key unavailable.");
+        if (!OperatingSystem.IsWindows())
+        {
+            var mode = File.GetUnixFileMode(filePath);
+            if ((mode & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite |
+                         UnixFileMode.GroupExecute | UnixFileMode.OtherRead |
+                         UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != 0 ||
+                (mode & UnixFileMode.UserRead) == 0)
+                throw new InvalidDataException("Signing key permissions denied.");
+        }
+        return File.ReadAllBytes(filePath);
+    }
+
     // PRE-COMMIT intent is a request marker recorded in a distinct
     // PostgreSQL PGDATA. It cannot prove the later source DELETE committed.
     const string syntheticTenant = "omnia-ci-unwitnessed-pitr-synthetic";
@@ -99,6 +129,46 @@ try
     {
         Console.WriteLine("PREERASE_INTENT_PRESENT_NOT_COMMITTED");
         return 0;
+    }
+    if (args[0] is "--anchor-intent" or "--verify-intent-anchor")
+    {
+        // A separate checkpoint on the THIRD PGDATA is mandatory before
+        // synthetic primary DELETE; it is NOT a completed erasure receipt.
+        var readerConnection = Restricted("OMNIA_TEST_INTENT_READER_DB",
+            15436, "omnia_witness", "omnia_witness_intent_reader");
+        var anchorReaderConnection = Restricted(
+            "OMNIA_PREERASE_PITR_ANCHOR_READER_DB", 15438,
+            "omnia_pitr_preflight_anchor", "omnia_anchor_reader");
+        var key = ReadPrivateKey("OMNIA_PREERASE_PITR_HMAC_KEY_PATH");
+        try
+        {
+            await using var reader = NpgsqlDataSource.Create(readerConnection);
+            await using var checkpointReader = NpgsqlDataSource.Create(
+                anchorReaderConnection);
+            if (args[0] == "--anchor-intent")
+            {
+                var anchorWriterConnection = Restricted(
+                    "OMNIA_PREERASE_PITR_ANCHOR_WRITER_DB", 15438,
+                    "omnia_pitr_preflight_anchor", "omnia_anchor_writer");
+                await using var anchorWriter = NpgsqlDataSource.Create(
+                    anchorWriterConnection);
+                await new PostgresPreEraseIntentAnchorIssuer(reader,
+                    anchorWriter, checkpointReader).BootstrapAsync(
+                        key, operatorApproved: true, CancellationToken.None);
+            }
+            await new PostgresPreEraseIntentAnchorVerifier(reader,
+                checkpointReader).VerifyRequestAsync(
+                    intentId, syntheticTenant, syntheticOwner, key,
+                    CancellationToken.None);
+            Console.WriteLine(args[0] == "--anchor-intent"
+                ? "PREERASE_INTENT_THIRD_ANCHOR_ACKNOWLEDGED"
+                : "PREERASE_INTENT_ANCHORED_NOT_COMMITTED");
+            return 0;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+        }
     }
 
     var recovered = args[0] == "--recovered-gap";

@@ -24,6 +24,7 @@ jobs:
           dotnet build src/backend/Omnia.ErasurePublisher/Omnia.ErasurePublisher.csproj -c Release
           dotnet build src/backend/Omnia.WitnessAudit/Omnia.WitnessAudit.csproj -c Release
           dotnet build tests/Omnia.RestoreRehearsal/Omnia.RestoreRehearsal.csproj -c Release
+          dotnet build tests/Omnia.WitnessPitrRehearsal/Omnia.WitnessPitrRehearsal.csproj -c Release
       - name: Recovery audit CLI denies missing external journal and checkpoint
         shell: bash
         run: |
@@ -168,7 +169,10 @@ jobs:
           docker run -d --rm --name omnia-ci-erasure-witness \
             -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_witness \
             -e "POSTGRES_PASSWORD=$witness_admin" \
-            -p 127.0.0.1:15436:5432 postgres:17
+            -p 127.0.0.1:15436:5432 postgres:17 \
+            -c archive_mode=on \
+            -c "archive_command=mkdir -p /tmp/omnia-ci-witness-wal-archive && test ! -f /tmp/omnia-ci-witness-wal-archive/%f && cp %p /tmp/omnia-ci-witness-wal-archive/%f" \
+            -c archive_timeout=60s
           for i in $(seq 1 60); do
             if docker exec omnia-ci-erasure-witness \
                pg_isready -U omnia -d omnia_witness >/dev/null 2>&1; then break; fi

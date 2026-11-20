@@ -62,14 +62,26 @@ docker exec "$source_container" psql -X -v ON_ERROR_STOP=1 -U omnia -d omnia_tes
   -c "INSERT INTO public.omnia_ci_pitr_marker (marker) VALUES ('before-target')" >/dev/null
 docker exec "$source_container" psql -X -v ON_ERROR_STOP=1 -U omnia -d omnia_test \
   -c "SELECT pg_create_restore_point('$restore_target')" >/dev/null
-docker exec "$source_container" psql -X -v ON_ERROR_STOP=1 -U omnia -d omnia_test \
-  -c "DELETE FROM public.memory_entries WHERE tenant_id = 'omnia-restore-drill-synthetic' AND owner_sub = 'synthetic-owner-only'" >/dev/null
+# RED: this must perform a real actor-scoped service erasure, including
+# transactional outbox, after the named restore point (not raw SQL DELETE).
+OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- erase-source
 docker exec "$source_container" psql -X -v ON_ERROR_STOP=1 -U omnia -d omnia_test \
   -c "INSERT INTO public.omnia_ci_pitr_marker (marker) VALUES ('after-target')" >/dev/null
 
 source_remaining="$(docker exec "$source_container" psql -U omnia -d omnia_test -Atqc \
   "SELECT count(*) FROM public.memory_entries WHERE tenant_id = 'omnia-restore-drill-synthetic' AND owner_sub = 'synthetic-owner-only'")"
 [[ "$source_remaining" == "0" ]] || { echo "Source destructive test action did not commit." >&2; exit 1; }
+
+# Both deletes and the erasure outbox row were committed on PRIMARY
+# strictly AFTER the restore point. The restored primary must lose it.
+source_receipts="$(docker exec "$source_container" psql -U omnia -d omnia_test -Atqc \
+  "SELECT count(*) FROM public.erasure_outbox WHERE tenant_id = 'omnia-restore-drill-synthetic' AND owner_sub = 'synthetic-owner-only'")"
+[[ "$source_receipts" == "1" ]] || {
+  echo "Synthetic source did not commit exactly one erasure event." >&2; exit 1;
+}
+
 
 # Outside-PGDATA synthetic deletion receipt. It is created only AFTER the
 # source DELETE commits, so restoring the earlier physical backup omits it.
@@ -129,6 +141,15 @@ if audit_journal >/dev/null 2>&1; then
 fi
 mv "$audit_dir/journal.original" "$OMNIA_RECOVERY_JOURNAL_PATH"
 audit_journal
+
+# RED: deliver the EXACT committed primary outbox event to independent
+# witness PGDATA before any PITR. This must not rely on receipt fixture
+# signer or a raw admin insertion into the witness.
+OMNIA_REHEARSAL_DB="$OMNIA_TEST_APP_DB" \
+OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+OMNIA_REHEARSAL_DISPATCH_DB="$OMNIA_TEST_DISPATCH_DB" \
+OMNIA_REHEARSAL_WITNESS_WRITER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
+  dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- publish-source
 
 # Ensure the segment containing the named restore point and the later
 # destructive action is durable in the WAL archive before copying.
@@ -217,6 +238,15 @@ target_system="$(docker exec "$recovery_container" psql -U omnia -d omnia_test -
   echo "Physical basebackup system identifier mismatch." >&2; exit 1;
 }
 
+# The target must be BEFORE the service erasure and BEFORE its outbox
+# insert, while the SECOND independent witness still knows the event.
+recovered_source_receipts="$(docker exec "$recovery_container" psql -U omnia -d omnia_test -Atqc \
+  "SELECT count(*) FROM public.erasure_outbox WHERE tenant_id = 'omnia-restore-drill-synthetic' AND owner_sub = 'synthetic-owner-only'")"
+[[ "$recovered_source_receipts" == "0" ]] || {
+  echo "PITR did not roll back the committed erasure outbox." >&2; exit 1;
+}
+
+
 new_app_password="$(openssl rand -hex 24)"
 echo "::add-mask::$new_app_password"
 docker exec -i "$recovery_container" psql -X -v ON_ERROR_STOP=1 \
@@ -272,10 +302,35 @@ if reconcile >/dev/null 2>&1; then
 fi
 mv "$receipt_mac.authentic" "$receipt_mac"
 
+# Negative: a witness writer login MUST NOT authorize reconciliation.
+# The restored source still contains the resurrected actor after denial.
+if OMNIA_REHEARSAL_DB="$target_cs" \
+   OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+   OMNIA_REHEARSAL_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
+   dotnet run --no-build -c Release \
+      --project tests/Omnia.RestoreRehearsal -- witness-reconcile >/dev/null 2>&1; then
+  echo "PITR reconciliation accepted a witness writer as reader." >&2
+  exit 1
+fi
+
 # Check the unauthorized attempt did not delete data or affect another actor.
 OMNIA_REHEARSAL_DB="$target_cs" \
 OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
   dotnet run --no-build -c Release --project tests/Omnia.RestoreRehearsal -- verify
+
+# The positive reconciliation is now sourced from the SECOND PGDATA
+# and the actual transactionally committed erase event, NOT from a
+# runner-created fixture receipt. Source outbox row is absent on PITR.
+witness_reconcile() {
+  OMNIA_REHEARSAL_DB="$target_cs" \
+  OMNIA_REHEARSAL_KEYRING_PATH="$OMNIA_TEST_KEYRING_FILE" \
+  OMNIA_REHEARSAL_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_READER_DB" \
+    dotnet run --no-build -c Release \
+      --project tests/Omnia.RestoreRehearsal -- witness-reconcile
+}
+witness_reconcile
+witness_reconcile
+# The older HMAC receipt also remains valid for idempotent replay.
 reconcile
 # Idempotent replay: an already-applied receipt is harmless to replay.
 reconcile

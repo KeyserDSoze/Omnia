@@ -278,3 +278,21 @@ durabile fuori dal failure domain PostgreSQL o un watermark monotono.
 Non implementa outbox transazionale, rimozione da backup/provider
 o traffic release gate. Il file `ready` non viene aggiornato.
 Decisione: [ADR 0022](../adr/0022-local-append-only-recovery-journal.md).
+
+
+## Outbox di cancellazione nel database primario (#141, ADR 0023)
+
+Le nuove richieste esplicite di cancellazione dell'API inseriscono
+un evento `erase-actor` dentro la **stessa transazione PostgreSQL**
+dei DELETE di consenso e memoria. Un errore sull'outbox annulla
+anche i DELETE; un publisher esterno non è ancora presente.
+
+Il restore logico e il test PITR mantengono RLS e grants sulla
+nuova tabella. Ma un PITR antecedente alla richiesta elimina
+dal database recuperato anche il relativo evento: la outbox da sola
+**non risolve la resurrezione dei dati**. Il journal di test ADR
+0022 rimane una fixture distinta, non un worker che pubblichi
+eventi autentici dell'API. Blocco API/retention, anti-rollback
+esterno e replay restano in #141.
+
+Decisione: [ADR 0023](../adr/0023-transactional-erasure-outbox.md).

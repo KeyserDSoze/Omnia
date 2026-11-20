@@ -222,3 +222,22 @@ authoritative request identity, DB transaction/outbox, trust in
 file paths against a privileged attacker, directory fsync, remote
 witness, full host recovery, Azure/OpenBao or high-watermark service.
 Both files can be rolled back together undetected. See ADR 0022.
+
+
+## Erasure transactional outbox boundary (#141 / ADR 0023)
+
+PostgresPersonalDataService now writes a minimal `erase-actor` row
+in `public.erasure_outbox` before committing the actor-scoped
+transaction that removes consent and memory. An outbox insert failure
+must undo both deletions. Runtime can INSERT only four specified
+columns with actor-match FORCE RLS; no runtime reads, updates, deletes
+or timestamp control. Backfill/audit/retention identities cannot
+read the table or issue events. This prevents the classic local
+DB-delete-without-an-event crash window, not delivery loss after
+commit. The outbox is in the restored PostgreSQL failure domain:
+PITR can erase the record along with the historical deletion.
+Actor IDs, event type and timestamps are personal metadata subject
+to retention, data-rights handling and minimization review.
+No publisher/offsite immutable ledger, signed high-watermark,
+verified event provenance, request idempotency, vault custody or
+release authority is provided yet. ADR 0023 and #141 remain gating.

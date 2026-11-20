@@ -240,3 +240,22 @@ Local private files do NOT establish independent durable custody,
 distributed locking, true fsync of directories, request authorization,
 transactional DB outbox, cross-host monotonic watermark or GDPR erasure.
 Do not wire an unauthenticated writer to the real API / EraseAsync.
+
+
+## Transactional erasure outbox (#141 / ADR 0023)
+
+ALL authenticated primary erasures in PostgresPersonalDataService
+MUST insert one `erase-actor` row into `public.erasure_outbox`
+IN THE SAME actor-scoped, PostgresActorLock-protected transaction
+as the DELETE from consent_grants and memory_entries. NEVER publish
+to a filesystem/network before commit, and NEVER treat an event
+created without confirmed commit as a deletion receipt.
+The runtime must have column-restricted INSERT only, NO SELECT
+or UPDATE/DELETE/TRUNCATE and NO timestamp override. FORCE RLS
+must deny wrong-actor insertion; PostgresRuntimeGuard.VerifyApiAsync
+enforces the API's narrow grant separately from backfill/audit.
+Any outbox error MUST roll back both original DELETE operations.
+Zero-row erasure may still create a distinct event (no idempotency
+key yet). The outbox is INSIDE PGDATA: no durable offsite journal,
+no anti-rollback guarantee. Actor IDs are personal metadata and
+require retention/data-rights review; DO NOT claim GDPR completion.

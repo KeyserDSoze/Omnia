@@ -235,3 +235,19 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   off-DB append-only ledger with independent monotonic checkpoint,
   multiple replica fencing/ingress, provider erasure, GDPR assessment
   and Azure/on-prem parity remain P0 OPEN.
+
+
+## #141/#31 — Transactional PostgreSQL erasure outbox (2026-11-20)
+
+- [x] Migration `0007_erasure_outbox.sql`: append-only column grants
+  for the JWT-derived actor, FORCE RLS and no runtime SELECT/DELETE.
+- [x] `EraseAsync`: event insert in SAME transaction as consent+memory
+  erasure under actor lock; outbox insert failure rolls back erasure.
+- [x] New role gate distinguishes API from backfill/count-only audit.
+- [x] PostgreSQL tests for transactional rollback, role separation,
+  actor scoping, repeated delete and limited row contents.
+- [ ] Record final CI/Pages/OIDC status on issues #141/#31/#109.
+- [ ] Unimplemented: off-DB publisher, durable ack, independent
+  monotonically anchored checkpoints, stable request-id dedup,
+  audit metadata GDPR retention/export, zero-trust vault keys,
+  cross-store erasure, disaster-recovery traffic release.

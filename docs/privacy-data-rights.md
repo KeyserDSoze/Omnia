@@ -55,3 +55,31 @@ Questo non determina il periodo adeguato per dati di origine diversa né elimina
 ## Export e cancellazione di note sealed (#139)
 
 Le note nuove salvano i campi `rawContent`, JSON normalizzato, summary e tags in un blob autenticato cifrato. L'export JSON decifra **solo dopo** verifica JWT e RLS e indica `storageProtection: "sealed-v1"`. Le vecchie note ancora non migrate sono esportate con `storageProtection: "legacy-plaintext"`. La cancellazione immediata e la retention eliminano la riga `memory_entries` completa, inclusi il blob cifrato e il vettore eventualmente presente. La cancellazione non rimuove backup, provider AI né altri sistemi esterni; vecchie note persistono in chiaro sino al backfill della #138.
+
+
+## Eventi di cancellazione nella outbox primaria (#141 / ADR 0023)
+
+L'endpoint `POST /api/v1/privacy/erase` ora scrive anche un evento
+`erase-actor` nella tabella `public.erasure_outbox`, nello stesso
+COMMIT dei DELETE di `consent_grants` e `memory_entries`.
+Se non è possibile scrivere l'evento, nessuna delle cancellazioni
+viene confermata. La tabella contiene UUID dell'evento, tenant ID,
+subject ID, tipo e data/ora server; NON il contenuto delle note.
+Il login applicativo dispone solo di INSERT su quattro colonne,
+con RLS obbligatoria: non può leggere, aggiornare, cancellare
+o alterare il timestamp delle righe di outbox.
+
+**Questa outbox contiene comunque dati personali identificativi.**
+L'export attuale v1 espone soltanto `memoryEntries` e `consentGrants`,
+non le ricevute della nuova tabella. L'endpoint di erase non rimuove
+i record di outbox, per evitare di perdere eventi prima di una
+futura pubblicazione. Sono necessari inventario DSAR, base giuridica,
+retention minima, procedure di accesso/cancellazione documentate e
+decisioni conformi alle eccezioni GDPR applicabili.
+
+Un retry esplicito che non trova più righe genera un nuovo evento:
+manca la chiave di idempotenza associata alla richiesta. L'outbox
+è dentro il database primario e può scomparire ripristinando un
+backup antecedente al COMMIT; non è un journal esterno e non
+dimostra replay/tombstone su provider, device, storage o backup.
+Vedi [ADR 0023](../adr/0023-transactional-erasure-outbox.md).

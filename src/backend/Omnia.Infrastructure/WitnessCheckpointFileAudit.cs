@@ -52,7 +52,7 @@ public static class WitnessCheckpointFileAudit
             {
                 using var stream = new FileStream(checkpointPath,
                     FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                    bufferSize: 4096, FileOptions.WriteThrough);
+                    bufferSize: 4096, options: FileOptions.WriteThrough);
                 if (!OperatingSystem.IsWindows())
                     File.SetUnixFileMode(checkpointPath,
                         UnixFileMode.UserRead | UnixFileMode.UserWrite);

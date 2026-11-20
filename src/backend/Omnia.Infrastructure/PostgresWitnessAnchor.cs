@@ -43,6 +43,8 @@ public sealed class PostgresWitnessAnchor(NpgsqlDataSource anchorWriter)
         ArgumentNullException.ThrowIfNull(checkpoint);
         if (checkpoint.Length is < 100 or > WitnessCheckpoint.MaxCheckpointBytes)
             throw new ArgumentOutOfRangeException(nameof(checkpoint));
+        // Fail closed even when this adapter is invoked without the issuer.
+        await VerifyWriterAsync(anchorWriter, ct);
         await using var command = anchorWriter.CreateCommand("""
             SELECT anchor.advance_checkpoint(@count, @payload)
             """);
@@ -68,6 +70,8 @@ public sealed class PostgresWitnessAnchorReader(NpgsqlDataSource anchorReader)
 {
     public async Task<WitnessAnchorState?> ReadAsync(CancellationToken ct)
     {
+        // Reject owner/admin and writer roles even for standalone reads.
+        await VerifyReaderAsync(anchorReader, ct);
         await using var cmd = anchorReader.CreateCommand("""
             SELECT checkpoint_count, checkpoint FROM anchor.current_checkpoint()
             """);

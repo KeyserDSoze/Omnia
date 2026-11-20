@@ -369,10 +369,18 @@ internal static class Program
         try
         {
             await using var anchorReader = NpgsqlDataSource.Create(anchorConnection);
+            var claimConnection = Required("OMNIA_PREERASE_PITR_CLAIM_WRITER_DB");
+            var claimTarget = new NpgsqlConnectionStringBuilder(claimConnection);
+            if (claimTarget.Host != "127.0.0.1" ||
+                claimTarget.Port != 15438 ||
+                claimTarget.Database != "omnia_pitr_execution_claims" ||
+                claimTarget.Username != "omnia_claim_writer")
+                throw new InvalidOperationException("Invalid synthetic claim capability.");
+            await using var claimWriter = NpgsqlDataSource.Create(claimConnection);
             var result = await new PostgresPersonalDataService(db, crypto)
-                .EraseWithAnchoredIntentAsync(requestId,
+                .EraseWithOneShotAnchoredIntentAsync(requestId,
                     UnwitnessedTenant, UnwitnessedOwner,
-                    remote, anchorReader, signingKey, default);
+                    remote, anchorReader, claimWriter, signingKey, default);
             if (result.DeletedMemories != 1 || result.DeletedConsents != 1 ||
                 (await new PostgresMemoryRepository(db, crypto)
                     .RecentAsync(UnwitnessedTenant, UnwitnessedOwner, 10, default))

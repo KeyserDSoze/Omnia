@@ -1131,3 +1131,20 @@ to the normal endpoint. Scope ONLY concurrent JSON body *reads*
 per API instance, not concurrent completed handlers, Kestrel sockets,
 slow request headers, connector/media uploads, quotas across replicas,
 fairness per tenant or a production DDoS/GDPR release. Parent #37 OPEN.
+
+## Pre-auth Kestrel HTTP transport limits (#160 / ADR 0059)
+
+Kestrel parses request headers BEFORE authentication, rate limiting,
+recovery middleware or ApiJsonBodyBudget. Keep an explicit server-level
+RequestHeadersTimeout via Transport:RequestHeadersTimeoutMilliseconds
+(default 10000; valid 1000..30000), MaxRequestHeadersTotalSize via
+Transport:MaxRequestHeadersTotalBytes (default 16384; valid
+8192..32768) and MaxRequestHeaderCount (default 64; valid 16..100).
+Invalid configuration MUST abort startup, not silently disable limits.
+Keep a non-null Kestrel MinRequestBodyDataRate 240 B/s with 5s grace
+and the existing 70KiB Kestrel max body size. Contract tests MUST
+verify all settings and an ACTUAL local TCP Kestrel incomplete header
+times out without running any handler. Normal requests must still work.
+Never claim this covers slow TLS handshakes, upstream proxies/WAF,
+HTTP/3, per-tenant distributed quotas, binary media or GDPR readiness.
+#37 stays OPEN.

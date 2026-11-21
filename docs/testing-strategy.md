@@ -370,3 +370,19 @@ Docker, S3/Azure, mobile and Pages workflow gates remain mandatory.
 CI evidence and final SHA must be captured on child #159 before
 closure; parent #37 stays OPEN for fair tenant quotas, WAF and load
 tests of real network connections.
+
+## Kestrel header parser real socket gate (#160 / ADR 0059)
+
+ApiKestrelTransportLimitsTests is a .NET 10 test suite independent
+from PostgreSQL and TestServer. Test-first RED calls the not-yet-
+implemented Configure API, verifies strict startup configuration
+bounds, exact configured KestrelServerLimits, positive complete GET
+and an incomplete HTTP/1.1 header on a *real loopback TCP socket*.
+The connection must be closed or receive 408 before dispatch; the
+endpoint invocation count must remain unchanged. This is one
+transport-level functional test, NOT a performance test or a
+validated Azure gateway/HTTP2/HTTP3/TLS slow-header claim.
+Retain all existing Domain, real PostgreSQL, S3/Azure provider,
+physical PITR, Docker, Playwright/OIDC, Pages and mobile CI gates.
+Record RED and GREEN SHA/run URLs in #160; close only after all
+required workflows succeed on the same final main SHA.

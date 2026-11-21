@@ -123,3 +123,13 @@ response and permit release before handler work. This is not a
 multi-replica budget, connection limiter, fair tenant quota, WAF
 or production ingress test. The historical 14-epic/116-child
 inventory is not a current live issue count; consult GitHub.
+
+## P0 Kestrel pre-auth header budget (#160, ADR 0059)
+
+New child [#160](https://github.com/KeyserDSoze/Omnia/issues/160)
+extends [#37](https://github.com/KeyserDSoze/Omnia/issues/37)
+after #156–#159: server-level Kestrel short request-header timeout,
+bounded header bytes and count, default minimum body data rate,
+and loopback TCP incomplete-header contract test. This does not
+harden upstream TLS, proxies, Azure ingress, global quotas, media,
+HTTP/3 or WAF. Original backlog counts are historical, not live.

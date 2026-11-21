@@ -155,3 +155,17 @@ DB/AI work. A 503 is a truthful temporary refusal, not a completed
 write or consent grant. This is NOT cluster-wide admission, a WAF,
 a limit on Kestrel connections or on downstream handler memory;
 #37 remains open, and the API is not ready for real personal data.
+
+## Kestrel transport header safeguards (#160)
+
+The .NET 10 API now sets server-level limits *before* middleware:
+Transport:RequestHeadersTimeoutMilliseconds 10000 (valid
+1000..30000), Transport:MaxRequestHeadersTotalBytes 16384 (valid
+8192..32768), and Transport:MaxRequestHeaderCount 64 (valid
+16..100). Kestrel enforces a 70KiB maximum request body and an
+explicit 240 B/s minimum body receive rate (5s grace) even before
+the authenticated JSON middleware. Incorrect config refuses startup;
+a loopback TCP test exercises incomplete headers and ordinary GET.
+These are direct Kestrel protections, not full DoS prevention or
+security guarantees for reverse proxies, Azure staging, TLS,
+HTTP/3 or distributed SaaS quotas. Parent #37 stays open.

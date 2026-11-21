@@ -948,3 +948,29 @@ implementations or exhaustion at Kestrel/proxy/ingress. Independent
 WAF/edge admission, per-tenant fair quotas, realistic socket-level
 load tests, media/connector budgets and production review remain P0
 work under #37. Never claim GDPR or multi-replica DoS protection.
+
+## Pre-auth HTTP header transport hardening (#160 / ADR 0059)
+
+JSON receive limits (ADR 0055–0058) only run after Kestrel finishes
+parsing request headers. A slowloris sender can exhaust transport
+resources before OIDC, the 429 limiter or JSON buffer admission even
+begins. The API now configures Kestrel explicitly:
+Transport:RequestHeadersTimeoutMilliseconds = 10000 (range 1000..30000),
+Transport:MaxRequestHeadersTotalBytes = 16384 (8192..32768),
+Transport:MaxRequestHeaderCount = 64 (16..100). Invalid settings fail
+startup. The existing 70KiB Kestrel max body remains; its minimum
+request-body data rate remains explicitly enabled at 240 B/s with
+5s grace. The application JSON total deadline and body/read buffer
+limits are independent, with distinct failure and cancellation paths.
+
+Real loopback Kestrel socket tests send incomplete HTTP/1.1 headers
+and verify timeout/connection termination before the handler, plus
+positive complete GET. TestServer cannot exercise Kestrel parsing;
+these tests do NOT validate TLS, HTTP/3, any Azure/NGINX/CDN ingress,
+proxy-origin connection reuse, Internet DDoS, per-tenant fairness,
+global concurrency, load or production edge WAF. HTTP/2 transport
+may enforce some settings connection-wide. The operator must
+separately inventory and validate LB/proxy protections on both
+on-prem and Azure deployments. Avoid logging malformed request
+header values, credentials or actor identities. Keep #37 and #2
+open for independent multi-replica and privacy release checks.

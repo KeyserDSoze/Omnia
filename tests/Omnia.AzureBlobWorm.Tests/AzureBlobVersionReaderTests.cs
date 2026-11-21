@@ -89,6 +89,37 @@ public sealed class AzureBlobVersionReaderTests
     }
 
     [Fact]
+    public async Task ResponseVersionOrEtagSwitchBetweenHeadAndGetIsDenied()
+    {
+        var id = Guid.NewGuid();
+        var scope = RandomNumberGenerator.GetBytes(32);
+        var signing = RandomNumberGenerator.GetBytes(32);
+        var data = ImmutableAttemptEvidence.CreateSynthetic(
+            id, "ci-tenant", "ci-owner", scope, signing);
+        const string version = "2026-11-21T08:12:32.0000000Z";
+        var now = new DateTimeOffset(2026, 11, 21, 8, 0, 0, TimeSpan.Zero);
+
+        foreach (var mismatch in new[] { "version", "etag", "length" })
+        {
+            using var http = new FakeAzureBlobHttp(version, data)
+            {
+                DownloadVersion = mismatch == "version"
+                    ? "2026-11-21T08:12:33.0000000Z" : null,
+                DownloadEtag = mismatch == "etag" ? "\"foreign-etag\"" : null,
+                DeclaredDownloadLength = mismatch == "length"
+                    ? data.LongLength + 1 : null
+            };
+            var reader = MakeReader(http);
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                ImmutableAttemptEvidence.VerifyAsync(
+                    reader, id, "ci-tenant", "ci-owner",
+                    scope, signing, "ci-azure-external-store",
+                    version, now, default));
+            Assert.Equal(2, http.Requests.Count);
+        }
+    }
+
+    [Fact]
     public async Task RejectsLatestNullForeignPathsAndWrongActors()
     {
         var id = Guid.NewGuid();
@@ -138,6 +169,9 @@ public sealed class AzureBlobVersionReaderTests
     private sealed class FakeAzureBlobHttp(string version, byte[] body)
         : HttpMessageHandler
     {
+        public string? DownloadVersion { get; set; }
+        public string? DownloadEtag { get; set; }
+        public long? DeclaredDownloadLength { get; set; }
         public string? PolicyMode { get; set; } = "locked";
         public DateTimeOffset RetainUntil { get; set; } =
             new(2026, 11, 22, 12, 0, 0, TimeSpan.Zero);
@@ -156,13 +190,18 @@ public sealed class AzureBlobVersionReaderTests
             if (Status == HttpStatusCode.OK)
             {
                 response.Headers.TryAddWithoutValidation("x-ms-request-id", "ci");
-                response.Headers.TryAddWithoutValidation("x-ms-version-id", version);
+                response.Headers.TryAddWithoutValidation("x-ms-version-id",
+                    request.Method == HttpMethod.Head
+                        ? version : DownloadVersion ?? version);
                 response.Headers.TryAddWithoutValidation("x-ms-blob-type", "BlockBlob");
                 response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue(
-                    "\"etag-ci\"");
+                    request.Method == HttpMethod.Head
+                        ? "\"etag-ci\"" : DownloadEtag ?? "\"etag-ci\"");
                 response.Content = new ByteArrayContent(
                     request.Method == HttpMethod.Head ? [] : body);
-                response.Content.Headers.ContentLength = body.LongLength;
+                response.Content.Headers.ContentLength =
+                    request.Method == HttpMethod.Head
+                        ? body.LongLength : DeclaredDownloadLength ?? body.LongLength;
                 response.Content.Headers.ContentType =
                     new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                 if (PolicyMode is not null)

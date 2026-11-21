@@ -111,13 +111,18 @@ jobs:
             '{identities:[{name:"ci-s3-admin",
               credentials:[{accessKey:$access,secretKey:$secret}],
               actions:["Admin","Read","Write","List","Tagging"]}]}' > "$auth"
-          chmod 600 "$auth"
+          # The official SeaweedFS entrypoint drops privileges via
+          # su-exec seaweed EVEN WHEN docker is started with --user 0.
+          # Discover the actual service UID/GID, then grant ONLY that
+          # identity read access to this bind-mounted synthetic secret.
+          docker pull chrislusf/seaweedfs:4.47 >/dev/null
+          seaweed_uid="$(docker run --rm --entrypoint id chrislusf/seaweedfs:4.47 -u seaweed)"
+          seaweed_gid="$(docker run --rm --entrypoint id chrislusf/seaweedfs:4.47 -g seaweed)"
+          [[ "$seaweed_uid" =~ ^[0-9]+$ && "$seaweed_gid" =~ ^[0-9]+$ ]]
+          sudo chown "$seaweed_uid:$seaweed_gid" "$auth"
+          chmod 400 "$auth"
           # Keep an exited container for diagnostics; cleanup runs always.
-          # CI-only: runner-owned mode 0600 secret is unreadable by
-          # SeaweedFS's default container UID. Run this *disposable* test
-          # process as root so the mounted 0600 file remains private.
-          # Production MUST use nonroot UID-matched secret provisioning.
-          docker run -d --user 0:0 --name omnia-ci-s3-object-lock \
+          docker run -d --name omnia-ci-s3-object-lock \
             -v "$auth:/etc/seaweedfs/s3.json:ro" \
             -p 127.0.0.1:18433:8333 \
             chrislusf/seaweedfs:4.47 \

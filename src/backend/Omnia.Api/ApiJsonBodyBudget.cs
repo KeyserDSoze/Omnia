@@ -3,15 +3,17 @@ namespace Omnia.Api;
 /// <summary>
 /// Bounded, privacy-preserving JSON HTTP request-body budget for existing
 /// authenticated /api/v1 mutation endpoints. TestServer and reverse proxies
-/// may not apply Kestrel limits, and Content-Length is not authoritative for
-/// chunked uploads. This guard reads at most MaxJsonBytes+1 before binding.
-/// No body data is logged or retained after the request.
+/// may not apply Kestrel limits. The total read deadline is separate from
+/// Kestrel's slow-header/minimum-data-rate protections.
 /// </summary>
 public static class ApiJsonBodyBudget
 {
     public const int DefaultMaxJsonBytes = 64 * 1024;
     public const int MinimumMaxJsonBytes = 1024;
     public const int MaximumMaxJsonBytes = 64 * 1024;
+    public const int DefaultReadTimeoutMilliseconds = 10_000;
+    public const int MinimumReadTimeoutMilliseconds = 100;
+    public const int MaximumReadTimeoutMilliseconds = 30_000;
 
     public static int ValidateLimit(int maxJsonBytes)
     {
@@ -21,9 +23,19 @@ public static class ApiJsonBodyBudget
         return maxJsonBytes;
     }
 
+    public static int ValidateReadTimeoutMilliseconds(int milliseconds)
+    {
+        if (milliseconds is < MinimumReadTimeoutMilliseconds
+            or > MaximumReadTimeoutMilliseconds)
+            throw new InvalidOperationException(
+                "RequestBody:ReadTimeoutMilliseconds must be between 100 and 30000.");
+        return milliseconds;
+    }
+
     public static async Task InvokeAsync(
         HttpContext context, RequestDelegate next,
-        int maxJsonBytes)
+        int maxJsonBytes,
+        int readTimeoutMilliseconds = DefaultReadTimeoutMilliseconds)
     {
         // Health, readiness, GET/DELETE and future upload endpoints are
         // not assumed to carry JSON. A separate media budget is required
@@ -57,30 +69,52 @@ public static class ApiJsonBodyBudget
             return;
         }
 
-        // Do not trust absent or forged Content-Length: stream a maximum
-        // of budget+1 bytes, then immediately 413, without reading or
-        // allocating an unbounded body. The successful body is replayed
-        // byte-for-byte to the existing Minimal API JSON binder.
+        // Do not trust absent/forged Content-Length. Never buffer more than
+        // max+1 bytes, even for streaming/chunked requests. A SINGLE total
+        // deadline covers all reads so a trickle cannot reset the timer.
         using var bounded = new MemoryStream(capacity: Math.Min(maxJsonBytes, 8192));
         var chunk = new byte[Math.Min(8192, maxJsonBytes + 1)];
-        while (true)
+        using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(
+            context.RequestAborted))
         {
-            var remaining = maxJsonBytes - (int)bounded.Length;
-            var count = await context.Request.Body.ReadAsync(
-                chunk.AsMemory(0, Math.Min(chunk.Length, remaining + 1)),
-                context.RequestAborted);
-            if (count == 0) break;
-            if (count > remaining)
+            deadline.CancelAfter(TimeSpan.FromMilliseconds(
+                ValidateReadTimeoutMilliseconds(readTimeoutMilliseconds)));
+            try
             {
+                while (true)
+                {
+                    var remaining = maxJsonBytes - (int)bounded.Length;
+                    var count = await context.Request.Body.ReadAsync(
+                        chunk.AsMemory(0, Math.Min(chunk.Length, remaining + 1)),
+                        deadline.Token);
+                    if (count == 0) break;
+                    if (count > remaining)
+                    {
+                        await RejectAsync(context,
+                            StatusCodes.Status413PayloadTooLarge,
+                            "request_body_too_large");
+                        return;
+                    }
+                    await bounded.WriteAsync(chunk.AsMemory(0, count),
+                        deadline.Token);
+                }
+            }
+            catch (OperationCanceledException) when (
+                deadline.IsCancellationRequested &&
+                !context.RequestAborted.IsCancellationRequested)
+            {
+                // The app-level body deadline expired: 408, with no payload,
+                // no replay, no model binding and no DB/AI mutation.
+                // A true client disconnect is NOT an application timeout.
                 await RejectAsync(context,
-                    StatusCodes.Status413PayloadTooLarge,
-                    "request_body_too_large");
+                    StatusCodes.Status408RequestTimeout,
+                    "request_body_timeout");
                 return;
             }
-            await bounded.WriteAsync(chunk.AsMemory(0, count),
-                context.RequestAborted);
         }
 
+        // Dispose the body-only deadline BEFORE normal downstream work:
+        // successful DB/AI handling must not be cancelled by a body timer.
         bounded.Position = 0;
         var original = context.Request.Body;
         context.Request.Body = bounded;

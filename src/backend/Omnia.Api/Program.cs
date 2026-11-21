@@ -70,6 +70,10 @@ if (requestsPerMinute is < 1 or > 1000)
 var maxJsonBytes = ApiJsonBodyBudget.ValidateLimit(
     builder.Configuration.GetValue<int?>("RequestBody:MaxJsonBytes") ??
     ApiJsonBodyBudget.DefaultMaxJsonBytes);
+// Total time available only for receiving the authenticated JSON body.
+var jsonBodyReadTimeoutMs = ApiJsonBodyBudget.ValidateReadTimeoutMilliseconds(
+    builder.Configuration.GetValue<int?>("RequestBody:ReadTimeoutMilliseconds") ??
+    ApiJsonBodyBudget.DefaultReadTimeoutMilliseconds);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -181,7 +185,7 @@ app.UseAuthorization();
 // Authentication and rate limiting happen BEFORE buffering any user bytes.
 // No credentials or request content are logged by the bounded guard.
 app.Use((context, next) =>
-    ApiJsonBodyBudget.InvokeAsync(context, next, maxJsonBytes));
+    ApiJsonBodyBudget.InvokeAsync(context, next, maxJsonBytes, jsonBodyReadTimeoutMs));
 app.MapGet("/health", () => Results.Ok(new { status = "ok", product = "Omnia" }));
 app.MapGet("/ready", async (NpgsqlDataSource db, CancellationToken ct) =>
 {

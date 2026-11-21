@@ -112,18 +112,24 @@ jobs:
               credentials:[{accessKey:$access,secretKey:$secret}],
               actions:["Admin","Read","Write","List","Tagging"]}]}' > "$auth"
           chmod 600 "$auth"
-          docker run -d --rm --name omnia-ci-s3-object-lock \
+          # Keep an exited container for diagnostics; cleanup runs always.
+          docker run -d --name omnia-ci-s3-object-lock \
             -v "$auth:/etc/seaweedfs/s3.json:ro" \
             -p 127.0.0.1:18433:8333 \
             chrislusf/seaweedfs:4.47 \
             server -s3 -s3.config=/etc/seaweedfs/s3.json \
               -dir=/data -master.volumeSizeLimitMB=64
           ready=0
-          for i in $(seq 1 80); do
+          for i in $(seq 1 50); do
+            if [[ "$(docker inspect -f '{{.State.Running}}' omnia-ci-s3-object-lock)" != true ]]; then
+              echo "S3 container terminated before its health check." >&2
+              docker logs --tail 100 omnia-ci-s3-object-lock || true
+              exit 1
+            fi
             # Unauthorized or signed S3 API responses both prove the
             # socket is accepting HTTP. Never log admin credentials.
             status="$(curl -sS -o /dev/null -w '%{http_code}' \
-              --connect-timeout 2 http://127.0.0.1:18433/ || true)"
+              --connect-timeout 2 http://127.0.0.1:18433/ 2>/dev/null || true)"
             if [[ "$status" =~ ^[245][0-9][0-9]$ ]]; then
               ready=1; break
             fi

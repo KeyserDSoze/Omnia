@@ -48,6 +48,11 @@ public interface IImmutableAttemptObjectReader
 public sealed record ImmutableAttemptObservation(
     Guid RequestId, string VersionId)
 {
+    // Provider claims are only trusted after the configured real adapter
+    // has been audited. Surface the effective mode/expiry for a writer
+    // to check against the EXACT mode and retention it requested.
+    public ImmutableAttemptImmutabilityMode VerifiedImmutabilityMode { get; init; }
+    public DateTimeOffset VerifiedRetainUntilUtc { get; init; }
     public bool AttemptPreviouslyObserved => true;
     public bool MayAutoReplay => false;
     public bool MayReleaseRecovery => false;
@@ -179,7 +184,11 @@ public static class ImmutableAttemptEvidence
         VerifyEnvelope(observed.Content, requestId, tenantId,
             ownerSubject, scopeKey, evidenceKey);
         return new ImmutableAttemptObservation(
-            requestId, observed.VersionId);
+            requestId, observed.VersionId)
+        {
+            VerifiedImmutabilityMode = observed.ImmutabilityMode,
+            VerifiedRetainUntilUtc = observed.RetainUntilUtc
+        };
     }
 
     private static void VerifyEnvelope(

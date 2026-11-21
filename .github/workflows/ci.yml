@@ -90,6 +90,9 @@ jobs:
             exit 1
           }
 
+      - name: REAL S3 Object Lock protocol test — CI-only RED
+        run: dotnet test tests/Omnia.S3ObjectLock.Tests/Omnia.S3ObjectLock.Tests.csproj -c Release
+
       - name: Start disposable PostgreSQL 17 / pgvector
         shell: bash
         run: |

@@ -511,3 +511,25 @@ real PostgreSQL/RLS integration, S3/Azure contracts, physical
 PITR/witness/restore, Docker, mobile/Playwright, real-browser
 OIDC and Pages before #165 closes. This is not a distributed
 load test or production/GDPR security release.
+
+## TDD: aggregate tenant requests/minute (#166 / ADR 0065)
+Behavioral RED on test-only commit 4096db9a,
+[CI 44962256629](https://github.com/KeyserDSoze/Omnia/actions/runs/44962256629):
+135 passed / 1 failed of 136 real PostgreSQL Integration.
+In WebApplicationFactory with test-only authentication and
+actor=10/min, tenant=2/min, the THIRD different subject of
+the SAME tenant got 200 instead of 429; spoofed X-Tenant-Id
+and X-Forwarded-For were irrelevant. Other-tenant and
+health behavior remains under test. Mobile RED job passed.
+Real JWT/JWKS verification remains in separate browser OIDC.
+
+New deterministic TimeProvider tests cover one-minute expiry,
+Retry-After near 1/60, atomically 7 admissions out of 128,
+bounded capacity and fail-closed new partitions, reclamation
+after 1000 short-lived synthetic tenants, config/key length
+validation and 429 on POST BEFORE body reads, without private
+identity echo. Test-runner not clock sleeps. Preserve per-user
+existing rate, body 408/413/415/503, real PostgreSQL/RLS,
+S3/Azure, physical PITR, Docker/mobile, OIDC and Pages
+evidence, verified on exact final main SHA before closing.
+No provider/production load or GDPR release is implied.

@@ -242,3 +242,18 @@ remain released BEFORE handlers. This is per-process
 resource safety, NOT assured tenant reservations,
 distributed capacity, whole-memory/DB/AI control,
 media/connector quotas, WAF or GDPR release.
+
+## Tenant-aggregate authenticated API rate (#166 / ADR 0065)
+In addition to per-account 120 requests/minute, Omnia
+limits all accounts of one OIDC tenant collectively to
+RateLimit:TenantRequestsPerMinute (default **600** per
+fixed 60-second window; valid 1..10000) per API process.
+On saturation authenticated /api/v1 returns HTTP
+429 rate_limited/no-store/Retry-After before body read
+or handler. RateLimit:MaxTrackedTenants defaults 4096
+(valid 1..16384); when all partitions are full, new
+tenant identities fail closed until expired windows
+are reclaimed on request traffic. Authentication,
+health, existing JSON limits and tenant isolation are
+unchanged. This is NOT a distributed multi-instance
+quota, WAF, guaranteed fairness or GDPR/production go-live.

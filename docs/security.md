@@ -1141,3 +1141,31 @@ NOT a distributed/multi-replica budget, a whole API processing/
 DB/AI quota, memory-profiler proof, WAF/ingress, media/connector
 or provider quota, load test, or GDPR release. Existing RLS,
 consent and body-receive limits 32/16/4 unchanged. #37/#2 OPEN.
+
+## Aggregate OIDC tenant request rate (#166 / ADR 0065)
+An authenticated tenant could spread requests among multiple
+signed subject accounts to evade the existing per-actor 120/min
+endpoint policy. A second process-local 60-second fixed window
+now aggregates all authenticated /api/v1 HTTP methods per signed
+tenant, default 600/min (configured range 1..10000), before
+body buffering and DB handlers. Same existing per-user policy
+remains active. The key derives solely from validated JWT
+tenant_id+sub, not X-Tenant-Id, X-Forwarded-For, body or query
+fields. Saturation returns 429 rate_limited/no-store/
+Retry-After 1..60 without reflecting private identifiers,
+reading body bytes or invoking an endpoint. Auth failures
+and health/readiness/CORS responses remain unaffected.
+
+The dictionary is protected by one lock and at most 4096
+tenants by default (configuration 1..16384), preventing
+unbounded NEW tenant partition allocation. Expired entries
+are reclaimed lazily every 15 seconds of request traffic;
+expired keys can stay in bounded RAM while idle. When the
+map is full, previously unseen tenants get generic 429
+until an expired window is reclaimed: fail closed, not
+guaranteed availability/fairness. Fixed-window boundaries
+may allow roughly double short bursts. Existing actor
+limiter's separate partition lifetime is not addressed.
+No distributed quota, edge WAF/TLS/HTTP connection control,
+media/storage/provider/AI quota, real load/SLO, production
+hardening or GDPR attestation; #37/#2 OPEN.

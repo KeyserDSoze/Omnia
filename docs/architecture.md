@@ -519,3 +519,16 @@ On saturation fail-fast 503 before body read. These limits
 cannot reserve global slots for a tenant or span replicas;
 non-JSON routes, total process/DB/AI memory and ingress
 remain outside this contract.
+
+## Aggregate tenant API rate window (ADR 0065)
+After JWT authentication, ASP.NET's actor rate policy and
+authorization, an independent process-local tenant limiter
+caps total authenticated /api/v1 GET/POST/PUT/PATCH/DELETE
+requests by ALL accounts in a tenant, default 600 per fixed
+60-second window. It is distinct from actor 120/min and
+read/buffer concurrency budgets. Tenant identity is from
+validated JWT claims. A lock protects at most 4096 tracked
+tenant windows, with lazy traffic-triggered expiry sweep
+every 15s and 429 fail-closed for unknown tenants at full
+partition capacity. Does not coordinate replicas or
+guarantee reserved tenant capacity.

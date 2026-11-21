@@ -202,3 +202,17 @@ tenant reservations, cluster-wide quotas, WAF/ingress,
 media/connector/storage budgets, realistic load or GDPR
 go-live claims; #37 and #2 stay OPEN. Historical inventory
 counts above do not reflect live issue totals.
+
+## P0 aggregate signed tenant requests/minute (#166 / ADR 0065)
+Child [#166](https://github.com/KeyserDSoze/Omnia/issues/166)
+under [#37](https://github.com/KeyserDSoze/Omnia/issues/37):
+60-second fixed window, default 600 accepted authenticated
+/api/v1 requests per signed OIDC tenant per API process,
+alongside existing per-account 120/min. No queue; 429
+rate_limited before body/handler, no client-header trust.
+Limit tracked tenant partitions to 4096 by default (max
+16384), lazily prune expired keys on traffic; fail closed
+for new tenants when the map is full. Not a distributed
+quota, ingress/WAF, media/connector/provider/storage
+budget, fair-share promise or GDPR release. Original
+backlog issue totals remain historical. #37/#2 OPEN.

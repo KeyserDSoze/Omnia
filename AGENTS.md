@@ -1261,3 +1261,29 @@ RECEIVE permits 32/16/4 released BEFORE handlers. This is an
 upper bound on one API process, NOT a fair reservation when
 global capacity is gone, cluster quota, all DB/AI work limiter,
 WAF/ingress protection or GDPR signoff. #37 and #2 OPEN.
+
+## Per-tenant request/minute budget (#166 / ADR 0065)
+Preserve the ASP.NET Core per-actor RateLimit:RequestsPerMinute
+policy (default 120) and apply an independent 60-second fixed
+window for authenticated /api/v1 requests across ALL signed
+OIDC actors in one tenant. Default
+RateLimit:TenantRequestsPerMinute=600, valid 1..10000;
+RateLimit:MaxTrackedTenants=4096, valid 1..16384. Explicit
+invalid values fail startup. Execute AFTER authentication,
+existing UseRateLimiter and authorization and BEFORE JSON
+body buffering/handlers; do not limit health, readiness,
+anonymous challenges or CORS preflight with this tenant layer.
+Partition ONLY with ApiRateLimitPolicy.TenantPartitionKey
+from validated OIDC claims, never forwarded/client headers.
+On exhaustion return generic 429 rate_limited, no-store and
+Retry-After 1..60, no queue, body read or handler work.
+One lock guards per-process windows; at most MaxTrackedTenants
+keys. Expiry cleanup is lazy on request traffic at most once
+per 15 seconds, not at every rejection or in background.
+At full partition cardinality, fail CLOSED for unknown tenants
+without evicting active tenants. Bounded in-memory key strings
+can remain until later traffic/restart; NEVER log or persist.
+Fixed-window edge bursts and denial to new tenants under
+cardinality pressure are explicit residual risks; not
+distributed, WAF, media/connector, GDPR or production-proof.
+Keep #37 and #2 OPEN.

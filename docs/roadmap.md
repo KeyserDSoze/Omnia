@@ -828,3 +828,19 @@ evidence and both are already CLOSED. They are NOT open work.
 - [ ] Parent #37 and epic #2 OPEN: distributed quotas,
   reserved-fair processing, ingress/WAF, media/provider
   budgets, real load and legal/GDPR release review.
+
+## P0 #166 tenant aggregate API rate (ADR 0065)
+- [x] TDD RED test-only commit 4096db9a, CI 44962256629:
+  135/136 PostgreSQL Integration passed, third same-tenant
+  actor bypassed tenant 2/min while under actor 10/min.
+- [x] 60-second process-local tenant rate cap 600 default,
+  and bounded 4096 tracked windows, no queue, 429/no-store
+  on exhaustion or cardinality saturation. Injectable
+  TimeProvider supports deterministic clock and 128-way
+  parallel admission regression.
+- [ ] Confirm all CI jobs (PostgreSQL, S3/Azure, PITR,
+  Docker, mobile), OIDC real-browser, Pages SUCCESS on
+  the SAME final main SHA before closing child #166.
+- [ ] Parent #37 and epic #2 remain OPEN for
+  cross-instance rates, ingress WAF, anonymous sockets,
+  media/provider budgets, load/SLO and GDPR release.

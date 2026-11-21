@@ -673,7 +673,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   `IImmutableAttemptObjectReader` senza dipendenze cloud,
   senza inserimento in API/DELETE; solo `MayAutoReplay=false`,
   `MayReleaseRecovery=false`, `ProvesSourceDeleteCommit=false`.
-- [ ] Registrare evidenze finali RED/GREEN GitHub Actions.
+- [x] **RED/GREEN GitHub Actions verificate**: [RED initial 44882236030](https://github.com/KeyserDSoze/Omnia/actions/runs/44882236030) per tipi mancanti; [RED alias 44882440793](https://github.com/KeyserDSoze/Omnia/actions/runs/44882440793) per `latest`/`null`; GREEN `390331a4` con [CI 44882456199](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456199), [OIDC 44882456209](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456209) e [Pages 44882456200](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456200) tutte SUCCESS. #143 chiusa; #144 e #141 aperte.
 - [ ] **#141**: implementare adapter reali Azure Blob e S3 Object
   Lock (on-prem realmente indipendente), controllare lock e
   retention per versione, version pin esterno monotono,

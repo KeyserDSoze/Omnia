@@ -109,3 +109,10 @@ canonica, assenza oggetto e eccezioni I/O. Tutti i provider
 sono **mock contrattuali**, non Azure o S3 reali. Le evidenze
 dei workflow RED/GREEN vengono registrate nelle issue dopo
 completamento; non attribuire conformità a un test con stub.
+
+## Evidenza TDD verificata su GitHub Actions
+
+- **RED #1:** test-first `ec6743d4`, [Omnia CI 44882236030](https://github.com/KeyserDSoze/Omnia/actions/runs/44882236030) **FAILURE attesa**, CS0246 per la mancanza del nuovo port/version model.
+- **RED #2:** test-first `fc31b61f`, [Omnia CI 44882440793](https://github.com/KeyserDSoze/Omnia/actions/runs/44882440793) **FAILURE attesa** (1/80 test fallito): valore `latest` e S3 `null` trattati erroneamente come pin di versione reale.
+- **GREEN:** fix `390331a4`, [Omnia CI 44882456199](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456199) **SUCCESS** (dotnet, mobile, PostgreSQL integration, restore e PITR fisici). [OIDC real-browser 44882456209](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456209) e [Pages 44882456200](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456200) **SUCCESS** sullo stesso SHA.
+- #143 chiusa dopo GREEN, #144 aperta per provider veri e #141 P0 ancora aperta per authority indipendente e commit attestation. La CI non prova WORM reali.

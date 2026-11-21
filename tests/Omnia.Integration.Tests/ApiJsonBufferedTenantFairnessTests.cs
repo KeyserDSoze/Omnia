@@ -82,6 +82,75 @@ public sealed class ApiJsonBufferedTenantFairnessTests
             "tenant-a", "actor-seventeen");
     }
 
+    [Fact]
+    public void TenantBufferBudgetValidatesConfigurationAndEvictsIdleKeys()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiJsonBufferedRequestLimiter(8, 0));
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiJsonBufferedRequestLimiter(8, 9));
+        Assert.Equal(16, new ApiJsonBufferedRequestLimiter(64).MaxConcurrentBufferedRequestsPerTenant);
+        Assert.Equal(8, new ApiJsonBufferedRequestLimiter(8).MaxConcurrentBufferedRequestsPerTenant);
+        Assert.Equal(1, new ApiJsonBufferedRequestLimiter(1).MaxConcurrentBufferedRequestsPerTenant);
+        Assert.Equal(3, new ApiJsonBufferedRequestLimiter(8, 3).MaxConcurrentBufferedRequestsPerTenant);
+
+        var limiter = new ApiJsonBufferedRequestLimiter(8, 3);
+        Assert.Throws<ArgumentException>(() => limiter.TryAcquire(" "));
+        Assert.Throws<ArgumentException>(() =>
+            limiter.TryAcquire(new string('x', 257)));
+        Assert.Equal(0, limiter.ActiveTenantPartitions);
+        for (var i = 0; i < 1000; i++)
+        {
+            using (var slot = limiter.TryAcquire($"synthetic-tenant-{i}"))
+            {
+                Assert.NotNull(slot);
+                Assert.Equal(1, limiter.ActiveTenantPartitions);
+            }
+            Assert.Equal(0, limiter.ActiveTenantPartitions);
+        }
+    }
+
+    [Fact]
+    public async Task BufferAdmissionsAreAtomicPerTenantAndGloballyUnderContention()
+    {
+        var limiter = new ApiJsonBufferedRequestLimiter(8, 4);
+        var held = await Task.WhenAll(Enumerable.Range(0, 128)
+            .Select(_ => Task.Run(() => limiter.TryAcquire("tenant:first"))));
+        try
+        {
+            Assert.Equal(4, held.Count(x => x is not null));
+            Assert.Equal(1, limiter.ActiveTenantPartitions);
+            Assert.Null(limiter.TryAcquire("tenant:first"));
+
+            var other = new List<IDisposable>();
+            try
+            {
+                for (var index = 0; index < 4; index++)
+                    other.Add(Assert.IsAssignableFrom<IDisposable>(
+                        limiter.TryAcquire("tenant:other")));
+                Assert.Equal(2, limiter.ActiveTenantPartitions);
+                Assert.Null(limiter.TryAcquire("tenant:third"));
+            }
+            finally
+            {
+                foreach (var permit in other)
+                    permit.Dispose();
+            }
+        }
+        finally
+        {
+            foreach (var permit in held.Where(x => x is not null))
+            {
+                permit!.Dispose();
+                permit.Dispose();
+            }
+        }
+
+        Assert.Equal(0, limiter.ActiveTenantPartitions);
+        using var reused = limiter.TryAcquire("tenant:first");
+        Assert.NotNull(reused);
+    }
+
     private static async Task AssertAcceptedAsync(
         ApiJsonBufferedRequestLimiter bufferLimiter,
         ApiJsonBodyReadConcurrencyLimiter readerLimiter,

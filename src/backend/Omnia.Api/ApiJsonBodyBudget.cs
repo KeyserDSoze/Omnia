@@ -90,7 +90,8 @@ public static class ApiJsonBodyBudget
         // Acquire before allocating/reading; dispose LAST, after the
         // bounded MemoryStream and after the handler has finished.
         // The separate receiver permit below still ends BEFORE the handler.
-        using var bufferedPermit = bufferedRequestLimiter?.TryAcquire();
+        using var bufferedPermit = bufferedRequestLimiter?.TryAcquire(
+            ApiRateLimitPolicy.TenantPartitionKey(context));
         if (bufferedRequestLimiter is not null && bufferedPermit is null)
         {
             context.Response.Headers["Retry-After"] = "1";

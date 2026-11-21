@@ -65,6 +65,11 @@ builder.Services.AddAuthorization();
 var requestsPerMinute = builder.Configuration.GetValue<int?>("RateLimit:RequestsPerMinute") ?? 120;
 if (requestsPerMinute is < 1 or > 1000)
     throw new InvalidOperationException("RateLimit:RequestsPerMinute must be between 1 and 1000.");
+// The Kestrel body-size limit is NOT sufficient for TestServer and
+// alternate hosts. Bound JSON mutations in the application as well.
+var maxJsonBytes = ApiJsonBodyBudget.ValidateLimit(
+    builder.Configuration.GetValue<int?>("RequestBody:MaxJsonBytes") ??
+    ApiJsonBodyBudget.DefaultMaxJsonBytes);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -173,6 +178,10 @@ app.UseCors("browser");
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+// Authentication and rate limiting happen BEFORE buffering any user bytes.
+// No credentials or request content are logged by the bounded guard.
+app.Use((context, next) =>
+    ApiJsonBodyBudget.InvokeAsync(context, next, maxJsonBytes));
 app.MapGet("/health", () => Results.Ok(new { status = "ok", product = "Omnia" }));
 app.MapGet("/ready", async (NpgsqlDataSource db, CancellationToken ct) =>
 {

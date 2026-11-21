@@ -112,3 +112,14 @@ senza side effects, conservando 413/415, OIDC e 429. La [parent #37](https://git
 resta OPEN per slow headers/real ingress, rate-limit distribuito,
 WAF, quote media/connector e k6. Lo snapshot del backlog del
 17 novembre non è il conteggio live delle issue GitHub.
+
+## P0 API bounded body read concurrency (#159, ADR 0058)
+
+Child [#159](https://github.com/KeyserDSoze/Omnia/issues/159)
+extends [#37](https://github.com/KeyserDSoze/Omnia/issues/37)
+after #156/#157/#158: per-instance, nonqueueing cap on **in-flight
+JSON request-body reads** with fail-fast 503, generic no-store
+response and permit release before handler work. This is not a
+multi-replica budget, connection limiter, fair tenant quota, WAF
+or production ingress test. The historical 14-epic/116-child
+inventory is not a current live issue count; consult GitHub.

@@ -141,3 +141,17 @@ Dal deploy della migrazione `0005_memory_sealed_payload.sql`, le nuove note invi
 **Configurazione obbligatoria:** `Crypto:KeyRingPath` con file esterno, senza chiavi nel repository, browser o log. In Docker locale creare `docker/secrets/envelope.keyring.json`, proprietà dell'UID della API container e permessi 0400/0440 (la API è non-root). Generare una KEK casuale di 32 byte; non usare l'esempio testuale come chiave. Per esempio: `openssl rand -base64 32` e formato JSON della [guida](docs/envelope-encryption.md). Il file `docker/secrets/` è ignorato da Git. Senza chiave valida l'API rifiuta lo startup; senza nuove migrazioni l'API rifiuta le vecchie scritture.
 
 **Non ancora protetti da questa slice:** note legacy, ID di origine e metadati, embeddings pgvector, storico consensi, backup/WAL, servizi esterni e audio. La feature padre #138/#33 resta aperta e l'ambiente **non è pronto per dati reali**. Dettagli: [docs/sealed-memory.md](docs/sealed-memory.md).
+
+## API JSON intake concurrency — P0 hardening slice #159
+
+Beyond 413 body bytes, 408 total receive deadline and 415 media
+checks, the API has a per-process **concurrent JSON receive** guard:
+RequestBody:MaxConcurrentReads defaults to **32**, configured
+1..256; invalid values refuse API startup. When all slots are in
+use, new supported JSON POST/PUT/PATCH /api/v1 requests get
+**503 request_body_busy** (Retry-After: 1; no-store) without
+reading the payload. Slots are released after buffering, before
+DB/AI work. A 503 is a truthful temporary refusal, not a completed
+write or consent grant. This is NOT cluster-wide admission, a WAF,
+a limit on Kestrel connections or on downstream handler memory;
+#37 remains open, and the API is not ready for real personal data.

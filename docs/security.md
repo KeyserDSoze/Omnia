@@ -921,3 +921,30 @@ synthetic stream that throws upon read; use the existing PostgreSQL
 TestServer and real OIDC workflows for separate authentication/data
 isolation regression, and do not infer production readiness or GDPR
 compliance from this change.
+
+## Concurrent JSON body receive admission (#159 / ADR 0058)
+
+In addition to the body-size / timeout / media-type controls, Omnia.Api
+limits the number of *simultaneously receiving* authenticated JSON
+request bodies per API process. Config:
+RequestBody:MaxConcurrentReads = 32 by default (1..256, fail startup
+outside range). No queue: once the process-local pool is saturated, a
+JSON POST/PUT/PATCH /api/v1 request receives HTTP **503**
+request_body_busy, Cache-Control: no-store and Retry-After: 1,
+without reading bytes or entering the normal API handler. The slot
+is acquired only after cheap 413 Content-Length and 415
+Content-Encoding/Content-Type checks. It is released in an idempotent
+lease even on stream error, client abort, 408 deadline or 413 chunked
+stream, and is explicitly returned before DB / provider / AI handling.
+GET/health and existing rejected media/length flows do not consume it.
+
+This is **local load shedding**, not a distributed quota. A malicious
+identity can consume slots despite the per-user request rate limit;
+there is no per-tenant fairness. Body buffers that have already been
+fully read may remain live in slow downstream handlers, so this does
+NOT bound the total buffered-request memory/connection count. It does
+not stop slow header reads, TLS handshakes, non-cooperative Stream
+implementations or exhaustion at Kestrel/proxy/ingress. Independent
+WAF/edge admission, per-tenant fair quotas, realistic socket-level
+load tests, media/connector budgets and production review remain P0
+work under #37. Never claim GDPR or multi-replica DoS protection.

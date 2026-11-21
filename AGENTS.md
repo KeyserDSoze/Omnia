@@ -1113,3 +1113,21 @@ media-type validation; total 408 deadline still guards accepted JSON.
 Use synthetic fail-on-read stream regression tests. Do not broaden to
 media upload, accept unauthenticated data or claim DoS/GDPR readiness.
 Keep #37 OPEN.
+
+## Concurrent JSON body reader admission (#159 / ADR 0058)
+
+Authenticated POST/PUT/PATCH /api/v1 request bodies must use ONE shared,
+process-local ApiJsonBodyReadConcurrencyLimiter in the API middleware,
+AFTER recovery/authentication/rate limiting/authorization and the
+existing Content-Encoding, declared size and Content-Type 415/413
+prechecks. RequestBody:MaxConcurrentReads defaults to 32 (valid
+1..256, fail startup outside range). Admission is a nonblocking,
+non-queuing Wait(0) BEFORE allocating the body buffer or ReadAsync.
+When saturated: 503 request_body_busy, Retry-After: 1 and no-store;
+no body read, model binder, DB/AI work or request content log. Always
+release the permit on 408, 413, disconnection, stream exceptions
+and successful buffering; release BEFORE handing the buffered body
+to the normal endpoint. Scope ONLY concurrent JSON body *reads*
+per API instance, not concurrent completed handlers, Kestrel sockets,
+slow request headers, connector/media uploads, quotas across replicas,
+fairness per tenant or a production DDoS/GDPR release. Parent #37 OPEN.

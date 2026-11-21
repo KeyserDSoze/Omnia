@@ -352,3 +352,21 @@ Test-first commit: [ad5f9d0f](https://github.com/KeyserDSoze/Omnia/commit/ad5f9d
 Implementation commit: [ee7c598d](https://github.com/KeyserDSoze/Omnia/commit/ee7c598d75acec8c1591d6b0ac18f89499777f58).
 CI RED/GREEN evidence must be recorded in issue #158 once checked; no
 unobserved workflow success is implied by these links.
+
+## Concurrent JSON intake TDD gate (#159 / ADR 0058)
+
+New xUnit middleware contract ApiJsonReadConcurrencyTests uses
+synthetic controllable, cancellation-aware streams and a shared
+one-permit limiter. The second request must immediately receive 503
+before its first ReadAsync and must NOT invoke the handler; permit
+returns on normal buffering, 408 deadline and client cancellation.
+A completed body must release its permit even if a downstream
+application handler is blocked. 413 known length and unsupported
+415 media type take precedence while a reader slot is occupied.
+Config permits 1..256, refuses 0/257. Contract tests make NO
+network, PostgreSQL, OIDC, distributed-node or production availability
+claims; existing TestServer real PostgreSQL, Keycloak browser OIDC,
+Docker, S3/Azure, mobile and Pages workflow gates remain mandatory.
+CI evidence and final SHA must be captured on child #159 before
+closure; parent #37 stays OPEN for fair tenant quotas, WAF and load
+tests of real network connections.

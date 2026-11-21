@@ -836,3 +836,19 @@ interpret only that exact result as a successful NEGATIVE regression;
 API, DELETE, worker and release state remain untouched/quarantined.
 No offsite immutable authority, postcommit source attestation or
 simultaneous rollback protection exists. #141 and dependencies OPEN.
+
+## Immutable version-pinned attempt evidence contract (#143 / ADR 0043)
+
+`ImmutableAttemptEvidence.VerifyAsync` is a read-only boundary,
+NOT permission to claim/delete/replay/recover. A valid observation
+MUST pin a known independently provisioned store identity AND exact
+object version, reject "latest"/missing version/incorrect key, require
+S3 COMPLIANCE or an actually locked Azure WORM policy with unexpired
+retention, validate canonical bounded schema and two distinct 32-byte
+scope/evidence HMAC keys. The contract's provider metadata is UNTRUSTED
+unless a separately tested implementation obtains real version-level
+lock status. In-memory/fake readers and `CreateSynthetic` are test-only,
+NEVER offsite/WORM evidence. No real providers, version pin authority,
+OIDC authorization, source COMMIT proof or global release exist yet.
+Keep #141/#109/#31/#32 OPEN. Do NOT wire this observer into REST
+or treat a valid receipt as GDPR erasure evidence.

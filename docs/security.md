@@ -760,3 +760,17 @@ credenziali e scope HMAC non costituiscono
 immutabilità, non sostituiscono un high-watermark
 offsite e non provano il commit di cancellazione
 sul primario. #141/109/31/32 OPEN.
+
+## #143 — External immutable-attempt evidence read contract (ADR 0043)
+
+Il verifier impone due chiavi HMAC da 32 byte, distinte,
+JSON canonico e bounded, scope attore esatto, expected
+store identity/immutable version ID, policy S3 COMPLIANCE o
+Azure LOCKED e retention UTC non scaduta. Missing/error,
+GOVERNANCE, versione differente o MAC alterato: deny.
+**Forte limite:** un reader fake può mentire su WORM/retention;
+né enum né chiave HMAC certificano indipendenza amministrativa.
+Occorrono credenziali workload identity, IAM/RBAC e version
+pin esterno, clock sicuro, test veri Object Lock su provider
+e una ricevuta COMMIT distinta. Non aprire recovery o
+abilitare DELETE sulla base di `ImmutableAttemptObservation`.

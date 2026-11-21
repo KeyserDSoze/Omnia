@@ -663,3 +663,19 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   una prova di commit DELETE sul primario e la release
   operativa/legale autenticata prima di usare dati reali.
   Il test non esegue DELETE né cambia lo stato recovery.
+
+## P0 #143 — Contratto read-only di evidence immutabile version-pinned (ADR 0043)
+
+- [x] RED: test fail-closed per UUID/tenant/owner e due chiavi,
+  store identity, exact version ID, modalità, retention,
+  JSON/MAC, missing e I/O prima della classe implementativa.
+- [x] GREEN implementativa: `ImmutableAttemptEvidence` e
+  `IImmutableAttemptObjectReader` senza dipendenze cloud,
+  senza inserimento in API/DELETE; solo `MayAutoReplay=false`,
+  `MayReleaseRecovery=false`, `ProvesSourceDeleteCommit=false`.
+- [ ] Registrare evidenze finali RED/GREEN GitHub Actions.
+- [ ] **#141**: implementare adapter reali Azure Blob e S3 Object
+  Lock (on-prem realmente indipendente), controllare lock e
+  retention per versione, version pin esterno monotono,
+  upload + ACK e attestazione post-commit primario, con
+  test reali provider. Nessuna prova WORM o GDPR prod in #143.

@@ -360,3 +360,17 @@ di authority produttiva richiede controllo esterno
 indipendente e attestazione del commit del primario.
 La prova non espone un'API e non rende effettiva
 la cancellazione di dati reali.
+
+## Boundary di lettura per evidence versione immutabile (ADR 0043)
+
+Nuovo port `IImmutableAttemptObjectReader`: il reader è
+obbligato a ottenere una versione esatta di un oggetto esterno
+e la sua policy di retention, non la versione latest.
+`ImmutableAttemptEvidence.VerifyAsync` vincola un expected
+store ID e expected version ID (da fornire da trust domain
+separato), uno scope HMAC UUID/tenant/owner e un HMAC
+domain-separated di evidence; restituisce esclusivamente
+un'osservazione del tentativo precedente senza release/replay.
+Il solo contratto non rende reale Azure Locked o S3 COMPLIANCE.
+Nessun adapter cloud e nessun control plane è implementato:
+l'architettura non contiene ancora una offsite/WORM authority.

@@ -949,3 +949,16 @@ finestra di rollback comune. Nessun DELETE, API
 ready, ingest, traffico worker o accesso esterno.
 WAL/PGDATA/key restano nel runner temporaneo e
 vengono eliminati dopo il test.
+
+## Preflight futuro su object-version WORM (ADR 0043)
+
+La lettura fail-closed di `IImmutableAttemptObjectReader`
+richiede un key/UUID e un *version ID pin* da un
+control plane indipendente dal PostgreSQL ripristinato,
+policy S3 COMPLIANCE/Azure LOCKED e retention valida.
+Una ricevuta con HMAC corretta non è sufficiente se
+la versione è mutable, scaduta o la custodia è nello
+stesso dominio di guasto. In questo incremento NON
+esiste un oggetto reale S3/Azure: test con stub.
+Mantenere le procedure PITR fisiche e la quarantena,
+non generare `ready` né riavviare ingress/worker.

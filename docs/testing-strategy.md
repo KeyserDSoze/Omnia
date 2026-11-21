@@ -91,3 +91,15 @@ build has read access; deployment alone has `pages:write` and
 `id-token:write`. This is not a guarantee of GitHub infrastructure
 availability; verify the REAL latest Actions run before closing #142.
 Source: https://github.com/actions/deploy-pages/blob/v4/src/internal/api-client.js
+
+## #143 — Provider-neutral WORM evidence contract (ADR 0043)
+
+`ImmutableAttemptEvidenceContractTests` esercita ricevute
+sintetiche canonical JSON + HMAC dello scope + un secondo
+HMAC di evidence, immutable version ID esterno, storage
+identity, retained-until e metadata di lock. Rifiuta
+strictly empty/forged/mutable/expired/mismatched/missing
+o I/O error. Un successo è **solo contract test con
+reader mock**: real S3 Object Lock e Azure Blob immutable
+policy/identity/version pin NON sono qui integrazione,
+e nessun permission token di cancellazione esiste.

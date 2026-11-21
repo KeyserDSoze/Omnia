@@ -368,3 +368,16 @@ Una claim validata o nuovamente scritta NON è evidenza
 del commit della richiesta di cancellazione GDPR Art.17.
 Restano obbligatorie fonte esterna affidabile, revisioni
 privacy/legal, dati derivati, backup e provider.
+
+## Evidence di tentativo pseudonimizzata, non certificato di erasure (ADR 0043)
+
+Il contratto non scrive tenant/subject in chiaro nel
+body JSON: solo UUID, scope MAC e HMAC separato.
+UUID e MAC possono comunque costituire metadati
+personali pseudonimizzati; non assumere anonimato.
+Prima di un vault offsite, documentare finalità,
+base giuridica, retention limitata, modalità di
+cancellazione al termine della retention, DPA,
+consensi applicabili e accessi dei responsabili.
+Il risultato attesta al massimo un tentativo visto,
+non la cancellazione ex art.17 GDPR.

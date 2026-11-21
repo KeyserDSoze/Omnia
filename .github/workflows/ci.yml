@@ -162,6 +162,9 @@ jobs:
           rm -f -- "$RUNNER_TEMP/omnia-s3-auth.json"
 
 
+      - name: Azure SDK WORM version-pinned HTTP contract tests (RED first)
+        run: dotnet test tests/Omnia.AzureBlobWorm.Tests/Omnia.AzureBlobWorm.Tests.csproj -c Release
+
       - name: Start disposable PostgreSQL 17 / pgvector
         shell: bash
         run: |

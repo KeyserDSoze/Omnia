@@ -79,7 +79,8 @@ var jsonBodyReadTimeoutMs = ApiJsonBodyBudget.ValidateReadTimeoutMilliseconds(
 // ingress connection cap or a distributed SaaS quota.
 var jsonBodyReadLimiter = new ApiJsonBodyReadConcurrencyLimiter(
     builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentReads") ??
-    ApiJsonBodyReadConcurrencyLimiter.DefaultMaxConcurrentReads);
+    ApiJsonBodyReadConcurrencyLimiter.DefaultMaxConcurrentReads,
+    builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentReadsPerActor"));
 // Validate transport limits BEFORE starting Kestrel or opening any sockets.
 var requestHeadersTimeoutMs = builder.Configuration.GetValue<int?>(
     "Transport:RequestHeadersTimeoutMilliseconds") ??

@@ -42,6 +42,15 @@ del DELETE primario potrebbe quindi creare tentativi duplicati.
   `ObjectLockRetainUntilDate` UTC, payload JSON e
   `MD5Digest` di trasporto S3 (non è autenticazione,
   che usa HMAC-SHA256). Una sola chiamata al client S3.
+- La rilettura deve provare anche **modalità S3 COMPLIANCE**
+  (non la modalità Azure Locked) e scadenza effettiva
+  **non materialmente inferiore alla retainUntil richiesta**
+  dal PUT; una differenza inferiore a un secondo è
+  ammessa per serializzazione S3 al secondo. Il record
+  `ImmutableAttemptObservation` espone modalità e
+  scadenza soltanto dopo la verifica HMAC+provider.
+  Un provider che restituisce `AzureLocked` o abbrevia
+  la retention produce `Uncertain`.
 - Il VersionId nell'ACK deve essere non-vuoto,
   non-`null`, non-`latest`. **Non basta l'ACK**:
   `ImmutableAttemptEvidence.VerifyAsync` interroga

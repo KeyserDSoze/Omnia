@@ -906,3 +906,16 @@ administrative loss, identity compromise and separate
 version pin authority remain outstanding. Synthetic
 SeaweedFS CI is the SAME runner, not offsite. No
 API/DI integration. #144/#141/#109/#31/#32 OPEN.
+
+## S3 writer mode/retention readback hardening (ADR0046/#147)
+
+A write/readback can return `Observed` ONLY when the verified
+effective mode is specifically S3Compliance (never AzureLocked)
+and effective retention is not materially shorter than the
+requested PUT retention (allow less than 1 second for provider
+timestamp encoding). The ADR0043 observation must surface
+verified mode + retention, not only versionId. TDD MUST prove
+RED with provider substitution and shortened retention,
+then GREEN on real SeaweedFS and fake error cases. Reject
+AWS clients with SDK hidden retries enabled before mutation.
+No APIs or production offsite claims; #144/#141 OPEN.

@@ -160,3 +160,15 @@ nessuno può produrre retry o ready. Payload MAC o
 retention non validi sono negati *prima* del PUT.
 Questi test non dimostrano atomicità distribuita,
 physical offsite WORM né source DELETE commit.
+
+## TDD #147 — modo/retention S3 dopo ACK
+
+Il test `WrongProviderOrShorterThanRequestedRetentionCannotBeObserved`
+deve essere RED se il publisher accetta una policy AzureLocked
+o una S3Compliance con scadenza abbreviata. Il GREEN
+richiede `ImmutableAttemptObservation` con modalità
+e retention verificate e confronto con la richiesta.
+`AwsClientThatCanRetryIsRejectedBeforeAnyWrite` respinge
+configurazioni SDK con retry nascosti prima di una PUT.
+Le suite continuano a usare il backend SeaweedFS
+effimero, non authority offsite.

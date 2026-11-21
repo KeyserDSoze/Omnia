@@ -722,3 +722,15 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [ ] #144/#141 ancora OPEN: offsite admin indipendente,
   Azure WORM staging, external monotonic pin, source
   COMMIT certificate, writer OIDC e global DR quarantine.
+
+## #147 — hardening semantica ACK S3 (ADR0046)
+
+- [x] RED per provider mode diverso da S3 e retention
+  effettiva abbreviata rispetto al PUT richiesto;
+  il publisher ora ritorna `Uncertain` in entrambi i casi.
+- [x] XUnit impedisce adapter AWS con retry SDK attivi.
+- [ ] Raccogliere prove RED/GREEN GitHub Actions sullo
+  SHA finale prima della chiusura #147.
+- [ ] #144/#141: pin version ID e authority esterna
+  indipendente dal runner e da tutti i PGDATA, fonte
+  autenticata COMMIT primaria, Azure WORM staging.

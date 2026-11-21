@@ -817,3 +817,14 @@ Timeout, 409/412, 200 senza versione, perdita ACK e readback
 negato rimangono `Uncertain`, mai autorizzazione a DELETE.
 La compliance reale richiede custodia offsite, IAM distinta,
 audit e legal review; test SeaweedFS non sono la prova.
+
+## Conditional S3 effective retention equality gate (#147)
+
+Un readback S3 `COMPLIANCE` ancora valido non è sufficiente
+se il provider ha accorciato la `retainUntil` desiderata.
+Il publisher confronta modalità effettiva (solo S3) e
+retention effettiva con la richiesta (tolleranza <1s per
+serializzazione protocollo). Provider substitution
+(`AzureLocked`) o scadenza troppo breve = `Uncertain`,
+senza auto-retry né DELETE. Test xUnit negativi verificano
+i casi e vietano MaxErrorRetry != 0.

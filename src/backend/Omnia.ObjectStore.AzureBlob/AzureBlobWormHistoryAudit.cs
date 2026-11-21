@@ -27,7 +27,7 @@ public interface IAzureBlobVersionHistory
 }
 
 /// <summary>
-/// READ-ONLY Azure.Storage.Blobs adapter. List versions, soft deleted and
+/// READ-ONLY Azure.Storage.Blobs adapter. Only canonical evidence or/// signed PIN keys are accepted; any wider prefix must be rejected.\n/// List versions, soft deleted and
 /// deleted-with-versions states, but do not infer that the provider returned
 /// its entire history (nor that all those objects are WORM protected).
 /// </summary>
@@ -45,7 +45,8 @@ public sealed class AzureBlobSdkVersionHistory : IAzureBlobVersionHistory
     public async Task<AzureBlobHistoryPage> ListAsync(
         string objectKey, string? cursor, int pageSize, CancellationToken ct)
     {
-        if (!AzureBlobWormHistoryAudit.ValidKey(objectKey) ||
+        if (!(AzureBlobWormHistoryAudit.ValidKey(objectKey) ||
+              AzureBlobVersionPinService.ValidPinKey(objectKey)) ||
             pageSize != 2 ||
             (cursor is not null && !AzureBlobWormHistoryAudit.ValidCursor(cursor)))
             throw Invalid();

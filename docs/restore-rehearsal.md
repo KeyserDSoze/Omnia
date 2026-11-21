@@ -1070,3 +1070,17 @@ di cancellazione o `ready`. La vista del provider può essere
 incompleta o manipolata: non è una sorgente esterna monotona e
 non dimostra il COMMIT DELETE del primario. Test HTTP scriptati,
 non Azure live; #144/#141/#109/#31 restano APERTE.
+
+## Azure lost HTTP ACK forensic reconciliation (#153 / ADR 0052)
+
+Il client può perdere l'ACK dopo un PUT accettato dal cloud o fra
+l'upload e il lock WORM della versione. Il nuovo
+`AzureBlobLostAckHistoryReconciler` è SOLO read-only, cerca la singola
+versione visibile tramite la porta List Blobs già esistente,
+ricontrolla identità/HMAC/immutability `AzureLocked` via HEAD/GET
+version-pinned e restituisce eventualmente `PreviouslyObserved`.
+Catalogo vuoto/ambiguo/403/timeout/ritenzione scaduta implica
+sempre `Uncertain`; in nessun caso può rieseguire la scrittura,
+confermare DELETE COMMIT o riaprire l'API. La cronologia visibile
+non è autorità monotona esterna; simulazione CI, non staging Azure,
+IAM segregato o validazione GDPR. #144/#141/#109/#31 OPEN.

@@ -1008,3 +1008,18 @@ NEVER grants auto retry, DELETE, source commit, replay, recovery-ready,
 complete history or independent custody. Scripted SDK tests do not
 replace true Azure offsite WORM/RBAC, independent monotonic journal
 or GDPR review. #144/#141/#109/#31 OPEN.
+
+## Azure Blob lost-ACK read-only reconciliation (#153 / ADR 0052)
+
+A lost Azure Blob PUT or lock ACK is NEVER proof that the operation did
+not commit. A forensic reconciler may scan the **visible** provider
+version history for a known UUID using 2-item pages, max 8 pages,
+exact key and nonrepeating cursor. Reject deleted, snapshot, noncurrent,
+foreign, duplicate, bad/versionless entries and provider 403 or truncated
+catalogues. Only ONE visible candidate may be verified using exact
+VersionId Azure Locked + actor HMAC. Even a positive observation leaves
+MayAutoRetry/MayReleaseRecovery/ProvesSourceDeleteCommit/
+ProvesCompleteHistory/ProvesMonotonicHistory **false**. Never use listing
+as a trusted independent pin, “nothing written”, permission to retry,
+replay, DELETE or release quarantine. No REST/API or worker wiring;
+synthetic xUnit tests DO NOT prove production Azure WORM. #144/#141/#109/#31 OPEN.

@@ -266,3 +266,18 @@ una observation del catalogo visibile; non prova storia completa,
 monotonicità, root offsite, DELETE COMMIT o diritto a retry/recovery.
 Real Azure staging e RBAC vanno testati separatamente prima di
 chiudere le issue P0 parent #144/#141.
+
+### Azure lost-ACK WORM forensic readback (#153 / ADR 0052)
+
+Un test xUnit crea una ricevuta sintetica HMAC e simula un PUT
+accettato dal remoto ma senza ACK al client: il publisher conserva
+`Uncertain` e una sola invocazione write. La riconciliazione
+read-only può osservare la versione Locked già esistente ma
+NEVER autorizza un secondo PUT, retry, DELETE, replay o READY.
+Prove negative: duplicate/second version, delete/snapshot/noncurrent,
+missing/foreign/unsafe VersionId, cursor loop/scan cap/page empty,
+provider denied, actor MAC sbagliato, wrong store/mode/retention,
+input chiavi/UTC invalido. La history è un mock, mentre la suite
+preesistente valida la serialization HTTP del vero Azure SDK. Nessuna
+prova Azure offsite real, independent monotonicity, source DELETE
+COMMIT o privacy legal compliance.

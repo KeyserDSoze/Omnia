@@ -977,3 +977,13 @@ rimane sotto controllo del runner e non è offsite.
 Non utilizzare il successo di questa prova per
 release del database ripristinato: occorrono ancora
 pin e commit attestati da authority indipendente.
+
+## Azure SDK WORM contract test (ADR 0045)
+
+La CI esercita richieste Azure Blob SDK HTTP reali,
+ma il trasporto risponde con metadata sintetici:
+si impone query versionid in HEAD+GET, versione
+immutabile Locked, UTC retention e ETag uguale,
+senza dare release né sinteticamente cancellare
+dati. Questo NON è un DR rehearsal su account
+Azure WORM reale e non sostituisce PITR o #141.

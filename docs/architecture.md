@@ -386,3 +386,14 @@ latest/null, versionId differente, body over-limit.
 Il test temporaneo usa SeaweedFS per il **protocollo**,
 non una authority esterna reale. L'architettura richiede
 ancora version pin indipendente, RBAC/vault e Azure parity.
+
+## Azure version-scoped object-lock reader (ADR 0045)
+
+Il port `IImmutableAttemptObjectReader` ora dispone anche
+di un adapter separato Azure.Storage.Blobs. Un client
+`BlobClient.WithVersion` legge HEAD e GET della stessa
+versione e ne verifica la policy Locked, la scadenza UTC,
+VersionId, size e ETag. Il core applica HMAC/scope.
+Il progetto non registra l'adapter nell'API né usa un
+account Azure reale: i contract test HTTP non attestano
+immutabilità in Azure o custodia indipendente.

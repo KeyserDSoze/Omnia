@@ -869,3 +869,18 @@ CI-only same-host synthetic S3; even a real S3 COMPLIANCE status
 does NOT prove offsite independent custody or source DELETE COMMIT.
 #144/#141/#109/#31/#32 remain OPEN. No production parity with
 MinIO/Azure; do not turn this into a release gate prematurely.
+
+## Azure Blob WORM read-only SDK adapter (#146 / ADR 0045)
+
+`AzureBlobWormAttemptReader` MUST use an explicit UTC timestamp
+version ID and ONE version-scoped `BlobClient.WithVersion` for both
+GetPropertiesAsync and DownloadStreamingAsync. Require HEAD VersionId
+equals exact pin, version-level ImmutabilityPolicy.PolicyMode Locked,
+non-null UTC ExpiresOn, size <=512, and GET VersionId/ContentLength/ETag
+agree with HEAD. The 513-byte buffer denies lying or oversized bodies;
+null/latest/unlocked/absent/foreign versions, missing policy, 403/404,
+bad HMAC and old retention fail closed. Azure SDK HTTP scripted tests
+are NOT actual Azure WORM service tests and cannot attest WORM,
+IAM, account ownership, version catalog or offsite custody. Do not
+register the adapter in REST/DELETE or authorize recovery ready:
+#144/#141/#109/#31/#32 remain OPEN.

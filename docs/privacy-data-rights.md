@@ -393,3 +393,14 @@ reale identificativi e MAC sono dati pseudonimizzati
 ancora soggetti a minimizzazione, base giuridica,
 retention, controllo accessi e cancellazione alla
 scadenza quando consentita. #141/#144 ancora aperte.
+
+## Azure WORM pseudonymized attempt, senza garanzie privacy automatiche (ADR 0045)
+
+Il reader non salva contenuto utente e non scrive
+dati nel Blob; il payload sintetico contiene UUID
+e HMAC pseudonimizzati, ancora regolati dal GDPR.
+Azienda dovrà documentare regione Azure, ruoli,
+DPA, base giuridica, retention necessaria e sua
+scadenza, gestione richieste art. 17 e audit.
+Il reader non è prova che un DELETE primario sia
+committed e non può riaprire recovery.

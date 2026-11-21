@@ -790,3 +790,16 @@ temporale affidabile. Per AWS richiedere
 `ExpectedBucketOwner`, S3 IAM GetObjectVersion e
 GetObjectRetention; on-prem impone un dominio di
 amministrazione realmente differente. No REST wiring.
+
+## Azure Blob WORM HEAD+GET per versione, non trust authority (ADR 0045)
+
+Richiedere sempre `GetPropertiesAsync` della versione:
+`ImmutabilityPolicy.PolicyMode=Locked` e `ExpiresOn`
+valido; rifiutare Unlocked/no policy, 403/404, VersionId
+non canonico, ETag o ContentLength non corrispondenti,
+stream oltre 512 bytes. Non dedurre immutabilità dalla
+sola abilitazione del container/di versioning. RBAC
+Managed Identity con Data Reader minimizzato, Key Vault,
+identità account indipendente, accesso account atteso e
+test reale di DELETE retained sono da progettare prima
+di production. HTTP mock non prova WORM effettivo.

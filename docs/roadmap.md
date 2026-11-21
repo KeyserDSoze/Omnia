@@ -693,3 +693,18 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   indipendente, Azure Blob immutabile, IAM/RBAC, HSM/vault,
   version pin monotono, disaster multi-site e S3 provider
   reali fuori dal runner; #141 per commit primary+release.
+
+## #146 — Azure Blob WORM SDK read-only version-scoped adapter (ADR 0045)
+
+- [x] RED: Azure Storage SDK transport HTTP contract tests created
+  before provider implementation and introduced into CI.
+- [x] Reader Azure.Storage.Blobs separate from API: exact
+  BlobClient.WithVersion for HEAD+GET, version-level Locked
+  ImmutabilityPolicy and UTC retention, size and ETag checks.
+- [ ] Verify real RED/GREEN runs and all latest-main Actions
+  before closing only #146.
+- [ ] #144 P0: Azure REAL locked version-level WORM staging
+  + Managed Identity/RBAC + separate administration,
+  S3 offsite, persistent monotone pin authority, delete 403
+  and operational approval. #141 P0 for post-commit
+  primary evidence + full recovery gate. No GDPR-ready claim.

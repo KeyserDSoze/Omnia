@@ -95,8 +95,23 @@ anche se un controllo successivo con VersionId
 **simulato come fornito esternamente** può trovare
 l'oggetto positivo.
 
-TDD RED/GREEN, run SHA e GitHub Actions saranno
-riportati qui solo dopo verifica effettiva.
+**TDD RED test-first**: [commit 009bd742](https://github.com/KeyserDSoze/Omnia/commit/009bd7429c8fecc9ee4db3e4a38da857eb6829b5), [CI 44904227083](https://github.com/KeyserDSoze/Omnia/actions/runs/44904227083) **FAILURE attesa** CS0246 perché `S3ObjectLockPinReader` e `S3ObjectLockVersionPinService` non esistevano.
+La prima compilazione del provider `e255d885` ha evidenziato che `PreEraseExecutionClaimScope` è correttamente interno all'Infrastructure; la correzione `5c9b7d88` ha creato un HMAC actor-scope con purpose separato, senza ampliare la visibilità dell'helper interno.
+[CI 44904518296](https://github.com/KeyserDSoze/Omnia/actions/runs/44904518296) sul commit `5c9b7d88` **SUCCESS**: 13/13 S3, 4/4 Azure SDK HTTP, 19/19 Domain, 80/80 PostgreSQL Integration, PITR/Docker/mobile.
+
+**GREEN hardening** dopo test addizionale di expiry pin abbreviata,
+identity store foreign, chiave HMAC ripetuta e provider mode AzureLocked
+sul [commit 3db924a0](https://github.com/KeyserDSoze/Omnia/commit/3db924a080f68f2bf654854cb80a79cbc7286421):
+[CI 44904790204](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790204) **SUCCESS** con **14/14 S3 Object Lock**, **4/4 Azure SDK HTTP sintetico**, **19/19 Domain**, **80/80 PostgreSQL Integration**, PITR fisici/Docker/mobile.
+[OIDC E2E 44904790199](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790199) e [Pages 44904790212](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790212) **SUCCESS**, stesso SHA.
+La negative rehearsal dual-PGDATA ha ancora
+`PHYSICAL_DUAL_CLAIM_PITR_UNSAFE_REPLAY_OBSERVED` e
+`PHYSICAL_DUAL_CLAIM_PITR_REMAINED_QUARANTINED`.
+Nessun test dà la completezza di un monotonic checkpoint offsite.
+
+Per le eventuali modifiche successive a questo commit bisogna
+verificare nuovamente **tutte** le Actions finali su main
+prima di chiudere #149. #144/#141/#109/#31 sempre OPEN.
 
 Questo esperimento NON certifica offsite,
 segregazione amministrativa o IAM/Managed Identity,

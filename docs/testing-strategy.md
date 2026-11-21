@@ -221,3 +221,10 @@ con un VersionId esternamente noto simulato.
 TDD RED prima delle classi; non attribuire
 a questa suite garanzie di monotonicity,
 provider independence o legal GDPR.
+
+### Evidenze GitHub Actions TDD #149 — cross-bucket signed pin
+
+- [RED 44904227083](https://github.com/KeyserDSoze/Omnia/actions/runs/44904227083): commit test-first `009bd742`, fail CS0246 reader/service mancanti; fix visibilità scope con HMAC domain-separated.
+- [GREEN 44904518296](https://github.com/KeyserDSoze/Omnia/actions/runs/44904518296): commit `5c9b7d88`, 13/13 S3, 4/4 Azure HTTP, 19/19 Domain, 80/80 PG Integration, PITR/Docker/mobile.
+- [GREEN finale codice 44904790204](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790204): `3db924a0`, 14/14 S3 (two-bucket pinned WORM + lost ACK + negative source mode/pin retention/store/keys), 4/4 Azure HTTP fake, 19/19 Domain, 80/80 PG Integration, PITR reali/Docker/mobile; [OIDC 44904790199](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790199), [Pages 44904790212](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790212) SUCCESS su stesso commit.
+- La simultanea physical-PITR continua a osservare unsafe replay e quarantena. Un pin locale firmato non sostituisce un catalogo monotono o una custodia amministrativamente separata (#144/#141).

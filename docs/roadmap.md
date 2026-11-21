@@ -759,8 +759,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Pin writer e reader S3 real protocol con GET
   version-specific + GetObjectRetention COMPLIANCE
   ed expiration confronto con la ricevuta.
-- [ ] Annotare RED/GREEN e tutte le Actions verdi sul
-  commit main finale prima di chiudere **solo** #149.
+- [x] **TDD RED/GREEN verificata**: [RED CI 44904227083](https://github.com/KeyserDSoze/Omnia/actions/runs/44904227083) per tipi assenti; [GREEN CI 44904790204](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790204) su `3db924a0`: 14/14 S3 (pin reale con 2 bucket + 4 test nuovi), 4/4 Azure SDK HTTP, 19/19 Domain, 80/80 Integration e PITR/Docker/mobile SUCCESS; [OIDC 44904790199](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790199), [Pages 44904790212](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790212) SUCCESS, medesimo SHA. La chiusura #149 copre solo questa slice, dopo recheck di ogni commit docs finale.
 - [ ] **#144/#141 P0 rimangono OPEN**: due bucket same-runner
   non equivalgono a authority indipendente; serve
   durable monotonic version-pin external control plane,

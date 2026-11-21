@@ -228,3 +228,15 @@ provider independence o legal GDPR.
 - [GREEN 44904518296](https://github.com/KeyserDSoze/Omnia/actions/runs/44904518296): commit `5c9b7d88`, 13/13 S3, 4/4 Azure HTTP, 19/19 Domain, 80/80 PG Integration, PITR/Docker/mobile.
 - [GREEN finale codice 44904790204](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790204): `3db924a0`, 14/14 S3 (two-bucket pinned WORM + lost ACK + negative source mode/pin retention/store/keys), 4/4 Azure HTTP fake, 19/19 Domain, 80/80 PG Integration, PITR reali/Docker/mobile; [OIDC 44904790199](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790199), [Pages 44904790212](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790212) SUCCESS su stesso commit.
 - La simultanea physical-PITR continua a osservare unsafe replay e quarantena. Un pin locale firmato non sostituisce un catalogo monotono o una custodia amministrativamente separata (#144/#141).
+
+### Negative pin-catalogue regression S3 (#150 / ADR 0049)
+
+I test AWS SDK + SeaweedFS su due bucket Object Lock devono
+confrontare la singola versione COMPLIANCE firmata con la storia
+visibile `ListVersions`, quindi introdurre un delete marker e una
+seconda versione COMPLIANCE. `VerifyPinnedAsync` può ancora
+confermare il vecchio pin: l'audit read-only deve dare `Uncertain`
+senza inferire assenza, autorizzare retry, replay, DELETE o `ready`.
+Test finti negano chiave/versione estranea, cursor non valido e
+catalogo mancante prima di un GET. Questi test non sostituiscono
+provider offsite reali, account/IAM isolati o un watermark monotono.

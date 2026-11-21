@@ -965,3 +965,16 @@ offsite custody; caller obtains both version IDs and
 still needs independently durable monotonic pins
 outside restorable PostgreSQL. No REST DI wiring.
 #144/#141/#109/#31/#32 remain OPEN.
+
+## S3 pin catalog ambiguity forensic audit (#150 / ADR 0049)
+
+`S3ObjectLockPinHistoryAudit` reuses the bounded ListVersions port and
+`S3ObjectLockVersionPinService.VerifyPinnedAsync` to report ONLY whether
+one externally pinned signed COMPLIANCE pin was visible in a clean provider
+listing. Any delete marker, second version, foreign key, malformed/partial
+pagination, 403 or readback mismatch MUST be `Uncertain`. Neither a clean
+list nor a positive HMAC read is independent proof of monotonic once-ever,
+absence of earlier attempts, source DELETE COMMIT or offsite custody.
+The audit has NO writer, retry, replay, API DI or recovery release action.
+Test with two synthetic same-admin SeaweedFS buckets and a deliberate
+second COMPLIANCE object after a delete marker. #144/#141/#109/#31 OPEN.

@@ -1030,3 +1030,16 @@ indipendentemente. Il test non recupera il PIN
 da un authority esterna autonoma né bypassa
 quarantena PITR multi-database. Nessuna
 prova di source DELETE COMMIT.
+
+## Audit non autorizzante del catalogo dei pin S3 (ADR 0049, #150)
+
+La prova sintetica separa la validità crittografica del pin esatto dalla
+**visibilità** di versioni concorrenti S3: dopo un delete marker e un
+secondo PUT COMPLIANCE sullo stesso object key, il primo pin resta
+leggibile per VersionId ma il nuovo `S3ObjectLockPinHistoryAudit`
+ritorna `Uncertain`. Scan limitata a 2 elementi/pagina e 8 pagine;
+nessuna LIST parziale, falsa assenza o errore di I/O può autorizzare
+un nuovo tentativo. Un solo pin visibile non prova che la lista sia
+completa o che il servizio risieda fuori dal failure domain comune:
+non è autorizzazione `ready`, conferma di DELETE COMMIT, audit GDPR
+o ripristino sicuro. #144/#141/#109/#31 restano aperte.

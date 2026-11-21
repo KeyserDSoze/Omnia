@@ -119,6 +119,34 @@ public sealed class ApiJsonReadConcurrencyTests
     }
 
     [Fact]
+    public async Task ChunkedOversizeOrStreamExceptionAlsoReturnReaderPermit()
+    {
+        var limiter = new ApiJsonBodyReadConcurrencyLimiter(1);
+        // The body has no trusted Content-Length; the middleware discovers
+        // oversize only after acquiring a read permit.
+        using (var oversizedStream = new MemoryStream(new byte[2048]))
+        {
+            var oversized = Request(oversizedStream);
+            oversized.Request.ContentLength = null;
+            await ApiJsonBodyBudget.InvokeAsync(oversized,
+                _ => throw new Exception("oversized body must not reach handler"),
+                1024, 5000, limiter);
+            Assert.Equal(StatusCodes.Status413PayloadTooLarge, oversized.Response.StatusCode);
+        }
+        await AssertSmallJsonSucceedsAsync(limiter);
+
+        using (var brokenStream = new FailOnReadStream())
+        {
+            var broken = Request(brokenStream);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ApiJsonBodyBudget.InvokeAsync(broken,
+                    _ => throw new Exception("broken body must not reach handler"),
+                    1024, 5000, limiter));
+        }
+        await AssertSmallJsonSucceedsAsync(limiter);
+    }
+
+    [Fact]
     public async Task CompletedReadReleasesPermitBeforeSlowDownstreamHandler()
     {
         var limiter = new ApiJsonBodyReadConcurrencyLimiter(1);

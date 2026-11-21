@@ -217,6 +217,98 @@ public sealed class S3ObjectLockVersionPinTests
         Assert.False(verified.ProvesSourceDeleteCommit);
     }
 
+    [Fact]
+    public async Task ShortPinRetentionForeignStoreAndUnsafeKeysFailClosedWithoutPut()
+    {
+        var id = Guid.NewGuid();
+        var scope = RandomNumberGenerator.GetBytes(32);
+        var evidenceKey = RandomNumberGenerator.GetBytes(32);
+        var pinKey = RandomNumberGenerator.GetBytes(32);
+        var now = DateTimeOffset.UtcNow;
+        const string evidenceVersion = "evidence-v1";
+        const string pinVersion = "pin-v1";
+        const string evidenceStore = "ci-evidence-store";
+        const string pinStore = "ci-pin-store";
+        var evidenceExpiry = now.AddDays(2);
+        var original = ImmutableAttemptEvidence.CreateSynthetic(id,
+            "ci-tenant", "ci-subject", scope, evidenceKey);
+        var pinContent = S3ObjectLockVersionPinService.CreateSignedSynthetic(
+            id, "ci-tenant", "ci-subject", scope, evidenceKey, pinKey,
+            evidenceStore, evidenceVersion);
+        var evidenceReader = new FixedReader(
+            new ImmutableAttemptObjectVersion(evidenceStore,
+                ImmutableAttemptEvidence.ObjectKey(id), evidenceVersion,
+                ImmutableAttemptImmutabilityMode.S3Compliance,
+                evidenceExpiry, original));
+        var badRetention = new FixedReader(
+            new ImmutableAttemptObjectVersion(pinStore,
+                S3ObjectLockVersionPinService.PinKey(id), pinVersion,
+                ImmutableAttemptImmutabilityMode.S3Compliance,
+                now.AddHours(2), pinContent));
+        var writer = new CountingWriter();
+        var service = new S3ObjectLockVersionPinService(evidenceReader,
+            badRetention, writer, evidenceStore, pinStore);
+
+        var shortened = await service.VerifyPinnedAsync(id, "ci-tenant",
+            "ci-subject", scope, evidenceKey, pinKey, evidenceVersion,
+            pinVersion, now, default);
+        Assert.True(shortened.Uncertain);
+        Assert.False(shortened.MayReleaseRecovery);
+        Assert.Equal(0, writer.Calls);
+
+        var wrongIdentity = new S3ObjectLockVersionPinService(
+            evidenceReader, new FixedReader(
+                new ImmutableAttemptObjectVersion("foreign-pin-store",
+                    S3ObjectLockVersionPinService.PinKey(id), pinVersion,
+                    ImmutableAttemptImmutabilityMode.S3Compliance,
+                    evidenceExpiry, pinContent)),
+            writer, evidenceStore, pinStore);
+        Assert.True((await wrongIdentity.VerifyPinnedAsync(id,
+            "ci-tenant", "ci-subject", scope, evidenceKey,
+            pinKey, evidenceVersion, pinVersion, now, default)).Uncertain);
+        Assert.Equal(0, writer.Calls);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            service.PublishOnceAsync(id, "ci-tenant", "ci-subject",
+                scope, evidenceKey, scope, evidenceVersion, now, default));
+        Assert.Equal(0, writer.Calls);
+
+        // Even a validly HMAC-signed receipt from a fake Azure-locked
+        // provider must not cause an S3 COMPLIANCE pin PUT.
+        var azureReceipt = new FixedReader(
+            new ImmutableAttemptObjectVersion(evidenceStore,
+                ImmutableAttemptEvidence.ObjectKey(id), evidenceVersion,
+                ImmutableAttemptImmutabilityMode.AzureLocked,
+                evidenceExpiry, original));
+        var wrongMode = new S3ObjectLockVersionPinService(azureReceipt,
+            badRetention, writer, evidenceStore, pinStore);
+        var refused = await wrongMode.PublishOnceAsync(id, "ci-tenant",
+            "ci-subject", scope, evidenceKey, pinKey,
+            evidenceVersion, now, default);
+        Assert.True(refused.Uncertain);
+        Assert.Equal(0, writer.Calls);
+    }
+
+    private sealed class FixedReader(ImmutableAttemptObjectVersion version)
+        : IImmutableAttemptObjectReader
+    {
+        public Task<ImmutableAttemptObjectVersion?> ReadVersionAsync(
+            string objectKey, string versionId, CancellationToken ct) =>
+            Task.FromResult<ImmutableAttemptObjectVersion?>(version);
+    }
+
+    private sealed class CountingWriter : IS3ObjectLockAttemptPut
+    {
+        public int Calls { get; private set; }
+        public Task<S3ObjectLockPutAcknowledgment> PutOnceAsync(
+            string objectKey, byte[] signedContent,
+            DateTimeOffset retainUntilUtc, CancellationToken ct)
+        {
+            Calls++;
+            return Task.FromResult(new S3ObjectLockPutAcknowledgment("pin-v1"));
+        }
+    }
+
     private sealed class LoseAckPinPut(IS3ObjectLockAttemptPut inner)
         : IS3ObjectLockAttemptPut
     {

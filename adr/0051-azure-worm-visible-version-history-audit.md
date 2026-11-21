@@ -41,9 +41,11 @@ retry, primary DB commit or recovery-ready link.
 ## TDD and validation
 
 - Tests first `tests/Omnia.AzureBlobWorm.Tests/AzureBlobVersionHistoryAuditTests.cs` exercise single visible good, competing versions, duplicate/missing, deletion/snapshot, foreign key, invalid version, paging loop/truncation/missing pages, simulated provider 403 and wrong actor, plus **real Azure SDK** List Blobs HTTP serialization through a scripted in-memory responder.
-- RED test-first commit `685a68e2`, [CI](https://github.com/KeyserDSoze/Omnia/actions/runs/44914308365). Check run status before claiming RED success.
-- Implementation commit `3f36ce26`, [CI](https://github.com/KeyserDSoze/Omnia/actions/runs/44914362707). Check results and any corrections before final acceptance.
-- Final HEAD CI, OIDC and Pages must all succeed before closing #152.
+- **RED confirmed:** test-first [`685a68e2`](https://github.com/KeyserDSoze/Omnia/commit/685a68e2376b5724df20b7582999b60c48280735), [CI 44914308365](https://github.com/KeyserDSoze/Omnia/actions/runs/44914308365): expected FAILURE CS0246 for missing `IAzureBlobVersionHistory` and `AzureBlobHistoryPage`.
+- **First GREEN attempt:** implementation [`3f36ce26`](https://github.com/KeyserDSoze/Omnia/commit/3f36ce26039aca410094344a2bb37abd643f821f), [CI 44914362707](https://github.com/KeyserDSoze/Omnia/actions/runs/44914362707): 12/13 Azure tests; positive SDK List Blobs query assertion case mismatch. The test exposed the need to explicitly include `Snapshots`.
+- **GREEN verified:** [`819d6a93`](https://github.com/KeyserDSoze/Omnia/commit/819d6a93af87f9214a6095e1493485513a4525eb) added snapshots to the Azure SDK version listing and corrected case-insensitive serialization assertions. [CI 44914545111](https://github.com/KeyserDSoze/Omnia/actions/runs/44914545111) **SUCCESS**, 13/13 Azure scripted SDK, 16/16 real S3 protocol with SeaweedFS, 19/19 Domain, 80/80 PostgreSQL Integration, PITR, restore, Docker and mobile success.
+- [OIDC real-browser E2E 44914545099](https://github.com/KeyserDSoze/Omnia/actions/runs/44914545099) and [GitHub Pages 44914545148](https://github.com/KeyserDSoze/Omnia/actions/runs/44914545148) both **SUCCESS** on same SHA `819d6a93`.
+- This evidence-only ADR update creates a new `main` commit; verify its full workflow gates before #152 is closed. Synthetic CI does NOT prove Azure real account WORM, independent offsite custody, monotonic completeness, source DELETE COMMIT or GDPR legal signoff.
 
 ## Threat model, privacy and remaining P0
 

@@ -1096,3 +1096,20 @@ This does NOT implement slow-header defenses, distributed quotas,
 connection cap, WAF, binary uploads, total endpoint timeout or
 production anti-DDoS. Kestrel request-header and minimum body data
 rates plus ingress controls are still necessary; parent #37 OPEN.
+
+
+## API JSON Content-Type fail-fast boundary (#158 / ADR 0057)
+
+For authenticated POST/PUT/PATCH `/api/v1`, keep media-type checks in
+`ApiJsonBodyBudget` AFTER authentication/rate limiting/authorization
+and BEFORE reading the body. Accept only ASP.NET Core JSON media types
+(`application/json` or `application/*+json`) with no parameters or a
+single `charset=utf-8` (case-insensitive, optionally quoted).
+Missing, malformed, non-JSON, non-UTF-8, duplicate or unknown media
+parameters MUST return 415 `unsupported_media_type` and
+`Cache-Control: no-store` without reading bytes or invoking handlers.
+Existing content-encoding 415 and declared-size 413 pre-checks precede
+media-type validation; total 408 deadline still guards accepted JSON.
+Use synthetic fail-on-read stream regression tests. Do not broaden to
+media upload, accept unauthenticated data or claim DoS/GDPR readiness.
+Keep #37 OPEN.

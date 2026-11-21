@@ -332,3 +332,23 @@ slowloris/header tests. The integration project still runs against
 real disposable PostgreSQL; the OIDC E2E and Kestrel/ingress
 boundaries remain independent. Do not claim 408 delivery to
 an already disconnected client or safe distributed rate limiting.
+
+
+## JSON Content-Type early-rejection test-first slice (#158, ADR 0057)
+
+`tests/Omnia.Integration.Tests/ApiJsonContentTypeTests.cs` introduces
+a synthetic fail-on-read request body to prove that unsupported/missing
+`Content-Type`, invalid charset, duplicate charset and malformed
+media type yield **415 before any read or handler invocation**.
+Valid `application/json` with/without UTF-8 and
+`application/vnd.omnia+json` must pass unmodified to the handler and
+restore the original body stream. `/health` remains untouched.
+These are middleware contract tests, **not** live ingress/network,
+provider-issued OIDC, database mutation, or protection against
+distributed DDoS. Existing real PostgreSQL 413/415, 408 and 429
+integration tests plus OIDC, Pages and mobile CI remain mandatory.
+
+Test-first commit: [ad5f9d0f](https://github.com/KeyserDSoze/Omnia/commit/ad5f9d0f8944b225cf1589995f17c0d7434222ff).
+Implementation commit: [ee7c598d](https://github.com/KeyserDSoze/Omnia/commit/ee7c598d75acec8c1591d6b0ac18f89499777f58).
+CI RED/GREEN evidence must be recorded in issue #158 once checked; no
+unobserved workflow success is implied by these links.

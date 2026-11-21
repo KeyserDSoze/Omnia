@@ -897,3 +897,27 @@ Non protegge da slow headers, occupazione globale connessioni,
 protezione WAF/DDoS, media uploads, quote distribuite e client o
 Stream che ignorano il token di cancellazione. Kestrel e il reverse
 proxy richiedono loro limiti separati, #37 rimane OPEN.
+
+
+## Content-Type JSON fail-fast guard (#158, ADR 0057)
+
+The `ApiJsonBodyBudget` middleware now refuses missing, malformed and
+unsupported JSON request media types **before** the first body read.
+For POST/PUT/PATCH under `/api/v1`, permitted values are
+`application/json` and structured `application/*+json`, with either
+no parameters or a single UTF-8 charset; unsupported/duplicate
+parameters and non-UTF-8 charsets are refused. A 415
+`unsupported_media_type` response uses `Cache-Control: no-store`
+and never echoes the header, request body or subject. Existing
+unsupported `Content-Encoding` 415, declared-size 413, streamed-size
+413, total receive-timeout 408 and actor-specific 429 remain separate.
+GET and `/health` are not constrained by the JSON media guard.
+
+This stops avoidable buffering of unsupported media types in the
+application, not slow headers, connection exhaustion, traffic at the
+edge, JSON schema abuse, multipart/audio uploads or model-binding
+validation of supported JSON. The standalone middleware tests use a
+synthetic stream that throws upon read; use the existing PostgreSQL
+TestServer and real OIDC workflows for separate authentication/data
+isolation regression, and do not infer production readiness or GDPR
+compliance from this change.

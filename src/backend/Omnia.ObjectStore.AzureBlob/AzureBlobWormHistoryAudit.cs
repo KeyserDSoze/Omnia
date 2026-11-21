@@ -53,7 +53,7 @@ public sealed class AzureBlobSdkVersionHistory : IAzureBlobVersionHistory
         var pageable = _container.GetBlobsAsync(
             BlobTraits.None,
             BlobStates.Version | BlobStates.Deleted |
-            BlobStates.DeletedWithVersions,
+            BlobStates.DeletedWithVersions | BlobStates.Snapshots,
             prefix: objectKey,
             cancellationToken: ct);
 

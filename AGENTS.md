@@ -999,7 +999,7 @@ provider to REST DELETE, replay or ready; #144/#141/#109/#31 OPEN.
 
 Do NOT treat Azure Blob versioned WORM evidence as once-ever or
 anti-rollback. A READ-ONLY provider history observation may enumerate
-Version|Deleted|DeletedWithVersions for an **exact** evidence key,
+Version|Deleted|DeletedWithVersions|Snapshots for an **exact** evidence key,
 with bounded pages and cursor checks. Any deleted/snapshot/duplicate,
 second version, untrusted VersionId, missing/truncated page or 403
 is `Uncertain`. Only one *visible* matching version may be checked

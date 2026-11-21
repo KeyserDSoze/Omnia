@@ -17,7 +17,7 @@ Add a read-only `AzureBlobSdkVersionHistory` and
 `AzureBlobWormHistoryAudit` to enumerate the **visible** catalogue
 for a single evidence key. Use Azure.Storage.Blobs
 `GetBlobsAsync(BlobTraits.None, BlobStates.Version | BlobStates.Deleted |
-BlobStates.DeletedWithVersions, prefix:exactKey)`, one page at a time
+BlobStates.DeletedWithVersions | BlobStates.Snapshots, prefix:exactKey)`, one page at a time
 (max 2 entries and 8 pages), with a bounded, nonrepeating continuation
 cursor. The SDK adapter makes **no writes** and never uses or
 deletes the mutable `latest` version.

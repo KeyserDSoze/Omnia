@@ -1062,7 +1062,7 @@ resta non atomico; #144/#141/#109/#31 restano OPEN.
 
 L'osservazione `AzureBlobWormHistoryAudit` campiona read-only le
 versioni che Azure restituisce per la chiave tentativo esatta,
-con stati Version/Deleted/DeletedWithVersions, al massimo 8 pagine e
+con stati Version/Deleted/DeletedWithVersions/Snapshots, al massimo 8 pagine e
 2 voci/pagina, blocco cursori ripetuti, snapshot, soft-delete,
 altre versioni e chiavi estranee. Solo una singola versione
 **visibile** consente il GET/HEAD Locked+HMAC, senza alcun privilegio

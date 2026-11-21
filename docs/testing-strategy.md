@@ -256,7 +256,7 @@ restano negli acceptance criteria della parent #144.
 ### Azure Blob version-history ambiguity audit (#152 / ADR 0051)
 
 xUnit usa il vero Azure.Storage.Blobs SDK per la richiesta List Blobs
-Version|Deleted|DeletedWithVersions attraverso un responder HTTP
+Version|Deleted|DeletedWithVersions|Snapshots attraverso un responder HTTP
 sintetico. I contratti fail-closed includono second version,
 duplicate, missing, soft-deleted, snapshot, foreign key, unsafe
 VersionId, cursor loop/truncation, list 403, wrong actor e HMAC.

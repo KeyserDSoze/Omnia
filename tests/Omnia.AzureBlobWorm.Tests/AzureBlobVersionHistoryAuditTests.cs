@@ -207,10 +207,16 @@ public sealed class AzureBlobVersionHistoryAuditTests
         Assert.Contains("comp=list", uri.Query);
         Assert.Contains("prefix=", uri.Query);
         Assert.Contains(Uri.EscapeDataString(key), uri.RawQuery);
-        Assert.Contains("versions", uri.Query);
-        Assert.Contains("deleted", uri.Query);
-        Assert.Contains("deletedwithversions", uri.Query);
-        Assert.Contains("maxresults=2", uri.Query);
+        Assert.True(uri.Query.Contains("versions", StringComparison.OrdinalIgnoreCase),
+            "Azure List must include versions: " + uri.Query);
+        Assert.True(uri.Query.Contains("deleted", StringComparison.OrdinalIgnoreCase),
+            "Azure List must include deleted: " + uri.Query);
+        Assert.True(uri.Query.Contains("deletedwithversions", StringComparison.OrdinalIgnoreCase),
+            "Azure List must include deletedwithversions: " + uri.Query);
+        Assert.True(uri.Query.Contains("maxresults=2", StringComparison.OrdinalIgnoreCase),
+            "Azure List must use bounded page size: " + uri.Query);
+        Assert.True(uri.Query.Contains("snapshots", StringComparison.OrdinalIgnoreCase),
+            "Azure List must include snapshots: " + uri.Query);
     }
 
     private static (Guid Id, byte[] Scope, byte[] Signing,

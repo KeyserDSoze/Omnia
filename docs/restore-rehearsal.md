@@ -1084,3 +1084,18 @@ sempre `Uncertain`; in nessun caso può rieseguire la scrittura,
 confermare DELETE COMMIT o riaprire l'API. La cronologia visibile
 non è autorità monotona esterna; simulazione CI, non staging Azure,
 IAM segregato o validazione GDPR. #144/#141/#109/#31 OPEN.
+
+## Azure immutable HMAC PIN versione esatta (#154 / ADR 0053)
+
+Nuova slice `AzureBlobVersionPinService`: la verifica positiva di una
+ricevuta AzureLocked firmata HMAC precede una singola scrittura
+condizionata del PIN nel namespace `erasure-pins/v1/`, con 3 chiavi
+HMAC distinte, 2 identità store *logiche* diverse e retention almeno
+pari alla ricevuta originale. Il writer usa SDK zero-retry, upload
+custom policy Unlocked e lock sulla **specifica versione** restituita;
+il reader PIN HEAD/GET limita a 1024 byte e rifiuta il downgrade a
+latest, Unlock e version mismatch. PUT o lock ACK perso => `Uncertain`,
+mai nuovo tentativo, READY o DELETE. Due container sotto lo stesso
+admin Azure **non** sono un journal monotono offsite indipendente:
+richiedono account/role reali, key custody, test WORM live e verifica
+normativa. #144/#141/#109/#31 OPEN.

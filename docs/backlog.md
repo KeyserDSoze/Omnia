@@ -74,3 +74,13 @@ Prima base crittografica per #33, con `IEnvelopeEncryption` e AEAD AES-256-GCM/D
 ## Aggiornamento operativo #139 (2026-11-18)
 
 I nuovi body delle note vengono scritti come `sealed_payload` nel PostgreSQL primario solo quando la key ring esterna è caricata, mentre un trigger vieta il ritorno alle scritture plaintext. `#138` e `#33` **rimangono aperte**: backfill legacy, cifratura embedding/metadati, Key Vault/OpenBao, backup e verifica GDPR sono ancora da fare. Stato definitivo da evidenze GitHub Actions, non dalla sola presenza del codice.
+
+## Status note 2026-11-21 — Azure WORM immutable version PIN (ADR 0053)
+
+Le 14 epic e le 116 feature originali restano snapshot iniziale, **non**
+contatori aggiornati GitHub. La nuova [child #154](https://github.com/KeyserDSoze/Omnia/issues/154),
+parent [#144](https://github.com/KeyserDSoze/Omnia/issues/144),
+sviluppa il PIN HMAC firmato per esatte versioni Azure WORM senza
+pretendere reale custodia offsite, monotonicità o esito della cancellazione.
+Per stato attuale e test consultare le issue/Actions GitHub, non il
+conteggio storico in intestazione.

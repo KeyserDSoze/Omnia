@@ -1023,3 +1023,21 @@ ProvesCompleteHistory/ProvesMonotonicHistory **false**. Never use listing
 as a trusted independent pin, “nothing written”, permission to retry,
 replay, DELETE or release quarantine. No REST/API or worker wiring;
 synthetic xUnit tests DO NOT prove production Azure WORM. #144/#141/#109/#31 OPEN.
+
+## Azure signed cross-container immutable pin (#154 / ADR 0053)
+
+`AzureBlobVersionPinService` signs an actor-scoped canonical JSON PIN
+(UUID, original exact UTC VersionId, store identity, separate HMAC) using
+THREE distinct 32-byte keys (scope/evidence/pin) without tenant or
+subject plaintext. Publish ONLY after exact evidence `AzureLocked` and
+actor HMAC verification, then perform ONE `If-None-Match: *` pin PUT
+using SDK Retry.MaxRetries=0, lock only the ACK VersionId and verify
+version-specific HEAD/GET `AzureLocked` and pin HMAC (max 1024 bytes).
+`VerifyPinnedAsync` always requires BOTH exact externally supplied
+VersionIds. Reject lost ACK, incomplete lock, foreign store/actor,
+wrong MAC/mode/version/expiry; NO retries, DELETE, source COMMIT,
+monotonic history or release, even when `PinObserved=true`. Store
+identity labels and two containers in the same Azure account are NOT
+independent offsite custody. Scripted SDK HTTP tests are NOT live
+Azure WORM, RBAC, external pin authority or GDPR signoff.
+Keep #144/#141/#109/#31 OPEN.

@@ -281,3 +281,15 @@ input chiavi/UTC invalido. La history è un mock, mentre la suite
 preesistente valida la serialization HTTP del vero Azure SDK. Nessuna
 prova Azure offsite real, independent monotonicity, source DELETE
 COMMIT o privacy legal compliance.
+
+### Azure cross-container HMAC signed exact-VersionId PIN (#154 / ADR 0053)
+
+Nuovi xUnit: pin firmato canonico e actor-bound; fake readers/writer
+per MAC tamper, actor mismatch, store/mode/version/retention errati,
+lost ACK dopo commit sintetico, duplicazione delle chiavi HMAC e
+nessuna seconda PUT. Il vero Azure SDK v12 viene esercitato con
+responder HTTP sintetico: upload `If-None-Match: *`, policy Locked
+esatta VersionId, HEAD+GET pinned e limiti max1024; 403/lost ACK,
+Retry.MaxRetries e HTTPS fanno fail closed. La prova non è Azure live,
+non valida la separatezza degli amministratori né source DELETE COMMIT,
+antirollback globale, privacy legal review o release dei recovery gate.

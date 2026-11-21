@@ -107,6 +107,12 @@ public sealed class AzureBlobWormAttemptReader : IImmutableAttemptObjectReader
                 finally { CryptographicOperations.ZeroMemory(bytes); }
             }
         }
+        // The Azure SDK throws for unknown serialized enum values before
+        // it can return BlobProperties. Never leak a deserialization error
+        // as a trustworthy observation or downgrade to an unlocked policy.
+        catch (ArgumentOutOfRangeException) { throw Invalid(); }
+        catch (FormatException) { throw Invalid(); }
+        catch (InvalidOperationException) { throw Invalid(); }
         catch (RequestFailedException)
         {
             // Includes 403 (insufficient RBAC), 404 (missing/deleted

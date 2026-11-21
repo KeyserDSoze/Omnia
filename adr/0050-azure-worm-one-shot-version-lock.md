@@ -57,8 +57,11 @@ grant, actual user data, replay or recovery release in this slice.
 
 ## TDD evidence
 
-- RED test-first commit `8d0311f2` [CI](https://github.com/KeyserDSoze/Omnia/actions/runs/44911802354); verify log for missing publisher types.
-- First provider implementation commit `30bda705`, [CI](https://github.com/KeyserDSoze/Omnia/actions/runs/44911845309); results and subsequent full-main SHA must be updated after completion.
+- **RED confirmed**: test-first commit [`8d0311f2`](https://github.com/KeyserDSoze/Omnia/commit/8d0311f248fac517981fcfec75c0a168e9c04cff), [CI 44911802354](https://github.com/KeyserDSoze/Omnia/actions/runs/44911802354): FAILURE CS0246 for intentionally missing `IAzureBlobWormAttemptWrite` and `AzureBlobWormWriteAck`.
+- **First GREEN attempt**: implementation [`30bda705`](https://github.com/KeyserDSoze/Omnia/commit/30bda705178f35650074be5f90b3a49f7531267b), [CI 44911845309](https://github.com/KeyserDSoze/Omnia/actions/runs/44911845309): compiled, but scripted HTTP PUT response used 200 rather than Azure's expected Created (201); positive test failed.
+- **GREEN verified**: [`2a871ce3`](https://github.com/KeyserDSoze/Omnia/commit/2a871ce3569aaeac2de3fcb6209ba2765e4b4140) fixed scripted responder, [CI 44911945201](https://github.com/KeyserDSoze/Omnia/actions/runs/44911945201) **SUCCESS**: 8/8 Azure scripted SDK tests, 16/16 S3 real SeaweedFS protocol tests, 19/19 Domain, 80/80 PostgreSQL Integration, all PITR/restore and Docker build, mobile job.
+- [OIDC real-browser E2E 44911945246](https://github.com/KeyserDSoze/Omnia/actions/runs/44911945246) and [GitHub Pages 44911945268](https://github.com/KeyserDSoze/Omnia/actions/runs/44911945268): both **SUCCESS** at same SHA 2a871ce3.
+- The final documentation-only follow-up after this evidence requires a fresh full-main Actions check before #151 is closed. #144/#141/#109/#31 remain OPEN; green CI is NOT Azure live WORM or offsite custody.
 
 ## Official sources
 

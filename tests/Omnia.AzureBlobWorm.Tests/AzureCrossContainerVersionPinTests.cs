@@ -20,7 +20,7 @@ public sealed class AzureCrossContainerVersionPinTests
     private const string PinVersion = "2026-11-21T16:00:01.0000000Z";
     private const string EvidenceStore = "ci-evidence-account";
     private const string PinStore = "ci-pin-account";
-    private const string Uri = "https://ci.blob.core.windows.net/omnia-pins";
+    private const string ContainerUrl = "https://ci.blob.core.windows.net/omnia-pins";
 
     [Fact]
     public async Task PinIsActorBoundAndVersionPinnedAcrossTwoLockedReaders()
@@ -189,9 +189,9 @@ public sealed class AzureCrossContainerVersionPinTests
         var f = Fixture();
         using var script = new PinSdkScript(PinVersion, f.Expiry);
         var options = Options(script);
-        var writer = new AzureBlobWormPinSdkWriter(new Uri(Uri), options);
+        var writer = new AzureBlobWormPinSdkWriter(new Uri(ContainerUrl), options);
         var reader = new AzureBlobWormPinReader(
-            new BlobContainerClient(new Uri(Uri), options), PinStore);
+            new BlobContainerClient(new Uri(ContainerUrl), options), PinStore);
         var payload = Signed(f);
 
         var ack = await writer.UploadAndLockOnceAsync(
@@ -227,11 +227,11 @@ public sealed class AzureCrossContainerVersionPinTests
                 Failure = failure
             };
             var options = Options(script);
-            var writer = new AzureBlobWormPinSdkWriter(new Uri(Uri), options);
+            var writer = new AzureBlobWormPinSdkWriter(new Uri(ContainerUrl), options);
             var publisher = new AzureBlobVersionPinService(
                 new FixedReader(Evidence(f)),
                 new AzureBlobWormPinReader(
-                    new BlobContainerClient(new Uri(Uri), options), PinStore),
+                    new BlobContainerClient(new Uri(ContainerUrl), options), PinStore),
                 writer, EvidenceStore, PinStore);
             var result = await publisher.PublishOnceAsync(f.Id,
                 "ci-tenant", "ci-owner", f.Scope, f.EvidenceKey, f.PinKey,
@@ -251,7 +251,7 @@ public sealed class AzureCrossContainerVersionPinTests
         var options = new BlobClientOptions();
         options.Retry.MaxRetries = 2;
         Assert.Throws<InvalidDataException>(() =>
-            new AzureBlobWormPinSdkWriter(new Uri(Uri), options));
+            new AzureBlobWormPinSdkWriter(new Uri(ContainerUrl), options));
         options.Retry.MaxRetries = 0;
         Assert.Throws<InvalidDataException>(() =>
             new AzureBlobWormPinSdkWriter(new Uri(
@@ -383,7 +383,7 @@ public sealed class AzureCrossContainerVersionPinTests
             response.Headers.ETag =
                 new System.Net.Http.Headers.EntityTagHeaderValue("\"ci-pin-etag\"");
             response.Content.Headers.ContentLength =
-                request.Method is HttpMethod.Get or HttpMethod.Head
+                (request.Method == HttpMethod.Get || request.Method == HttpMethod.Head)
                     ? _payload.LongLength : 0;
             response.Content.Headers.ContentType =
                 new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");

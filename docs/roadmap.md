@@ -743,8 +743,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   `S3ObjectLockAttemptHistoryReconciler`, bound 8×2,
   HMAC+COMPLIANCE+store/actor, soltanto
   `PreviouslyObserved` o `Uncertain` non autorizzativi.
-- [ ] Allegare RED/GREEN e Actions complete sullo
-  SHA finale prima di chiudere child #148.
+- [x] TDD verificata: [RED CI 44896553267](https://github.com/KeyserDSoze/Omnia/actions/runs/44896553267) mancava l'adapter; [GREEN CI 44896756880](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756880) **SUCCESS** (10/10 S3, 4/4 Azure HTTP, 19/19 Domain, 80/80 PG Integration, PITR/Docker/mobile), [OIDC 44896756790](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756790) e [Pages 44896756867](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756867) SUCCESS sul commit `d218100f`. #148 chiudibile solo per il reconciler read-only, non per offsite/monotonic pin.
 - [ ] **#144/#141 P0 OPEN**: S3 version-history scan
   non è un pin monotono/offsite indipendente, non
   attesta source DELETE COMMIT o global DR gate;

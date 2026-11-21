@@ -196,3 +196,9 @@ non danno mai retry o release. La scansione è
 metadata è un result Uncertain, non una prova di
 inesistenza. Ancora nessuna verifica offsite e
 source commit primario.
+
+### TDD evidence #148: S3 uncertain ACK history
+
+- [RED 44896553267](https://github.com/KeyserDSoze/Omnia/actions/runs/44896553267) sul commit `5b6aa349`: CS0246 su reconciler e port test-first mancanti.
+- [GREEN 44896756880](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756880) su `d218100f`: **10/10 S3 provider protocol + negative history**, 4/4 Azure SDK fake HTTP, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali/Docker/mobile; [OIDC 44896756790](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756790), [Pages 44896756867](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756867) SUCCESS.
+- La detection del replay pericoloso dopo dual-PGDATA PITR continua a richiedere quarantena, non può essere sbloccata dal nuovo reconciler. Zero/multiple/incomplete S3 version listing non prova l'assenza di tentativi. #144/#141 P0 OPEN.

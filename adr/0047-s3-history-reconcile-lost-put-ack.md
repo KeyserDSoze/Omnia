@@ -113,6 +113,11 @@ la presente slice non rilascia nessuno di quei gate.
 
 ## TDD
 
-Red e green con GitHub Actions verranno registrati solo dopo aver
-osservato i risultati reali dei test e delle Actions sul `main`
-definitivo; non chiudere #144, #141, #109 o #31 per questa slice.
+**RED test-first verificata:** [commit 5b6aa349](https://github.com/KeyserDSoze/Omnia/commit/5b6aa349bab58277b4f3801b1a4b88230bc6c981), [CI 44896553267](https://github.com/KeyserDSoze/Omnia/actions/runs/44896553267) FAILURE prevista: errori CS0246 per porta `IS3AttemptVersionHistory` e modello `S3AttemptHistoryPage` inesistenti prima dell'implementazione.
+
+**GREEN e2e sul commit documentale `d218100f`:**
+[CI 44896756880](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756880) **SUCCESS**: 10/10 S3 SDK/SeaweedFS (3 nuovi lost ACK/marker/ambiguous history), 4/4 Azure SDK HTTP sintetico, 19/19 Domain e 80/80 PostgreSQL Integration, PITR fisici, Docker/mobile. [OIDC E2E 44896756790](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756790) e [Pages 44896756867](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756867) **SUCCESS** sul medesimo SHA. La negative rehearsal simultanea genera tuttora `PHYSICAL_DUAL_CLAIM_PITR_UNSAFE_REPLAY_OBSERVED` e `PHYSICAL_DUAL_CLAIM_PITR_REMAINED_QUARANTINED`. La suite non ha accesso a storage realmente offsite né a pin monotono.
+
+Le Actions di ogni eventuale commit successivo devono essere
+nuovamente verificate prima della chiusura #148. **#144,
+#141, #109 e #31 rimangono aperte**.

@@ -96,6 +96,10 @@ Non chiudere #144 o #141 per questo adapter.
 
 ## Evidenza TDD
 
-Registrare run RED e GREEN conclusi e SHA **solo dopo la
-verifica delle GitHub Actions**. L'assenza di test Azure
-è nota e tracciata in #144; non dichiarare provider parity.
+**TDD RED**: [CI 44884847236](https://github.com/KeyserDSoze/Omnia/actions/runs/44884847236) su `4db53ef5`, `CS0234` per assenza di `Omnia.ObjectStore.S3`; [CI 44884878720](https://github.com/KeyserDSoze/Omnia/actions/runs/44884878720) su `4e231f1c`, `CS0029` nel test PUT per enum AWS SDK distinti; corretti separatamente.
+
+**TDD / CI GREEN**: [commit 649e12ab](https://github.com/KeyserDSoze/Omnia/commit/649e12ab50d4efa3ada5f452d844b8e3554fb259), [CI 44885831789](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831789) **SUCCESS**: **2/2 test S3 Object Lock su SeaweedFS 4.47 reale**, **19/19 Domain**, **80/80 PostgreSQL Integration**, veri PITR/dual rollback negativi, Docker/mobile. [OIDC E2E 44885831790](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831790) e [Pages 44885831828](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831828) entrambi **SUCCESS** sullo stesso SHA.
+
+L'harness inizialmente non avviava SeaweedFS: la diagnostica sui log del container ha mostrato `su-exec seaweed` senza accesso al segreto `0600` del runner. Nel CI finale si rilevano gli UID/GID effettivi del container, si applica `chmod 0400` PRIMA del `chown` e si monta il segreto in sola lettura; il container temporaneo viene eliminato dopo i test. Nessuna credenziale o dato utente è inserito nel repository.
+
+**Solo protocollo S3 reale nella CI**; niente vera custodia offsite, attestazione del commit primario, ambiente Azure, IAM produzione o recovery-ready. #145 completata come slice del reader S3; #144 e #141 devono restare OPEN.

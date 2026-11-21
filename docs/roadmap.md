@@ -688,7 +688,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   AWS v4 pinning per GetObject e GetObjectRetention, COMPLIANCE
   soltanto, 512 byte max, version e actor-scope verificati
   dal precedente contratto, errori falliscono chiusi.
-- [ ] Registrare evidenze Actions RED/GREEN complete.
+- [x] **RED/GREEN verificata su GitHub Actions**: [RED adapter mancante 44884847236](https://github.com/KeyserDSoze/Omnia/actions/runs/44884847236), [RED enum SDK 44884878720](https://github.com/KeyserDSoze/Omnia/actions/runs/44884878720). GREEN sullo SHA `649e12ab`: [CI 44885831789](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831789) (2/2 S3, 19/19 Domain, 80/80 PostgreSQL, PITR/Docker/mobile), [OIDC 44885831790](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831790), [Pages 44885831828](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831828) tutti SUCCESS; #145 limitata al test S3 chiusa.
 - [ ] **#144 OPEN**: verifica di MinIO/on-prem in ambiente
   indipendente, Azure Blob immutabile, IAM/RBAC, HSM/vault,
   version pin monotono, disaster multi-site e S3 provider

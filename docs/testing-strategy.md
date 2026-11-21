@@ -123,3 +123,7 @@ I log NON devono stampare segreti o contenuti.
 SeaweedFS usa lo stesso runner della primaria;
 l'assenza di offsite/WORM effettivo e di test Azure
 rimane esplicitamente nelle issue aperte.
+
+### Evidenze TDD e compatibilità S3 Object Lock (#145)
+
+Il test-first ha prodotto [RED CI 44884847236](https://github.com/KeyserDSoze/Omnia/actions/runs/44884847236) (provider S3 non ancora implementato) e [RED CI 44884878720](https://github.com/KeyserDSoze/Omnia/actions/runs/44884878720) (enum AWS SDK PUT da correggere). Dopo test-first, adapter e aggiustamenti del bootstrap S3 CI con uid/gid reale e file privato `0400`, [GREEN CI 44885831789](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831789) su `649e12ab` ha eseguito **2/2 test REALI SeaweedFS**, **19/19 Domain** e **80/80 Integration**, PITR fisici, Docker/mobile; [OIDC 44885831790](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831790) e [Pages 44885831828](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831828) GREEN. Il test provider verifica una semantica S3 reale ma non può attestare l'indipendenza dallo stesso runner, né validità giuridica della retention.

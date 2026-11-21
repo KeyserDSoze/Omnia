@@ -20,14 +20,14 @@ public sealed class ApiJsonBufferedRequestTests
         Assert.Throws<InvalidOperationException>(() => new ApiJsonBufferedRequestLimiter(257));
         var limiter = new ApiJsonBufferedRequestLimiter(1);
         Assert.Equal(1, limiter.MaxConcurrentBufferedRequests);
-        using (var lease = limiter.TryAcquire("test-tenant"))
+        using (var lease = limiter.TryAcquire("test-actor", "test-tenant"))
         {
             Assert.NotNull(lease);
-            Assert.Null(limiter.TryAcquire("test-tenant"));
+            Assert.Null(limiter.TryAcquire("test-actor", "test-tenant"));
             lease.Dispose();
             lease.Dispose();
         }
-        using var again = limiter.TryAcquire("test-tenant");
+        using var again = limiter.TryAcquire("test-actor", "test-tenant");
         Assert.NotNull(again);
         Assert.Equal(64,
             new ApiJsonBufferedRequestLimiter(64).MaxConcurrentBufferedRequests);
@@ -40,11 +40,11 @@ public sealed class ApiJsonBufferedRequestTests
     {
         var limiter = new ApiJsonBufferedRequestLimiter(3);
         var leases = await Task.WhenAll(Enumerable.Range(0, 128)
-            .Select(_ => Task.Run(() => limiter.TryAcquire("test-tenant"))));
+            .Select(_ => Task.Run(() => limiter.TryAcquire("test-actor", "test-tenant"))));
         try
         {
             Assert.Equal(3, leases.Count(x => x is not null));
-            Assert.Null(limiter.TryAcquire("test-tenant"));
+            Assert.Null(limiter.TryAcquire("test-actor", "test-tenant"));
         }
         finally
         {
@@ -54,7 +54,7 @@ public sealed class ApiJsonBufferedRequestTests
                 lease.Dispose();
             }
         }
-        using var reopened = limiter.TryAcquire("test-tenant");
+        using var reopened = limiter.TryAcquire("test-actor", "test-tenant");
         Assert.NotNull(reopened);
     }
 
@@ -120,7 +120,7 @@ public sealed class ApiJsonBufferedRequestTests
     public async Task CheapInvalidMediaAndDeclaredOversizeWinEvenWhenBufferBudgetIsFull()
     {
         var bufferLimiter = new ApiJsonBufferedRequestLimiter(1);
-        using var occupied = bufferLimiter.TryAcquire("test-tenant");
+        using var occupied = bufferLimiter.TryAcquire("test-actor", "test-tenant");
         Assert.NotNull(occupied);
 
         using var invalidBody = new FailOnReadStream();

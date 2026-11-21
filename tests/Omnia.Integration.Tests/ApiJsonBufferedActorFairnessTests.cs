@@ -91,6 +91,97 @@ public sealed class ApiJsonBufferedActorFairnessTests
             "tenant-alpha", "actor-one");
     }
 
+    [Fact]
+    public void ActorBufferedDefaultsConfigAndEphemeralKeysAreBounded()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiJsonBufferedRequestLimiter(16, 8, 0));
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiJsonBufferedRequestLimiter(16, 8, 9));
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiJsonBufferedRequestLimiter(16, 2, 3));
+
+        Assert.Equal(4, new ApiJsonBufferedRequestLimiter(64).MaxConcurrentBufferedRequestsPerActor);
+        Assert.Equal(2, new ApiJsonBufferedRequestLimiter(8, 2).MaxConcurrentBufferedRequestsPerActor);
+        Assert.Equal(1, new ApiJsonBufferedRequestLimiter(1).MaxConcurrentBufferedRequestsPerActor);
+        Assert.Equal(3, new ApiJsonBufferedRequestLimiter(16, 8, 3).MaxConcurrentBufferedRequestsPerActor);
+
+        var limiter = new ApiJsonBufferedRequestLimiter(16, 8, 3);
+        Assert.Throws<ArgumentException>(() => limiter.TryAcquire(" ", "tenant:a"));
+        Assert.Throws<ArgumentException>(() => limiter.TryAcquire("actor:a", " "));
+        Assert.Throws<ArgumentException>(() =>
+            limiter.TryAcquire(new string('x', 513), "tenant:a"));
+        Assert.Throws<ArgumentException>(() =>
+            limiter.TryAcquire("actor:a", new string('x', 257)));
+
+        for (var index = 0; index < 1000; index++)
+        {
+            using (var permit = limiter.TryAcquire(
+                $"account:tenant-a:actor-{index}", "tenant:a"))
+            {
+                Assert.NotNull(permit);
+                Assert.Equal(1, limiter.ActiveActorPartitions);
+                Assert.Equal(1, limiter.ActiveTenantPartitions);
+            }
+            Assert.Equal(0, limiter.ActiveActorPartitions);
+            Assert.Equal(0, limiter.ActiveTenantPartitions);
+        }
+    }
+
+    [Fact]
+    public async Task ActorTenantAndGlobalBufferedAdmissionAreAtomicUnderContention()
+    {
+        var limiter = new ApiJsonBufferedRequestLimiter(8, 6, 2);
+        var held = await Task.WhenAll(Enumerable.Range(0, 128)
+            .Select(_ => Task.Run(() =>
+                limiter.TryAcquire("account:tenant-a:actor-one", "tenant:a"))));
+        try
+        {
+            Assert.Equal(2, held.Count(x => x is not null));
+            Assert.Equal(1, limiter.ActiveActorPartitions);
+            Assert.Equal(1, limiter.ActiveTenantPartitions);
+            Assert.Null(limiter.TryAcquire("account:tenant-a:actor-one", "tenant:a"));
+
+            var other = new List<IDisposable>();
+            try
+            {
+                foreach (var actor in new[] { "actor-two", "actor-three" })
+                {
+                    for (var i = 0; i < 2; i++)
+                        other.Add(Assert.IsAssignableFrom<IDisposable>(
+                            limiter.TryAcquire($"account:tenant-a:{actor}", "tenant:a")));
+                }
+                Assert.Equal(3, limiter.ActiveActorPartitions);
+                Assert.Null(limiter.TryAcquire("account:tenant-a:actor-four", "tenant:a"));
+
+                for (var i = 0; i < 2; i++)
+                    other.Add(Assert.IsAssignableFrom<IDisposable>(
+                        limiter.TryAcquire("account:tenant-b:actor-one", "tenant:b")));
+
+                Assert.Equal(4, limiter.ActiveActorPartitions);
+                Assert.Equal(2, limiter.ActiveTenantPartitions);
+                Assert.Null(limiter.TryAcquire("account:tenant-c:actor-one", "tenant:c"));
+            }
+            finally
+            {
+                foreach (var permit in other)
+                    permit.Dispose();
+            }
+        }
+        finally
+        {
+            foreach (var permit in held.Where(x => x is not null))
+            {
+                permit!.Dispose();
+                permit.Dispose();
+            }
+        }
+        Assert.Equal(0, limiter.ActiveActorPartitions);
+        Assert.Equal(0, limiter.ActiveTenantPartitions);
+        using var reopened = limiter.TryAcquire("account:tenant-a:actor-one", "tenant:a");
+        Assert.NotNull(reopened);
+    }
+
     private static async Task AssertAcceptedAsync(
         ApiJsonBufferedRequestLimiter bufferLimiter,
         ApiJsonBodyReadConcurrencyLimiter receiveLimiter,

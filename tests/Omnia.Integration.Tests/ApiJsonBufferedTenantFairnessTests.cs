@@ -95,13 +95,13 @@ public sealed class ApiJsonBufferedTenantFairnessTests
         Assert.Equal(3, new ApiJsonBufferedRequestLimiter(8, 3).MaxConcurrentBufferedRequestsPerTenant);
 
         var limiter = new ApiJsonBufferedRequestLimiter(8, 3);
-        Assert.Throws<ArgumentException>(() => limiter.TryAcquire(" "));
+        Assert.Throws<ArgumentException>(() => limiter.TryAcquire("test-actor", " "));
         Assert.Throws<ArgumentException>(() =>
-            limiter.TryAcquire(new string('x', 257)));
+            limiter.TryAcquire("test-actor", new string('x', 257)));
         Assert.Equal(0, limiter.ActiveTenantPartitions);
         for (var i = 0; i < 1000; i++)
         {
-            using (var slot = limiter.TryAcquire($"synthetic-tenant-{i}"))
+            using (var slot = limiter.TryAcquire($"synthetic-actor-{i}", $"synthetic-tenant-{i}"))
             {
                 Assert.NotNull(slot);
                 Assert.Equal(1, limiter.ActiveTenantPartitions);
@@ -115,21 +115,21 @@ public sealed class ApiJsonBufferedTenantFairnessTests
     {
         var limiter = new ApiJsonBufferedRequestLimiter(8, 4);
         var held = await Task.WhenAll(Enumerable.Range(0, 128)
-            .Select(_ => Task.Run(() => limiter.TryAcquire("tenant:first"))));
+            .Select(i => Task.Run(() => limiter.TryAcquire($"actor:first:{i}", "tenant:first"))));
         try
         {
             Assert.Equal(4, held.Count(x => x is not null));
             Assert.Equal(1, limiter.ActiveTenantPartitions);
-            Assert.Null(limiter.TryAcquire("tenant:first"));
+            Assert.Null(limiter.TryAcquire("actor:next", "tenant:first"));
 
             var other = new List<IDisposable>();
             try
             {
                 for (var index = 0; index < 4; index++)
                     other.Add(Assert.IsAssignableFrom<IDisposable>(
-                        limiter.TryAcquire("tenant:other")));
+                        limiter.TryAcquire($"actor:other:{index}", "tenant:other")));
                 Assert.Equal(2, limiter.ActiveTenantPartitions);
-                Assert.Null(limiter.TryAcquire("tenant:third"));
+                Assert.Null(limiter.TryAcquire("actor:third", "tenant:third"));
             }
             finally
             {
@@ -147,7 +147,7 @@ public sealed class ApiJsonBufferedTenantFairnessTests
         }
 
         Assert.Equal(0, limiter.ActiveTenantPartitions);
-        using var reused = limiter.TryAcquire("tenant:first");
+        using var reused = limiter.TryAcquire("actor:next", "tenant:first");
         Assert.NotNull(reused);
     }
 

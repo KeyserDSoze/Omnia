@@ -113,7 +113,11 @@ jobs:
               actions:["Admin","Read","Write","List","Tagging"]}]}' > "$auth"
           chmod 600 "$auth"
           # Keep an exited container for diagnostics; cleanup runs always.
-          docker run -d --name omnia-ci-s3-object-lock \
+          # CI-only: runner-owned mode 0600 secret is unreadable by
+          # SeaweedFS's default container UID. Run this *disposable* test
+          # process as root so the mounted 0600 file remains private.
+          # Production MUST use nonroot UID-matched secret provisioning.
+          docker run -d --user 0:0 --name omnia-ci-s3-object-lock \
             -v "$auth:/etc/seaweedfs/s3.json:ro" \
             -p 127.0.0.1:18433:8333 \
             chrislusf/seaweedfs:4.47 \

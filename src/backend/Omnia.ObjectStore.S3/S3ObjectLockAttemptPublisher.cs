@@ -152,7 +152,16 @@ public sealed class S3ObjectLockAttemptPublisher
                 _reader, requestId, tenantId, ownerSubject, scopeKey,
                 evidenceKey, _storeIdentity, version, nowUtc, ct);
 
+            // A provider returning a believable, still-locked object
+            // with a DIFFERENT WORM mode or materially shorter retention
+            // did not honor our requested S3 COMPLIANCE PUT. S3 timestamps
+            // can be rounded to whole seconds in some compatible servers;
+            // allow <1s truncation, never a shortened retention period.
             if (!seen.AttemptPreviouslyObserved ||
+                seen.VerifiedImmutabilityMode !=
+                    ImmutableAttemptImmutabilityMode.S3Compliance ||
+                seen.VerifiedRetainUntilUtc <
+                    retainUntilUtc.AddSeconds(-1) ||
                 !string.Equals(seen.VersionId, version,
                     StringComparison.Ordinal))
                 return Uncertain(requestId);

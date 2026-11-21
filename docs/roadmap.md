@@ -814,8 +814,8 @@ evidence and both are already CLOSED. They are NOT open work.
 
 ## P0 #165 — Actor cap on JSON buffers held by slow handlers (ADR 0064)
 
-- [x] TDD behavior-first RED on c8? See corrected commit below:
-  actual test-only commit 8cdda406, CI 44960870525:
+- [x] TDD behavior-first RED: test-only commit
+  8cdda406, CI 44960870525:
   132 passed / 1 failed Integration, fifth same-account
   request wrongly reached handler.
 - [x] Atomic per-process global/tenant/actor buffered JSON

@@ -476,3 +476,38 @@ Keep real PostgreSQL/RLS integration, Domain, S3/Azure contracts,
 physical WAL/PITR, Docker, mobile/Playwright, real Keycloak/OIDC
 browser and GitHub Pages gates passing on exact FINAL main SHA.
 Attach complete RED/GREEN evidence in #164; #37/#2 stay OPEN.
+
+## RED/GREEN actor-scoped retained JSON buffers (#165 / ADR 0064)
+
+Behavioral test-first ApiJsonBufferedActorFairnessTests holds
+FOUR already-read bodies for one synthetic authenticated
+tenant+subject in blocked downstream handlers with buffer
+global 16/tenant 8. Fifth same actor must receive
+request_buffer_busy 503/no-store/Retry-After:1 without any
+body read or handler, while another actor of the same
+tenant and the original subject of another tenant succeed.
+Forged X-Forwarded-For and X-Tenant-Id must not bypass
+signed identity keying. Existing READ cap permits return
+before handler processing so a fifth sender is otherwise
+able to try reading; these two quotas MUST remain distinct.
+
+Test-only RED commit 8cdda406 and CI 44960870525 confirm
+132/133 PostgreSQL integration tests passed; the new
+test failed behaviorally at Assert.False, because fifth
+request reached its handler. GREEN tests cover 128 parallel
+acquisitions against global+tenant+actor 8/6/2 caps,
+1000 sequential actor identities with immediate eviction
+of both dictionaries, explicit invalid settings, optional
+default auto-clamp when tenant/global limits decrease,
+bounded key lengths, idempotent permit disposal and
+inter-tenant actor collisions. Existing #163/#164 tests
+also exercise 408/413/415 precheck, client abort, broken
+stream, thrown handler and early body-read permit release.
+
+Only synthetic ClaimsPrincipal/streams in these middleware
+tests; real JWT/OIDC is tested independently with Keycloak
+and Playwright. Full final main SHA must verify .NET Domain,
+real PostgreSQL/RLS integration, S3/Azure contracts, physical
+PITR/witness/restore, Docker, mobile/Playwright, real-browser
+OIDC and Pages before #165 closes. This is not a distributed
+load test or production/GDPR security release.

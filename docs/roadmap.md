@@ -811,3 +811,20 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 Historical #162/#163 checkboxes above refer to earlier candidates;
 their child issues contain the final successful CI/OIDC/Pages
 evidence and both are already CLOSED. They are NOT open work.
+
+## P0 #165 — Actor cap on JSON buffers held by slow handlers (ADR 0064)
+
+- [x] TDD behavior-first RED on c8? See corrected commit below:
+  actual test-only commit 8cdda406, CI 44960870525:
+  132 passed / 1 failed Integration, fifth same-account
+  request wrongly reached handler.
+- [x] Atomic per-process global/tenant/actor buffered JSON
+  slots defaults 64/16/4; optional actor config clamps to
+  the current tenant budget, active-only keys and 503
+  no-read/no-queue. Independent read limits unchanged.
+- [ ] Full final main SHA SUCCESS required for CI (real
+  PostgreSQL, S3/Azure, PITR/Docker, mobile), real-browser
+  OIDC and GitHub Pages; issue #165 holds exact evidence.
+- [ ] Parent #37 and epic #2 OPEN: distributed quotas,
+  reserved-fair processing, ingress/WAF, media/provider
+  budgets, real load and legal/GDPR release review.

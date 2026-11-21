@@ -502,3 +502,20 @@ entries are removed when count reaches zero. The byte-limited
 MemoryStream is disposed before the buffered permit releases.
 This imposes a bounded tenant ceiling on live middleware-owned
 JSON buffers but no fair reservation or global cluster guarantee.
+
+## Actor-scoped live JSON buffer admission (ADR 0064)
+
+API JSON POST/PUT/PATCH requests after OIDC/authz and 413/415
+now acquire an atomically coordinated three-dimensional
+**buffer lifetime** permit: global default 64, validated JWT
+tenant default 16, validated JWT tenant+sub actor default 4
+(with automatic clamping for lower configured budgets).
+A short lock protects all active counts, and both tenant
+and actor partition entries disappear immediately when idle.
+Buffer permits live until bounded request MemoryStream disposal
+AFTER the downstream Minimal API handler. A separate existing
+read-phase quota 32/16/4 releases before endpoint execution.
+On saturation fail-fast 503 before body read. These limits
+cannot reserve global slots for a tenant or span replicas;
+non-JSON routes, total process/DB/AI memory and ingress
+remain outside this contract.

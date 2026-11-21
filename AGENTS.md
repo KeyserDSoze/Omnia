@@ -1235,3 +1235,29 @@ stream/handler faults and success, idempotently. NOT a guaranteed
 fair-share reserve when global pool full, per-actor processing,
 cross-replica distributed quota, WAF/media/connector protection or
 GDPR release. Keep parent #37 and epic #2 OPEN.
+
+## Active-only actor fairness for retained JSON buffers (#165 / ADR 0064)
+
+In addition to per-instance global buffered-request slots (default 64)
+and verified OIDC tenant slots (default min(16,global)), apply a third
+per VERIFIED tenant+subject actor slot cap (default min(4,tenant)).
+RequestBody:MaxConcurrentBufferedRequestsPerActor is OPTIONAL and valid
+1..effective tenant cap; invalid explicit values fail startup.
+Leave the actor setting absent from appsettings defaults so reduced
+tenant/global limits auto-clamp safely. Acquire global, tenant and
+actor slots ATOMICALLY under one lock and without a queue, after
+OIDC/rate limit/authorization and cheap 413/415 checks, before
+any buffer allocation or ReadAsync. Derive actor and tenant ONLY from
+ApiRateLimitPolicy.PartitionKey and TenantPartitionKey (JWT OIDC,
+anonymous fallback direct peer), never user-supplied headers.
+Return SAME generic 503 request_buffer_busy, Retry-After:1,
+no-store when ANY cap is full; no read, handler, payload or identity
+echo. Hold this buffered permit throughout downstream handler
+and MemoryStream lifetime, releasing on success, 408, 413, abort,
+stream or handler failure. Release all 3 counters exactly once
+and evict actor and tenant keys immediately at zero, bounded by
+global active slots. No key logging/storage. Keep separate JSON
+RECEIVE permits 32/16/4 released BEFORE handlers. This is an
+upper bound on one API process, NOT a fair reservation when
+global capacity is gone, cluster quota, all DB/AI work limiter,
+WAF/ingress protection or GDPR signoff. #37 and #2 OPEN.

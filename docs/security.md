@@ -1097,3 +1097,47 @@ replicas, cap all managed memory/parser copies or DB/AI work,
 enforce per-user handler concurrency or provide production
 ingress, WAF, load testing or GDPR approval. No additional
 tenant identity storage or consent change. #37 and #2 OPEN.
+
+## Active-only signed-actor JSON buffer lifetime cap (#165 / ADR 0064)
+
+Prior retained-buffer admission #163/#164 limits process-wide
+concurrent middleware-owned JSON buffers to 64 and a signed
+tenant's share to 16 by default, including time spent in
+downstream handlers. A single validated OIDC tenant+subject
+could still occupy all 16 tenant slots through multiple
+fast-body/slow-handler requests because the receive-only actor
+quota is intentionally released before handler work. The
+separate buffered-request limiter now checks THREE atomic
+per-process ceilings: global 64, signed tenant min(16,global),
+signed actor min(4,effective tenant). Operators can optionally
+set RequestBody:MaxConcurrentBufferedRequestsPerActor within
+1..effective tenant limit. Invalid explicit values fail startup;
+absent settings clamp safely under reduced global/tenant caps.
+
+Both partition keys come from the same signed, uniquely bounded
+JWT tenant_id+sub claims through ApiRateLimitPolicy after upstream
+auth, 429 and authorization; never from X-Forwarded-For,
+X-Tenant-Id, JSON, connection parameters or caller-specified
+tenant data. Invalid/unauthenticated claims share direct-peer
+anonymous fallback and do NOT authorize mutation endpoints.
+After cheap 413/415 checks, a single short lock checks global,
+tenant and actor buffered slots and increments all or none.
+Exhaustion returns generic HTTP 503 request_buffer_busy,
+no-store, Retry-After:1 before reading any payload, allocating
+the MemoryStream or invoking the handler. No quota key, JWT,
+body or private data is emitted. A one-use idempotent lease
+retains these three buffered slots through handler completion
+and bounded MemoryStream disposal and releases on success,
+408, streamed 413, abort, stream/handler fault. Tenant and actor
+dictionary entries are evicted immediately at zero, with
+cardinality limited by active global permits; no persistent
+identity tracking or logs.
+
+Distinct users of one tenant can use remaining tenant capacity,
+and the same subject in another tenant is independent. This
+is still an upper bound, NOT capacity reserved for other
+tenants if the global 64 slots are already consumed, and
+NOT a distributed/multi-replica budget, a whole API processing/
+DB/AI quota, memory-profiler proof, WAF/ingress, media/connector
+or provider quota, load test, or GDPR release. Existing RLS,
+consent and body-receive limits 32/16/4 unchanged. #37/#2 OPEN.

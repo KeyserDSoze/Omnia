@@ -185,3 +185,20 @@ distributed service, guaranteed reserved tenant capacity,
 connector/media/AI quotas, WAF, realistic load or GDPR go-live.
 Original backlog counts are historical, not current GitHub issue
 counts.
+
+## P0 actor-scoped retained JSON buffer fairness (#165 / ADR 0064)
+
+Child [#165](https://github.com/KeyserDSoze/Omnia/issues/165)
+extends the bounded handler-buffer lifetime work #163/#164 under
+parent [#37](https://github.com/KeyserDSoze/Omnia/issues/37):
+global 64, signed tenant 16, and signed tenant+subject actor 4
+default process-local simultaneous JSON buffers (auto-clamped
+when configured capacities are lower). Atomic nonqueued
+admission, generic 503 without body read, release only after
+downstream handler, and immediate eviction of idle tenant/
+actor quota keys. The body RECEIVER 32/16/4 limits remain
+separate and end before handler processing. No guaranteed
+tenant reservations, cluster-wide quotas, WAF/ingress,
+media/connector/storage budgets, realistic load or GDPR
+go-live claims; #37 and #2 stay OPEN. Historical inventory
+counts above do not reflect live issue totals.

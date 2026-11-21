@@ -224,3 +224,21 @@ before handler and are unaffected. Does not reserve guaranteed
 slots if global capacity is full, span replicas or limit total
 process memory, DB/AI, media connectors or upstream WAF.
 #37 remains OPEN.
+
+## Per-actor bounded JSON buffer lifetime (#165 / ADR 0064)
+
+Omnia now applies atomic, per-API-instance live buffered
+JSON request ceilings to **global / OIDC tenant / OIDC
+tenant+subject actor**, defaults **64 / 16 / 4**, while
+the downstream handler holds its bounded JSON body stream.
+Optional RequestBody:MaxConcurrentBufferedRequestsPerActor
+may be set from 1 through the effective tenant cap;
+unset defaults clamp safely. Exhausted buffer capacity
+returns 503 request_buffer_busy/no-store/Retry-After:1
+before reading any bytes, without queuing. Inactive quota
+identities are evicted; their values are not logged or
+persisted. Independent concurrent READ limits 32/16/4
+remain released BEFORE handlers. This is per-process
+resource safety, NOT assured tenant reservations,
+distributed capacity, whole-memory/DB/AI control,
+media/connector quotas, WAF or GDPR release.

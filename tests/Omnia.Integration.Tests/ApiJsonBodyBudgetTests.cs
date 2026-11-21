@@ -90,6 +90,10 @@ public sealed class ApiJsonBodyBudgetTests
         using (var request = Post(new StreamContent(new MemoryStream(
             Encoding.UTF8.GetBytes(new string('X', 2048))))))
         {
+            // This is a JSON payload with untrusted/chunked length.
+            // An absent Content-Type is now correctly rejected earlier as 415.
+            request.Content!.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
             request.Headers.TransferEncodingChunked = true;
             request.Content!.Headers.ContentLength = null;
             using var result = await client.SendAsync(request);

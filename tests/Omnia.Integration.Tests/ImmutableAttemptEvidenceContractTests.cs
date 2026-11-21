@@ -70,6 +70,13 @@ public sealed class ImmutableAttemptEvidenceContractTests
         await Deny(version with { ObjectKey = "other-object" });
         await Deny(version with { VersionId = "other-version" });
         await Deny(version, pinned: "");
+        // "latest" and S3's unversioned "null" are NOT immutable
+        // object version IDs. An adapter must never silently downgrade
+        // from exact versioning to an unpinned current-object read.
+        await Deny(version with { VersionId = "latest" }, pinned: "latest");
+        await Deny(version with { VersionId = "null" }, pinned: "null");
+        await Deny(version, pinned: "LATEST");
+
         await Deny(version, store: "");
         await Deny(version with { VersionId = "" });
         await Deny(version with { ImmutabilityMode =

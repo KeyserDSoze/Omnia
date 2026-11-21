@@ -319,3 +319,16 @@ rifiutate. Eseguire con `OMNIA_TEST_DB`, `OMNIA_TEST_APP_DB`,
 Non inviare contenuti reali; nessun log di payload. Questo test
 non garantisce WAF/ingress production, slowloris, quote distribuite,
 upload audio o vera autenticazione OIDC, che ha la sua E2E.
+
+### JSON body total read timeout — slow/chunked negative tests (#157)
+
+`ApiJsonBodyReadTimeoutTests` uses only synthetic
+`DefaultHttpContext` and cooperative cancellation-aware streams:
+blocking upload, slow trickle, genuine `RequestAborted` client
+cancellation and valid small JSON stream restoration. Tests assert
+no downstream invocation after 408, no content echo, no-store, and
+config validation (100..30000ms). These are not full network
+slowloris/header tests. The integration project still runs against
+real disposable PostgreSQL; the OIDC E2E and Kestrel/ingress
+boundaries remain independent. Do not claim 408 delivery to
+an already disconnected client or safe distributed rate limiting.

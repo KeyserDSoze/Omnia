@@ -440,3 +440,13 @@ ottiene capacità di ripresa. La CI usa due bucket
 dello stesso SeaweedFS, perciò non prova custody
 offsite indipendente o monotonicità globale.
 undefined
+
+## ADR 0056 — API JSON read deadline after ADR 0055
+
+`ApiJsonBodyBudget` includes a bounded TOTAL body-receive timeout
+(`RequestBody:ReadTimeoutMilliseconds`, default 10000; range
+100..30000). A slow/blocked authenticated JSON POST/PUT/PATCH
+ends with 408/no-store before binding or DB work; genuine client
+cancellations do not fabricate a 408. It does not replace Kestrel
+request-header/body-rate policies, reverse proxy/WAF, connection
+limits or distributed quota. See ADR 0056 and #157; #37 remains open.

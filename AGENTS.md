@@ -1076,3 +1076,23 @@ rate-limit/consent/RLS unchanged. Test with real PostgreSQL
 WebApplicationFactory and fake auth header only inside tests.
 This is NOT a distributed/connector/media quota, DDoS gateway, slow
 body timeout, real OIDC attestation or GDPR release. #37 remains OPEN.
+
+## Total JSON body read deadline / slow-client guard (#157, ADR 0056)
+
+`ApiJsonBodyBudget` MUST enforce BOTH 1..64KiB body budget (ADR 0055)
+and a **single absolute total read deadline** for authenticated JSON
+POST/PUT/PATCH `/api/v1` requests. Configure
+`RequestBody:ReadTimeoutMilliseconds` default 10000, valid
+100..30000; invalid startup values must fail closed. Use a linked
+cancellation token (`RequestAborted`) with CancelAfter ONCE before
+the first body read, and do not reset it per chunk/trickle. An
+app-level read expiration (not client disconnect) returns HTTP 408
+`request_body_timeout`, `Cache-Control: no-store`, zero binder/DB
+side effects and zero body echo. Client abort must remain distinct.
+Dispose body timer BEFORE passing completed bounded JSON to the
+normal handler. 413/415, authentication→rate-limit→authorization,
+real OIDC/JWKS, tenant scope and RLS remain unchanged.
+This does NOT implement slow-header defenses, distributed quotas,
+connection cap, WAF, binary uploads, total endpoint timeout or
+production anti-DDoS. Kestrel request-header and minimum body data
+rates plus ingress controls are still necessary; parent #37 OPEN.

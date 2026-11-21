@@ -879,3 +879,21 @@ Body valido viene riprodotto invariato, errori senza PII e
 `Cache-Control: no-store`. Kestrel 70KiB resta una difesa separata.
 Non è controllo di upload binari, slow-client timeout, WAF/DDOS o
 quota distribuita fra repliche. La parent #37 resta OPEN.
+
+## Timeout totale per body JSON lento/chunked (#157 / ADR 0056)
+
+Oltre al limite di 64KiB e ai rifiuti 413/415, il middleware
+`ApiJsonBodyBudget` impone una durata massima complessiva alla
+**ricezione** del JSON. Configurazione:
+`RequestBody:ReadTimeoutMilliseconds` default 10000, range
+100..30000 controllato allo startup. Il token di lettura è
+collegato a `RequestAborted`; un timeout del middleware senza
+disconnessione client comporta HTTP 408 `request_body_timeout`
+con no-store, senza echo PII, esecuzione binder, DB o AI. Il timer
+non si resetta a ogni byte e viene smaltito appena la ricezione
+termina: non può quindi cancellare il lavoro di backend successivo.
+
+Non protegge da slow headers, occupazione globale connessioni,
+protezione WAF/DDoS, media uploads, quote distribuite e client o
+Stream che ignorano il token di cancellazione. Kestrel e il reverse
+proxy richiedono loro limiti separati, #37 rimane OPEN.

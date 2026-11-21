@@ -103,3 +103,12 @@ chunked e Content-Length mancante, senza perdere il body valido.
 Parent #37 ancora aperta per quote distribuite, media, connector,
 slow-body timeout, testing di carico e WAF. Contatori issue nel
 backlog storico non rappresentano lo stato corrente di GitHub.
+
+## P0 API body read timeout (#157, ADR 0056)
+
+La child [#157](https://github.com/KeyserDSoze/Omnia/issues/157)
+segue #156: introdotto timeout **totale** per lettura JSON con 408
+senza side effects, conservando 413/415, OIDC e 429. La [parent #37](https://github.com/KeyserDSoze/Omnia/issues/37)
+resta OPEN per slow headers/real ingress, rate-limit distribuito,
+WAF, quote media/connector e k6. Lo snapshot del backlog del
+17 novembre non è il conteggio live delle issue GitHub.

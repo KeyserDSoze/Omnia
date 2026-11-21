@@ -68,7 +68,12 @@ public sealed class AzureBlobSdkVersionHistory : IAzureBlobVersionHistory
                     item.Deleted || item.HasVersionsOnly == true,
                     !string.IsNullOrEmpty(item.Snapshot),
                     item.IsLatestVersion == true)).ToArray();
-            return new AzureBlobHistoryPage(entries, page.ContinuationToken);
+            // Azure REST emits <NextMarker></NextMarker> at end-of-list;
+            // the SDK represents that terminator as the empty string.
+            // Normalize ONLY the empty marker. Whitespace, control chars
+            // and repeated tokens remain untrusted at the audit boundary.
+            return new AzureBlobHistoryPage(entries,
+                page.ContinuationToken == "" ? null : page.ContinuationToken);
         }
 
         // A provider returning no pages is NOT proof of an absent attempt.

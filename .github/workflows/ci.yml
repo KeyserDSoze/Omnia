@@ -119,8 +119,10 @@ jobs:
           seaweed_uid="$(docker run --rm --entrypoint id chrislusf/seaweedfs:4.47 -u seaweed)"
           seaweed_gid="$(docker run --rm --entrypoint id chrislusf/seaweedfs:4.47 -g seaweed)"
           [[ "$seaweed_uid" =~ ^[0-9]+$ && "$seaweed_gid" =~ ^[0-9]+$ ]]
-          sudo chown "$seaweed_uid:$seaweed_gid" "$auth"
+          # Set mode *before* transferring ownership; GitHub runner
+          # cannot chmod a file after it belongs to the container UID.
           chmod 400 "$auth"
+          sudo chown "$seaweed_uid:$seaweed_gid" "$auth"
           # Keep an exited container for diagnostics; cleanup runs always.
           docker run -d --name omnia-ci-s3-object-lock \
             -v "$auth:/etc/seaweedfs/s3.json:ro" \

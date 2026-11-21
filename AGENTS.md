@@ -1041,3 +1041,21 @@ identity labels and two containers in the same Azure account are NOT
 independent offsite custody. Scripted SDK HTTP tests are NOT live
 Azure WORM, RBAC, external pin authority or GDPR signoff.
 Keep #144/#141/#109/#31 OPEN.
+
+## Azure signed PIN visible-history audit (#155 / ADR 0054)
+
+`AzureBlobWormPinHistoryAudit` scans the **provider-visible** catalogue
+for a canonical `erasure-pins/v1/{uuid:N}.json` key using the strict
+Azure version-list SDK port (also used for evidence keys). Allow only
+`Version|Deleted|DeletedWithVersions|Snapshots` and bounded exact-key
+pages, max 2 entries and 8 pages, with nonrepeating continuation.
+Competing PIN version, snapshot, deleted/tombstone, duplicate, foreign
+key, bad or missing version/cursor, 403, partial page or failure =>
+`Uncertain` BEFORE pin readback. A single visible PIN version may
+be authenticated with `AzureBlobVersionPinService.VerifyPinnedAsync`
+using BOTH externally pinned VersionIds, actor-bound signed PIN HMAC,
+AzureLocked policies and expiry; it NEVER proves complete history,
+monotonicity, source DELETE COMMIT or a right to retry or release.
+No provider write/DELETE, API registration, worker, replay or ready.
+Scripted Azure SDK HTTP != real Azure WORM/offsite/IAM. Keep
+#144/#141/#109/#31 OPEN.

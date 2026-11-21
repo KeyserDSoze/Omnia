@@ -293,3 +293,16 @@ esatta VersionId, HEAD+GET pinned e limiti max1024; 403/lost ACK,
 Retry.MaxRetries e HTTPS fanno fail closed. La prova non è Azure live,
 non valida la separatezza degli amministratori né source DELETE COMMIT,
 antirollback globale, privacy legal review o release dei recovery gate.
+
+### Azure signed PIN version-list ambiguity test (#155 / ADR 0054)
+
+La nuova suite xUnit esegue una enumerazione read-only su
+`erasure-pins/v1/` usando il vero Azure SDK con un responder HTTP
+sintetico; include versioni/deleted/deletedwithversions/snapshots,
+prefisso canonico e maxresults=2. Il verificatore fail-closed
+rifiuta catalogo empty/multi-version/duplicate, snapshot, deletion,
+foreign, invalid pin ID, paginazione ciclica/troncata e provider 403
+PRIMA di qualsiasi HEAD/GET. Quando la singola versione è valida
+ricontrolla due versioni AzureLocked e la firma HMAC attore;
+nessuna porta di write è invocata. Non costituisce custodia
+indipendente o autorizzazione a riaprire dati dopo PITR.

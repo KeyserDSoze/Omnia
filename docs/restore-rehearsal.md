@@ -1099,3 +1099,16 @@ mai nuovo tentativo, READY o DELETE. Due container sotto lo stesso
 admin Azure **non** sono un journal monotono offsite indipendente:
 richiedono account/role reali, key custody, test WORM live e verifica
 normativa. #144/#141/#109/#31 OPEN.
+
+## Azure PIN catalog ambiguity audit, solo lettura (#155 / ADR 0054)
+
+Con due `VersionId` precisi forniti dall'esterno e chiavi HMAC
+separate, il nuovo audit `AzureBlobWormPinHistoryAudit` verifica
+se la **lista visibile** del PIN firmato presenti una singola versione
+corrente. Rifiuta delete/snapshot/seconda versione, qualsiasi pagina
+o cursore sospetto, 403, key diversa, versione non canonica; solo
+in caso di lista senza ambiguità ricontrolla PIN+evidence mediante
+`VerifyPinnedAsync` AzureLocked+MAC. Gli esiti sono diagnostici e
+NON sbloccano replay, auto retry, DELETE o recovery-ready. La lista
+proviene dallo stesso admin cloud, non è un checkpoint monotono,
+e i test Azure sono HTTP simulati. #144/#141/#109/#31 APERTE.

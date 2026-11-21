@@ -84,3 +84,12 @@ sviluppa il PIN HMAC firmato per esatte versioni Azure WORM senza
 pretendere reale custodia offsite, monotonicità o esito della cancellazione.
 Per stato attuale e test consultare le issue/Actions GitHub, non il
 conteggio storico in intestazione.
+
+## DR Azure note — PIN version-history audit (#155, ADR 0054)
+
+La nuova child [#155](https://github.com/KeyserDSoze/Omnia/issues/155)
+segue la #154 senza duplicare l'audit dell'evidence #152: esamina
+soltanto la cronologia **visibile del PIN firmato** via Azure SDK
+in sola lettura. NON completa l'epic #144 o le issue #141/#109/#31.
+I numeri originali 14 epics/116 child nel backlog sono uno snapshot
+del 17 novembre: verificare i contatori reali su GitHub.

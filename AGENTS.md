@@ -919,3 +919,24 @@ RED with provider substitution and shortened retention,
 then GREEN on real SeaweedFS and fake error cases. Reject
 AWS clients with SDK hidden retries enabled before mutation.
 No APIs or production offsite claims; #144/#141 OPEN.
+
+## S3 lost-ACK version-history reconciliation (#148 / ADR 0047)
+
+`S3ObjectLockAttemptHistoryReconciler` is a READ-ONLY
+positive-evidence lookup, never an authorization boundary.
+It MUST enumerate `ListVersions` for the exact canonical
+key (not mutable latest), enforce bounded two-item pages,
+at most eight pages, all-page traversal, distinct exact
+VersionIds, no wrong-key entries, no cyclic/missing
+pagination cursor, delete markers never mistaken for data;
+only ONE real S3 COMPLIANCE version may be validated with
+`ImmutableAttemptEvidence.VerifyAsync` and two separate
+MAC keys. An empty/denied/partial/multiple/foreign/malformed
+history MUST return Uncertain, NEVER safe-to-retry or
+evidence of absence, primary DELETE commit, or ready.
+Real AWS SDK + SeaweedFS test may lose ACK after actual
+synthetic remote PUT and recover *prior observation* by
+history enumeration, including under a latest delete
+marker. This runs on SAME CI runner; does not pin versions
+monotonically in independently administered offsite
+custody or release the API. #144/#141/#109/#31 OPEN.

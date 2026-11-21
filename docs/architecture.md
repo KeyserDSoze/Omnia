@@ -410,3 +410,17 @@ o le API di lettura sono indisponibili segnala
 `Uncertain`, mai “assente” o “sicuro da ripetere”.
 È protocollo CI su storage effimero, non authority
 esterna al primario PostgreSQL.
+
+## S3 version history reconciliation for lost ACK (ADR0047)
+
+`Omnia.ObjectStore.S3` ora espone una porta paginata
+`IS3AttemptVersionHistory`, un adapter AWS SDK v4
+`ListVersions` e un reconciler read-only. Questo
+ultimo ricerca una possibile versione COMPLIANCE scritta
+anche quando l'ACK di PUT è stato perso, **senza
+usare latest**, senza rieseguire PUT e senza toccare
+le tabelle del PostgreSQL ripristinato. Solo una
+versione positiva HMAC/retention/scope può produrre
+`PreviouslyObserved`; cataloghi vuoti o ambigui sono
+`Uncertain`. La lista non è un'autorità monotona
+offsite e non si collega a REST o release.

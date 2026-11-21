@@ -1000,3 +1000,16 @@ timeout, 412 e readback non COMPLIANCE: tutti incerti
 senza auto-retry. Il test non coinvolge primary DELETE
 né emette recovery-ready; il doppio PITR postgres resta
 unsafe senza una authority offsite superstite.
+
+## S3 PUT acknowledged remotely but ACK lost locally (ADR 0047)
+
+CI-only: il test effettua vera PUT COMPLIANCE in SeaweedFS,
+quindi il fault wrapper perde l'ACK prima che il publisher
+la confermi. Il publisher dice `Uncertain`; una lettura
+della *storia* S3 (non mutable latest) può ritrovare la
+singola versione firmata protetta anche sotto un successivo
+delete marker. Indice vuoto, ambiguo, foreign o paginazione
+non attendibile non consentono retry, DELETE o READY.
+Non prova la sopravvivenza allo stesso host fault o al
+rollback simultaneo di PGDATA e custodia: nessuna
+autorità offsite è stata ancora provisioned.

@@ -828,3 +828,19 @@ serializzazione protocollo). Provider substitution
 (`AzureLocked`) o scadenza troppo breve = `Uncertain`,
 senza auto-retry né DELETE. Test xUnit negativi verificano
 i casi e vietano MaxErrorRetry != 0.
+
+## S3 ListObjectVersions e ambiguità metadata (ADR0047)
+
+La riconciliazione di ACK perso richiede permesso
+`s3:ListBucketVersions` e verifica le versioni storiche
+mediante due API version-pinned, non `GetObject` su latest.
+Limite massimo 8 pagine da 2 versioni; nessun ciclo,
+marker mancante o duplicato, alias null/latest, key
+estranea o più versioni autentiche accettabile.
+Delete markers non sono contenuto: non cancellano
+la prova positiva della precedente versione WORM.
+Assenza del catalogo/HTTP 403 non prova inesistenza:
+risultato `Uncertain`, senza retry, DELETE o READY.
+Un attaccante con controllo amministrativo sul bucket
+può manipolare il catalogo e la disponibilità; questo
+non è ancora pin monotono in un trust domain separato.

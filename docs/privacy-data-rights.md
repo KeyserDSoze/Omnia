@@ -416,3 +416,16 @@ periodo di retention approvato, localizzazione,
 minimizzazione dei pseudonimi, scadenza oggetti
 e gestione GDPR per data rights e audit; non
 inferire compliance da COMPLIANCE object-lock.
+
+## S3 historical attempt discovery e diritto all'oblio (ADR 0047)
+
+La storia di versioni S3 viene interrogata soltanto
+per chiavi UUID e ricevute HMAC pseudonimizzate.
+L'esistenza di un attempt è distinta dall'esito del
+DELETE primario, e l'assenza della versione non
+costituisce una prova. Accesso minimo a
+`s3:ListBucketVersions`, localizzazione, giustificazione
+e limitazione della retention, protezione e revoca chiavi,
+audit e definizione del ciclo di vita WORM sono
+obblighi da studiare in produzione; i test sintetici
+non attestano GDPR art.17 o disponibilità offsite.

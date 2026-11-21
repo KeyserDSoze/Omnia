@@ -733,3 +733,20 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [ ] #144/#141: pin version ID e authority esterna
   indipendente dal runner e da tutti i PGDATA, fonte
   autenticata COMMIT primaria, Azure WORM staging.
+
+## #148 — S3 lost-ACK history reconciliation (ADR 0047)
+
+- [x] TDD RED: nuove prove sul reconciler assente
+  e real S3 lost ACK, delete marker, versioni multiple
+  e scansioni paginate malformed.
+- [x] Adapter AWS SDK `ListVersions` e
+  `S3ObjectLockAttemptHistoryReconciler`, bound 8×2,
+  HMAC+COMPLIANCE+store/actor, soltanto
+  `PreviouslyObserved` o `Uncertain` non autorizzativi.
+- [ ] Allegare RED/GREEN e Actions complete sullo
+  SHA finale prima di chiudere child #148.
+- [ ] **#144/#141 P0 OPEN**: S3 version-history scan
+  non è un pin monotono/offsite indipendente, non
+  attesta source DELETE COMMIT o global DR gate;
+  Azure version-level WORM staging e privacy review
+  ancora mancanti.

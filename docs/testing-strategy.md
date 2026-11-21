@@ -180,3 +180,19 @@ effimero, non authority offsite.
 - [RED hardening 44891542059](https://github.com/KeyserDSoze/Omnia/actions/runs/44891542059): 1/6 S3 fallito per accettazione di provider mode AzureLocked o retainUntil effettiva inferiore alla richiesta.
 - [GREEN 44891839494](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839494) sul commit `5b237395`: **7/7 S3 real protocol + fake faults**, **4/4 Azure SDK fake HTTP**, **19/19 Domain**, **80/80 PostgreSQL Integration**, PITR e Docker/mobile SUCCESS; [OIDC 44891839549](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839549), [Pages 44891839509](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839509) SUCCESS. Test dual PITR dimostra ancora replay NON sicuro, quarantena mantenuta.
 - CI SeaweedFS è sullo stesso runner e non prova offsite immutable custody. #144/#141 OPEN.
+
+## S3 bounded history reconciliation test-first (ADR0047 / #148)
+
+`tests/Omnia.S3ObjectLock.Tests/S3UncertainAckHistoryTests.cs`
+esercita AWS SDK v4 reale su bucket SeaweedFS effimero:
+PUT COMPLIANCE realmente accettata dal server con ACK
+artificialmente perso nel processo caller; scansione
+`ListVersions` e verifica HMAC/retention esatta;
+successivo delete marker latest non occulta la versione.
+Cataloghi senza oggetti, con due versioni COMPLIANCE,
+soggetti errati, alias, chiavi estranee o cursori ciclici
+non danno mai retry o release. La scansione è
+2/versioni per pagina, massimo otto pagine; malformed
+metadata è un result Uncertain, non una prova di
+inesistenza. Ancora nessuna verifica offsite e
+source commit primario.

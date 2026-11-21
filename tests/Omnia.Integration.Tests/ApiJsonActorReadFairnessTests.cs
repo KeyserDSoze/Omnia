@@ -14,6 +14,77 @@ namespace Omnia.Integration.Tests;
 public sealed class ApiJsonActorReadFairnessTests
 {
     [Fact]
+    public void ActorLimitsAreValidatedAndActivePartitionKeysDoNotAccumulate()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiJsonBodyReadConcurrencyLimiter(8, 0));
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiJsonBodyReadConcurrencyLimiter(8, 9));
+        Assert.Throws<ArgumentException>(() =>
+            new ApiJsonBodyReadConcurrencyLimiter(8).TryAcquire(new string('x', 513)));
+
+        Assert.Equal(4, new ApiJsonBodyReadConcurrencyLimiter(8).MaxConcurrentReadsPerActor);
+        Assert.Equal(1, new ApiJsonBodyReadConcurrencyLimiter(1).MaxConcurrentReadsPerActor);
+        Assert.Equal(2, new ApiJsonBodyReadConcurrencyLimiter(8, 2).MaxConcurrentReadsPerActor);
+
+        var limiter = new ApiJsonBodyReadConcurrencyLimiter(8, 2);
+        for (var index = 0; index < 1000; index++)
+        {
+            using (var lease = limiter.TryAcquire($"synthetic-account:{index}"))
+            {
+                Assert.NotNull(lease);
+                Assert.Equal(1, limiter.ActiveActorPartitions);
+            }
+            // No ever-growing per-subject limiter dictionary after release.
+            Assert.Equal(0, limiter.ActiveActorPartitions);
+        }
+    }
+
+    [Fact]
+    public async Task ParallelAdmissionsAreAtomicAcrossActorAndGlobalBudgets()
+    {
+        var limiter = new ApiJsonBodyReadConcurrencyLimiter(8, 2);
+        var results = await Task.WhenAll(Enumerable.Range(0, 128)
+            .Select(_ => Task.Run(() => limiter.TryAcquire("signed:tenant:actor-one"))));
+        try
+        {
+            Assert.Equal(2, results.Count(lease => lease is not null));
+            Assert.Equal(1, limiter.ActiveActorPartitions);
+            var other = new List<IDisposable>();
+            try
+            {
+                // Six more active slots across three other accounts are
+                // allowed, but a ninth process-wide permit must be refused.
+                foreach (var actor in new[] { "actor-two", "actor-three", "actor-four" })
+                {
+                    for (var i = 0; i < 2; i++)
+                        other.Add(Assert.IsAssignableFrom<IDisposable>(
+                            limiter.TryAcquire($"signed:tenant:{actor}")));
+                }
+
+                Assert.Equal(4, limiter.ActiveActorPartitions);
+                Assert.Null(limiter.TryAcquire("signed:tenant:actor-five"));
+            }
+            finally
+            {
+                foreach (var lease in other)
+                    lease.Dispose();
+            }
+        }
+        finally
+        {
+            foreach (var lease in results.Where(x => x is not null))
+            {
+                lease!.Dispose();
+                lease.Dispose(); // Idempotent even after the first release.
+            }
+        }
+        Assert.Equal(0, limiter.ActiveActorPartitions);
+        using var reopened = limiter.TryAcquire("signed:tenant:actor-one");
+        Assert.NotNull(reopened);
+    }
+
+    [Fact]
     public async Task OneAuthenticatedActorCannotConsumeEveryJsonReadSlot()
     {
         // Eight process-wide slots, but one verified actor should be able to
@@ -36,6 +107,7 @@ public sealed class ApiJsonActorReadFairnessTests
             using var rejectedStream = new MemoryStream(
                 Encoding.UTF8.GetBytes("{\"synthetic\":\"private\"}"));
             var rejected = Request(rejectedStream, "tenant-one", "actor-one");
+            rejected.Request.Headers["X-Forwarded-For"] = "198.51.100.25";
             var called = false;
             await ApiJsonBodyBudget.InvokeAsync(rejected, _ =>
             {

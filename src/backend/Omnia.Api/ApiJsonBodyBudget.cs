@@ -37,7 +37,8 @@ public static class ApiJsonBodyBudget
     public static async Task InvokeAsync(
         HttpContext context, RequestDelegate next,
         int maxJsonBytes,
-        int readTimeoutMilliseconds = DefaultReadTimeoutMilliseconds)
+        int readTimeoutMilliseconds = DefaultReadTimeoutMilliseconds,
+        ApiJsonBodyReadConcurrencyLimiter? concurrencyLimiter = null)
     {
         // Health, readiness, GET/DELETE and future upload endpoints are
         // not assumed to carry JSON. A separate media budget is required
@@ -80,6 +81,20 @@ public static class ApiJsonBodyBudget
             await RejectAsync(context,
                 StatusCodes.Status415UnsupportedMediaType,
                 "unsupported_media_type");
+            return;
+        }
+
+        // Do not queue slow senders once this instance's JSON intake is full.
+        // The lease is acquired after cheap 413/415 checks but before any
+        // buffer allocation or ReadAsync; it is shared across API requests.
+        // The using statement releases on timeout, abort, 413 or exceptions.
+        using var readPermit = concurrencyLimiter?.TryAcquire();
+        if (concurrencyLimiter is not null && readPermit is null)
+        {
+            context.Response.Headers["Retry-After"] = "1";
+            await RejectAsync(context,
+                StatusCodes.Status503ServiceUnavailable,
+                "request_body_busy");
             return;
         }
 
@@ -126,6 +141,11 @@ public static class ApiJsonBodyBudget
                 return;
             }
         }
+
+        // The body-read permit is NOT held during downstream DB/AI work.
+        // Dispose is idempotent; the using declaration remains a safety net
+        // for any failure during buffering or exception from a stream.
+        readPermit?.Dispose();
 
         // Dispose the body-only deadline BEFORE normal downstream work:
         // successful DB/AI handling must not be cancelled by a body timer.

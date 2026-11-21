@@ -82,6 +82,11 @@ var jsonBodyReadLimiter = new ApiJsonBodyReadConcurrencyLimiter(
     ApiJsonBodyReadConcurrencyLimiter.DefaultMaxConcurrentReads,
     builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentReadsPerActor"),
     builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentReadsPerTenant"));
+// Independently cap middleware-retained JSON buffers WHILE downstream
+// handlers run. Read permits still release before handler execution.
+var jsonBufferedRequestLimiter = new ApiJsonBufferedRequestLimiter(
+    builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentBufferedRequests") ??
+    ApiJsonBufferedRequestLimiter.DefaultMaxConcurrentBufferedRequests);
 // Validate transport limits BEFORE starting Kestrel or opening any sockets.
 var requestHeadersTimeoutMs = builder.Configuration.GetValue<int?>(
     "Transport:RequestHeadersTimeoutMilliseconds") ??
@@ -212,7 +217,7 @@ app.UseAuthorization();
 // No credentials or request content are logged by the bounded guard.
 app.Use((context, next) =>
     ApiJsonBodyBudget.InvokeAsync(context, next, maxJsonBytes, jsonBodyReadTimeoutMs,
-        jsonBodyReadLimiter));
+        jsonBodyReadLimiter, jsonBufferedRequestLimiter));
 app.MapGet("/health", () => Results.Ok(new { status = "ok", product = "Omnia" }));
 app.MapGet("/ready", async (NpgsqlDataSource db, CancellationToken ct) =>
 {

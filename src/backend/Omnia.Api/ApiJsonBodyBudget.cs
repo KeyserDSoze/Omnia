@@ -38,7 +38,8 @@ public static class ApiJsonBodyBudget
         HttpContext context, RequestDelegate next,
         int maxJsonBytes,
         int readTimeoutMilliseconds = DefaultReadTimeoutMilliseconds,
-        ApiJsonBodyReadConcurrencyLimiter? concurrencyLimiter = null)
+        ApiJsonBodyReadConcurrencyLimiter? concurrencyLimiter = null,
+        ApiJsonBufferedRequestLimiter? bufferedRequestLimiter = null)
     {
         // Health, readiness, GET/DELETE and future upload endpoints are
         // not assumed to carry JSON. A separate media budget is required
@@ -81,6 +82,21 @@ public static class ApiJsonBodyBudget
             await RejectAsync(context,
                 StatusCodes.Status415UnsupportedMediaType,
                 "unsupported_media_type");
+            return;
+        }
+
+        // This second process-local admission caps middleware-owned JSON
+        // buffers across BOTH body reception and downstream handler work.
+        // Acquire before allocating/reading; dispose LAST, after the
+        // bounded MemoryStream and after the handler has finished.
+        // The separate receiver permit below still ends BEFORE the handler.
+        using var bufferedPermit = bufferedRequestLimiter?.TryAcquire();
+        if (bufferedRequestLimiter is not null && bufferedPermit is null)
+        {
+            context.Response.Headers["Retry-After"] = "1";
+            await RejectAsync(context,
+                StatusCodes.Status503ServiceUnavailable,
+                "request_buffer_busy");
             return;
         }
 

@@ -160,6 +160,22 @@ public sealed class S3ObjectLockAttemptSubmissionTests
     }
 
     [Fact]
+    public void AwsClientThatCanRetryIsRejectedBeforeAnyWrite()
+    {
+        using var client = new AmazonS3Client(
+            new BasicAWSCredentials("synthetic-only", "synthetic-only"),
+            new AmazonS3Config
+            {
+                ServiceURL = "http://127.0.0.1:18433",
+                AuthenticationRegion = "us-east-1",
+                ForcePathStyle = true,
+                MaxErrorRetry = 2
+            });
+        Assert.Throws<InvalidDataException>(() =>
+            new AwsS3ObjectLockAttemptPut(client, "ci-test-bucket"));
+    }
+
+    [Fact]
     public async Task InvalidPayloadAndRetentionNeverReachS3()
     {
         var id = Guid.NewGuid();

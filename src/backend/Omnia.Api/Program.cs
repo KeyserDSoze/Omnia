@@ -80,6 +80,18 @@ var jsonBodyReadTimeoutMs = ApiJsonBodyBudget.ValidateReadTimeoutMilliseconds(
 var jsonBodyReadLimiter = new ApiJsonBodyReadConcurrencyLimiter(
     builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentReads") ??
     ApiJsonBodyReadConcurrencyLimiter.DefaultMaxConcurrentReads);
+// Validate transport limits BEFORE starting Kestrel or opening any sockets.
+var requestHeadersTimeoutMs = builder.Configuration.GetValue<int?>(
+    "Transport:RequestHeadersTimeoutMilliseconds") ??
+    ApiKestrelTransportLimits.DefaultRequestHeadersTimeoutMilliseconds;
+var maxRequestHeadersTotalBytes = builder.Configuration.GetValue<int?>(
+    "Transport:MaxRequestHeadersTotalBytes") ??
+    ApiKestrelTransportLimits.DefaultMaxRequestHeadersTotalBytes;
+var maxRequestHeaderCount = builder.Configuration.GetValue<int?>(
+    "Transport:MaxRequestHeaderCount") ??
+    ApiKestrelTransportLimits.DefaultMaxRequestHeaderCount;
+ApiKestrelTransportLimits.Validate(
+    requestHeadersTimeoutMs, maxRequestHeadersTotalBytes, maxRequestHeaderCount);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -166,7 +178,13 @@ switch (provider)
         break;
     default: throw new InvalidOperationException($"Unsupported Embeddings:Provider: {provider}");
 }
-builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 70 * 1024);
+// Kestrel's header parser runs before middleware. Keep a strict pre-auth
+// header budget and its 240 B/s minimum request-body rate; the later
+// authenticated JSON middleware still owns 408/413/415/503 decisions.
+builder.WebHost.ConfigureKestrel(options =>
+    ApiKestrelTransportLimits.Configure(
+        options.Limits, requestHeadersTimeoutMs,
+        maxRequestHeadersTotalBytes, maxRequestHeaderCount));
 var app = builder.Build();
 // Recheck on each request: an operator can quarantine a running API by
 // withdrawing the ready marker. This is not a signed recovery release.

@@ -112,6 +112,24 @@ public static class ImmutableAttemptEvidence
         finally { CryptographicOperations.ZeroMemory(scope); }
     }
 
+    /// <summary>
+    /// Validate the caller-provided signed *bytes* before considering any
+    /// remote write (ADR 0046). No storage/retention assertion is made by
+    /// this method; an observation still requires VerifyAsync on the
+    /// exact object version. It neither authorizes DELETE nor replay.
+    /// </summary>
+    public static void VerifyPayload(byte[] content, Guid requestId,
+        string tenantId, string ownerSubject, byte[] scopeKey,
+        byte[] evidenceKey)
+    {
+        ValidateKeys(scopeKey, evidenceKey);
+        if (content is not { Length: >= 2 and <= MaxBytes })
+            throw Invalid();
+        ObjectKey(requestId);
+        VerifyEnvelope(content, requestId, tenantId, ownerSubject,
+            scopeKey, evidenceKey);
+    }
+
     public static async Task<ImmutableAttemptObservation> VerifyAsync(
         IImmutableAttemptObjectReader reader, Guid requestId,
         string tenantId, string ownerSubject, byte[] scopeKey,

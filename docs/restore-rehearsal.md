@@ -962,3 +962,18 @@ stesso dominio di guasto. In questo incremento NON
 esiste un oggetto reale S3/Azure: test con stub.
 Mantenere le procedure PITR fisiche e la quarantena,
 non generare `ready` né riavviare ingress/worker.
+
+## Prova S3 Object Lock reale ma CI-only (ADR 0044)
+
+La pipeline crea un container OSS SeaweedFS S3
+su loopback 18433 con credenziali random mascherate,
+crea un bucket versioning/Object Lock-enabled,
+registra un piccolo JSON sintetico COMPLIANCE e legge
+la *stessa versione* con retention effettiva. Controlla
+che un successivo GOVERNANCE non modifichi la versione
+pinned e che la cancellazione di quest'ultima sia
+vietata dalla API del servizio. L'intero storage
+rimane sotto controllo del runner e non è offsite.
+Non utilizzare il successo di questa prova per
+release del database ripristinato: occorrono ancora
+pin e commit attestati da authority indipendente.

@@ -774,3 +774,19 @@ Occorrono credenziali workload identity, IAM/RBAC e version
 pin esterno, clock sicuro, test veri Object Lock su provider
 e una ricevuta COMMIT distinta. Non aprire recovery o
 abilitare DELETE sulla base di `ImmutableAttemptObservation`.
+
+## S3 real Object Lock read adapter — #145 / ADR 0044
+
+L'adapter verifica modalità COMPLIANCE e retain-until
+per lo stesso `VersionId` richiesto al backend,
+con identità del bucket configurata; le dimensioni
+sono limitate anche sullo streaming. Chiavi HMAC/tenant
+e stato osservativo restano nel verificatore ADR0043.
+La rehearsal usa SeaweedFS su un runner CI temporaneo:
+non è prova WORM resistente ad admin host,
+non è prova di independent offsite custody, IAM minima,
+account owner esterno, conservazione GDPR o fonte
+temporale affidabile. Per AWS richiedere
+`ExpectedBucketOwner`, S3 IAM GetObjectVersion e
+GetObjectRetention; on-prem impone un dominio di
+amministrazione realmente differente. No REST wiring.

@@ -110,3 +110,16 @@ e nessun permission token di cancellazione esiste.
 - [CI RED 44882440793](https://github.com/KeyserDSoze/Omnia/actions/runs/44882440793): 1 di 80 test fallito per versioni `latest` e `null`;
 - [CI GREEN 44882456199](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456199): test xUnit/restore/PITR/Docker e mobile verde sul commit `390331a4`;
 - [OIDC E2E 44882456209](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456209) e [Pages 44882456200](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456200) green stesso SHA. Questa è evidenza solo del **contratto con stub**, non di uno storage WORM reale.
+
+## AWS SDK S3 immutable object version provider rehearsal (#145)
+
+Il nuovo progetto xUnit `tests/Omnia.S3ObjectLock.Tests`
+esercita l'API S3 reale di un OSS temporaneo:
+bucket con Object Lock, versione COMPLIANCE,
+GET con VersionId, GetObjectRetention stessa versione,
+GOVERNANCE/unlocked/alias/foreign pin negati,
+tentativo DELETE versione COMPLIANCE negato.
+I log NON devono stampare segreti o contenuti.
+SeaweedFS usa lo stesso runner della primaria;
+l'assenza di offsite/WORM effettivo e di test Azure
+rimane esplicitamente nelle issue aperte.

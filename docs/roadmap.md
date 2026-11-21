@@ -679,3 +679,17 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   retention per versione, version pin esterno monotono,
   upload + ACK e attestazione post-commit primario, con
   test reali provider. Nessuna prova WORM o GDPR prod in #143.
+
+## #145 — S3 Object Lock read adapter e test protocollo OSS (ADR 0044)
+
+- [x] RED test-first: suite AWS SDK S3 con version lock reale
+  prima dell'adapter, con runner effimero e nessun dato utente.
+- [x] GREEN implementativa: `S3ObjectLockAttemptReader`, SDK
+  AWS v4 pinning per GetObject e GetObjectRetention, COMPLIANCE
+  soltanto, 512 byte max, version e actor-scope verificati
+  dal precedente contratto, errori falliscono chiusi.
+- [ ] Registrare evidenze Actions RED/GREEN complete.
+- [ ] **#144 OPEN**: verifica di MinIO/on-prem in ambiente
+  indipendente, Azure Blob immutabile, IAM/RBAC, HSM/vault,
+  version pin monotono, disaster multi-site e S3 provider
+  reali fuori dal runner; #141 per commit primary+release.

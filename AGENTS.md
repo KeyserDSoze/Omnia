@@ -852,3 +852,20 @@ NEVER offsite/WORM evidence. No real providers, version pin authority,
 OIDC authorization, source COMMIT proof or global release exist yet.
 Keep #141/#109/#31/#32 OPEN. Do NOT wire this observer into REST
 or treat a valid receipt as GDPR erasure evidence.
+
+## REAL S3 Object Lock provider read-only slice (#145 / ADR 0044)
+
+`Omnia.ObjectStore.S3.S3ObjectLockAttemptReader` is an AWS SDK v4
+adapter for the ADR0043 observer. The adapter MUST pin the SAME
+exact non-null/non-latest VersionId on BOTH GetObjectRetention and
+GetObject, require per-version retention mode COMPLIANCE and UTC date,
+reject mismatched GetObject response version, enforce strict payload
+size on both ContentLength and streaming (512+1 probe), and reject
+missing/unauthorized/governance/expired/invalid foreign keys.
+Do not use a bucket default retention as substitute for per-version
+retention. The reader has NO PUT/DELETE or ready/retry path and
+is NOT registered in the API. The SeaweedFS protocol test is
+CI-only same-host synthetic S3; even a real S3 COMPLIANCE status
+does NOT prove offsite independent custody or source DELETE COMMIT.
+#144/#141/#109/#31/#32 remain OPEN. No production parity with
+MinIO/Azure; do not turn this into a release gate prematurely.

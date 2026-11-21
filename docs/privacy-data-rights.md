@@ -381,3 +381,15 @@ cancellazione al termine della retention, DPA,
 consensi applicabili e accessi dei responsabili.
 Il risultato attesta al massimo un tentativo visto,
 non la cancellazione ex art.17 GDPR.
+
+## Receipt di tentativo su S3 OSS in CI (ADR 0044)
+
+La rehearsal usa soltanto UUID/tenant/actor sintetici
+e HMAC di due chiavi casuali, senza contenuti utenti.
+Il codice provider S3 restituisce solo una *osservazione
+di tentativo*, non attesta che i dati siano stati
+cancellati e non autorizza il replay. Nel sistema
+reale identificativi e MAC sono dati pseudonimizzati
+ancora soggetti a minimizzazione, base giuridica,
+retention, controllo accessi e cancellazione alla
+scadenza quando consentita. #141/#144 ancora aperte.

@@ -374,3 +374,15 @@ un'osservazione del tentativo precedente senza release/replay.
 Il solo contratto non rende reale Azure Locked o S3 COMPLIANCE.
 Nessun adapter cloud e nessun control plane è implementato:
 l'architettura non contiene ancora una offsite/WORM authority.
+
+## Adapter S3 version-pinned (ADR 0044)
+
+Il nuovo adapter `Omnia.ObjectStore.S3` implementa il port
+`IImmutableAttemptObjectReader` con AWS SDK v4, ma non
+viene registrato nella API SaaS o nel processo di DELETE.
+Legge `GetObjectRetention` della stessa versione letta
+via `GetObject` e rifiuta GOVERNANCE/no-retention,
+latest/null, versionId differente, body over-limit.
+Il test temporaneo usa SeaweedFS per il **protocollo**,
+non una authority esterna reale. L'architettura richiede
+ancora version pin indipendente, RBAC/vault e Azure parity.

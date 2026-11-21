@@ -124,6 +124,42 @@ public sealed class S3ObjectLockAttemptSubmissionTests
     }
 
     [Fact]
+    public async Task WrongProviderOrShorterThanRequestedRetentionCannotBeObserved()
+    {
+        var id = Guid.NewGuid();
+        var scope = RandomNumberGenerator.GetBytes(32);
+        var signing = RandomNumberGenerator.GetBytes(32);
+        var data = ImmutableAttemptEvidence.CreateSynthetic(
+            id, "ci-tenant", "ci-owner", scope, signing);
+        var key = ImmutableAttemptEvidence.ObjectKey(id);
+        var now = DateTimeOffset.UtcNow;
+        var requestedRetention = now.AddDays(2);
+        foreach (var (mode, effectiveRetention) in new[]
+        {
+            (ImmutableAttemptImmutabilityMode.AzureLocked, requestedRetention),
+            (ImmutableAttemptImmutabilityMode.S3Compliance, now.AddHours(2))
+        })
+        {
+            var writer = new StubPut(() =>
+                Task.FromResult(new S3ObjectLockPutAcknowledgment("version-1")));
+            var reader = new StubRead(new ImmutableAttemptObjectVersion(
+                "ci-store", key, "version-1", mode,
+                effectiveRetention, data));
+            var publisher = new S3ObjectLockAttemptPublisher(
+                writer, reader, "ci-store");
+            var result = await publisher.SubmitOnceAsync(id,
+                "ci-tenant", "ci-owner", scope, signing,
+                data, requestedRetention, now, default);
+            Assert.True(result.Uncertain);
+            Assert.False(result.Observed);
+            Assert.False(result.MayAutoRetry);
+            Assert.False(result.MayReleaseRecovery);
+            Assert.Equal(1, writer.Calls);
+            Assert.Equal(1, reader.Calls);
+        }
+    }
+
+    [Fact]
     public async Task InvalidPayloadAndRetentionNeverReachS3()
     {
         var id = Guid.NewGuid();

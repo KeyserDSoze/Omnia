@@ -884,3 +884,25 @@ are NOT actual Azure WORM service tests and cannot attest WORM,
 IAM, account ownership, version catalog or offsite custody. Do not
 register the adapter in REST/DELETE or authorize recovery ready:
 #144/#141/#109/#31/#32 remain OPEN.
+
+## S3 Object Lock conditional write & uncertain ACK (#147 / ADR 0046)
+
+`S3ObjectLockAttemptPublisher` is a *testable* read/write
+boundary, not an actor DELETE or recovery authorization.
+It MUST verify canonical UUID/tenant/owner and 2-key HMAC
+payload bytes before any S3 request, reject short/invalid
+UTC retention, perform exactly one conditional
+`PutObject(IfNoneMatch="*", ObjectLockMode=COMPLIANCE,
+ObjectLockRetainUntilDate UTC, Content-MD5)` with an SDK
+client configured `MaxErrorRetry=0`, and only return
+`Observed` after verifying the returned exact VersionId
+with the read-only S3 COMPLIANCE observer. Any lost ack,
+timeout, conflict 409/412, null/versionless ACK,
+readback untrusted or absent must be `Uncertain`,
+NEVER “safe to retry”, “not written”, “erased”, “ready”
+or trigger a source DELETE. If-None-Match is current-key
+conditional, not cross-PITR anti-rollback; delete markers,
+administrative loss, identity compromise and separate
+version pin authority remain outstanding. Synthetic
+SeaweedFS CI is the SAME runner, not offsite. No
+API/DI integration. #144/#141/#109/#31/#32 OPEN.

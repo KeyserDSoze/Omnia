@@ -397,3 +397,16 @@ VersionId, size e ETag. Il core applica HMAC/scope.
 Il progetto non registra l'adapter nell'API né usa un
 account Azure reale: i contract test HTTP non attestano
 immutabilità in Azure o custodia indipendente.
+
+## S3 conditional attempt evidence publisher (#147, ADR 0046)
+
+Il modulo S3 ora include una porta singolo-PUT, un adapter
+AWS SDK v4 e un publisher fail-closed, NON registrati
+nell'API. Prima del PUT il publisher verifica la ricevuta
+HMAC canonica; invia COMPLIANCE conditional `IfNoneMatch=*`
+con client no-retry; dopo ACK verifica la stessa
+versione pin con il reader ADR0044. Se manca conferma
+o le API di lettura sono indisponibili segnala
+`Uncertain`, mai “assente” o “sicuro da ripetere”.
+È protocollo CI su storage effimero, non authority
+esterna al primario PostgreSQL.

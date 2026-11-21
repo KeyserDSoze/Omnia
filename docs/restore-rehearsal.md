@@ -987,3 +987,16 @@ immutabile Locked, UTC retention e ETag uguale,
 senza dare release né sinteticamente cancellare
 dati. Questo NON è un DR rehearsal su account
 Azure WORM reale e non sostituisce PITR o #141.
+
+## S3 uncertain PUT ack, real protocol CI (#147)
+
+Il rehearsal crea un bucket effimero versioning +
+Object Lock, fa un singolo PUT COMPLIANCE con
+If-None-Match e controlla che la successiva richiesta
+sulla stessa chiave non diventi un secondo `Observed`;
+il primo VersionId rimane interrogabile e protetto.
+Fault injection simulate `response lost after commit`,
+timeout, 412 e readback non COMPLIANCE: tutti incerti
+senza auto-retry. Il test non coinvolge primary DELETE
+né emette recovery-ready; il doppio PITR postgres resta
+unsafe senza una authority offsite superstite.

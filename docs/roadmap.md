@@ -707,3 +707,18 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   S3 offsite, persistent monotone pin authority, delete 403
   and operational approval. #141 P0 for post-commit
   primary evidence + full recovery gate. No GDPR-ready claim.
+
+## #147 — S3 COMPLIANCE conditional PUT e ACK incerto (ADR 0046)
+
+- [x] RED xUnit: API assente, conditional single PUT
+  e lost-ack/untrusted readback negative matrix.
+- [x] Implementazione: `VerifyPayload` prima del PUT
+  (HMAC 2-key e scope), S3 SDK `MaxErrorRetry=0`,
+  conditional `IfNoneMatch=*`, COMPLIANCE, MD5 trasporto,
+  retainUntil UTC, VersionId pinned e readback
+  COMPLIANCE con actor MAC. Solo `Observed`/`Uncertain`,
+  mai un token di DELETE/replay/recovery.
+- [ ] RED/GREEN CI sullo SHA finale da registrare.
+- [ ] #144/#141 ancora OPEN: offsite admin indipendente,
+  Azure WORM staging, external monotonic pin, source
+  COMMIT certificate, writer OIDC e global DR quarantine.

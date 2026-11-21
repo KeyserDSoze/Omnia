@@ -146,3 +146,17 @@ e 403 DELETE sono ancora da implementare (#144).
 - [RED 44888375998](https://github.com/KeyserDSoze/Omnia/actions/runs/44888375998): policy sconosciuta causa eccezione SDK; il reader è stato reso fail-closed e aggiunti test di HEAD/GET mismatch.
 - [CI GREEN 44888632016](https://github.com/KeyserDSoze/Omnia/actions/runs/44888632016) sul commit `df498bc7`: **4/4 test Azure SDK HTTP sintetici**; 2/2 real S3 SeaweedFS, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali e Docker/mobile; [OIDC 44888631958](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631958) e [Pages 44888631988](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631988) SUCCESS sullo stesso SHA.
 - Questa è una prova di SDK contro risposte HTTP simulate, non di version-level Azure WORM realmente Locked su tenant/account Azure o resistenza al DELETE. Mantenere #144/#141 aperte.
+
+## S3 conditional COMPLIANCE publisher negative/real tests (#147)
+
+`tests/Omnia.S3ObjectLock.Tests/S3ObjectLockAttemptSubmissionTests.cs`
+verifica AWS SDK PutObject condizionale su SeaweedFS
+Object Lock reale e rilettura COMPLIANCE della versione
+con HMAC; non deve sostituire il publisher con un
+semplice stub nel test positivo. Fault injection
+sul port write simula lost acknowledgment dopo PUT,
+timeout, 412, `null` VersionId e readback governance;
+nessuno può produrre retry o ready. Payload MAC o
+retention non validi sono negati *prima* del PUT.
+Questi test non dimostrano atomicità distribuita,
+physical offsite WORM né source DELETE commit.

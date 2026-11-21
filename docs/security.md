@@ -803,3 +803,17 @@ Managed Identity con Data Reader minimizzato, Key Vault,
 identità account indipendente, accesso account atteso e
 test reale di DELETE retained sono da progettare prima
 di production. HTTP mock non prova WORM effettivo.
+
+## S3 COMPLIANCE write path non-authorizing (#147)
+
+Nessun PUT deve iniziare con payload scope/HMAC invalido,
+ritenzione insufficiente o configurazione SDK che può
+ripetere richieste. I retry SDK devono essere esplicitamente
+disabilitati; `If-None-Match: *` protegge soltanto lo stato
+corrente della chiave e NON una storia monotona di versioni.
+Un PUT riuscito deve essere rileggibile per VersionId con
+GetObjectRetention COMPLIANCE prima di poter dire `Observed`.
+Timeout, 409/412, 200 senza versione, perdita ACK e readback
+negato rimangono `Uncertain`, mai autorizzazione a DELETE.
+La compliance reale richiede custodia offsite, IAM distinta,
+audit e legal review; test SeaweedFS non sono la prova.

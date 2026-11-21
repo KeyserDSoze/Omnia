@@ -404,3 +404,15 @@ DPA, base giuridica, retention necessaria e sua
 scadenza, gestione richieste art. 17 e audit.
 Il reader non è prova che un DELETE primario sia
 committed e non può riaprire recovery.
+
+## Evidence attempt publisher S3, non prova diritto all'oblio (#147)
+
+Il PUT CI usa solo ricevute con UUID e MAC
+pseudonimizzati, senza contenuti reali. L'evidenza
+di un tentativo è distinta dall'avvenuta cancellazione
+primaria e non abilita auto-retry dopo PITR.
+In produzione servono base giuridica, minimo
+periodo di retention approvato, localizzazione,
+minimizzazione dei pseudonimi, scadenza oggetti
+e gestione GDPR per data rights e audit; non
+inferire compliance da COMPLIANCE object-lock.

@@ -1057,3 +1057,16 @@ Gli unit test esercitano il vero SDK .NET con risposte HTTP sintetiche,
 account versioning e WORM reale su staging, replica offsite,
 autorità monotona, post-COMMIT e GDPR review. Il gap fra PUT e lock
 resta non atomico; #144/#141/#109/#31 restano OPEN.
+
+## Azure Blob visible-version history check (#152 / ADR 0051)
+
+L'osservazione `AzureBlobWormHistoryAudit` campiona read-only le
+versioni che Azure restituisce per la chiave tentativo esatta,
+con stati Version/Deleted/DeletedWithVersions, al massimo 8 pagine e
+2 voci/pagina, blocco cursori ripetuti, snapshot, soft-delete,
+altre versioni e chiavi estranee. Solo una singola versione
+**visibile** consente il GET/HEAD Locked+HMAC, senza alcun privilegio
+di cancellazione o `ready`. La vista del provider può essere
+incompleta o manipolata: non è una sorgente esterna monotona e
+non dimostra il COMMIT DELETE del primario. Test HTTP scriptati,
+non Azure live; #144/#141/#109/#31 restano APERTE.

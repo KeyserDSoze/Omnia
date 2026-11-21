@@ -994,3 +994,17 @@ anti-rollback, independent custody or permission to release traffic.
 All real Azure RBAC, staging WORM and key custody are future gates;
 scripted SDK HTTP contracts are synthetic. Never connect this
 provider to REST DELETE, replay or ready; #144/#141/#109/#31 OPEN.
+
+## Azure WORM visible history audit (#152 / ADR 0051)
+
+Do NOT treat Azure Blob versioned WORM evidence as once-ever or
+anti-rollback. A READ-ONLY provider history observation may enumerate
+Version|Deleted|DeletedWithVersions for an **exact** evidence key,
+with bounded pages and cursor checks. Any deleted/snapshot/duplicate,
+second version, untrusted VersionId, missing/truncated page or 403
+is `Uncertain`. Only one *visible* matching version may be checked
+using exact-version Azure Locked + HMAC readback. Even success
+NEVER grants auto retry, DELETE, source commit, replay, recovery-ready,
+complete history or independent custody. Scripted SDK tests do not
+replace true Azure offsite WORM/RBAC, independent monotonic journal
+or GDPR review. #144/#141/#109/#31 OPEN.

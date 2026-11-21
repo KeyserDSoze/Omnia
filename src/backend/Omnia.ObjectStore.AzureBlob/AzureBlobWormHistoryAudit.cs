@@ -214,7 +214,7 @@ public sealed class AzureBlobWormHistoryAudit
         cursor is { Length: > 0 and <= 1024 } &&
         !cursor.Any(char.IsControl) && !string.IsNullOrWhiteSpace(cursor);
 
-    private static bool ValidVersion(string? version) =>
+    internal static bool ValidVersion(string? version) =>
         version is { Length: 28 } &&
         VersionPattern.IsMatch(version) &&
         DateTimeOffset.TryParseExact(version,

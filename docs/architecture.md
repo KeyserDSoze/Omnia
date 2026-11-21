@@ -450,3 +450,15 @@ ends with 408/no-store before binding or DB work; genuine client
 cancellations do not fabricate a 408. It does not replace Kestrel
 request-header/body-rate policies, reverse proxy/WAF, connection
 limits or distributed quota. See ADR 0056 and #157; #37 remains open.
+
+## Actor-scoped JSON receive admission (ADR 0060)
+
+At the REST entrypoint, after JWT/OIDC authentication + per-actor
+request rate limits and cheap 413/415 media checks, the shared
+ApiJsonBodyReadConcurrencyLimiter atomically controls both global
+(active reads; default 32) and per-tenant+subject active reads
+(default 4). A lock-protected dictionary retains keys only while
+reads are active and removes them upon release, preventing idle
+principal cardinality growth. The read lease is released before
+the Minimal API handler/DB work. No new personal-data persistence,
+no distributed quota and no tenant-wide fair sharing are claimed.

@@ -974,3 +974,35 @@ separately inventory and validate LB/proxy protections on both
 on-prem and Azure deployments. Avoid logging malformed request
 header values, credentials or actor identities. Keep #37 and #2
 open for independent multi-replica and privacy release checks.
+
+## Process-local actor fairness for JSON body receive (#161 / ADR 0060)
+
+ADR 0058 globally bounds concurrent request-body reception to
+RequestBody:MaxConcurrentReads=32 (1..256). A single authenticated user
+could still hold all slots with slow JSON. The API now also applies a
+process-local **per-OIDC actor** cap during the SAME body-receive phase:
+optional RequestBody:MaxConcurrentReadsPerActor, default min(4,
+MaxConcurrentReads), valid 1..MaxConcurrentReads. Explicit invalid
+settings reject startup. Both admission checks happen atomically
+without blocking/queueing or allocating request-body buffers, after
+validated OIDC JWT, 429 limiter, authorization and cheap 413/415.
+Partition keys come from the existing length-framed tenant+sub signed
+identity; anonymous fallback uses connection peer IP only, not
+client-controlled X-Forwarded-For. All capacity errors use the
+same 503 request_body_busy/no-store/Retry-After:1 with no actor,
+tenant, headers or body in the response.
+
+A bounded in-memory dictionary tracks **active only** per-actor counts
+behind one lock, removing the entry when count hits zero. At most
+MaxConcurrentReads actor keys may exist concurrently; no actor keys
+are emitted as logs or diagnostics (only partition count). An
+idempotent lease releases both budgets after successful read,
+timeout/408, oversize/413, disconnect or stream fault, and specifically
+BEFORE downstream binding/DB/AI processing.
+
+This is NOT tenant fairness: 8 distinct subjects inside one tenant
+could still occupy the global slots. It does not cross API replicas,
+cover unvalidated traffic/other HTTP methods, impose limits on
+completed handler memory, throttle binary connectors/media, replace
+Kestrel/TLS/proxy/WAF, prove denial-of-service protection or GDPR
+readiness. #37 and #2 still OPEN.

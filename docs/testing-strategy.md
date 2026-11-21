@@ -386,3 +386,25 @@ Retain all existing Domain, real PostgreSQL, S3/Azure provider,
 physical PITR, Docker, Playwright/OIDC, Pages and mobile CI gates.
 Record RED and GREEN SHA/run URLs in #160; close only after all
 required workflows succeed on the same final main SHA.
+
+## RED→GREEN per-actor body receiver fairness (#161 / ADR 0060)
+
+Synthetic \`ApiJsonActorReadFairnessTests\` verifies the missing
+application behavior by holding four JSON ReadAsync operations for
+one signed tenant+subject in an eight-slot limiter; the fifth request
+from the same principal must receive 503/no-store/Retry-After before
+any body read/handler, but another subject of the same tenant and the
+same sub in a different tenant are admitted. A forged X-Forwarded-For
+must not affect the quota identity. Configuration validates
+1..MaxConcurrentReads, default min(4,global). Additional tests
+issue 128 concurrent acquisition attempts under an actor budget of
+two and confirm atomic admission + unchanged global total. A thousand
+unique sequential synthetic principals verify that actor dictionary
+entries are evicted immediately after release. Lease Dispose is
+idempotent, and earlier #159 tests continue covering 408/413, client
+abort, stream faults and release before downstream handler work.
+The tests use synthetic ClaimsPrincipal and Stream: they are NOT a
+replacement for the real Keycloak/JWKS E2E authentication suite.
+Retain real PostgreSQL RLS, Domain, S3/Azure, physical PITR, Docker,
+mobile, browser/OIDC and Pages gate checks on FINAL SHA. Record
+RED and GREEN exact run IDs in #161. Parent #37 stays OPEN.

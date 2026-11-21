@@ -133,3 +133,15 @@ bounded header bytes and count, default minimum body data rate,
 and loopback TCP incomplete-header contract test. This does not
 harden upstream TLS, proxies, Azure ingress, global quotas, media,
 HTTP/3 or WAF. Original backlog counts are historical, not live.
+
+## P0 active-only per-actor JSON receiver fairness (#161 / ADR 0060)
+
+Child [#161](https://github.com/KeyserDSoze/Omnia/issues/161)
+follows the global per-instance concurrent-read cap [#159](https://github.com/KeyserDSoze/Omnia/issues/159).
+It adds atomic per-OIDC tenant+subject read admission (default 4
+alongside default 32 global) and immediate eviction of idle actor
+partition counts, while preserving 503/no-store, 408/413/415 and
+release-before-handler invariants. It does not add distributed,
+cross-tenant or multi-account fairness, provider quotas or WAF;
+[father #37](https://github.com/KeyserDSoze/Omnia/issues/37)
+remains OPEN. Original backlog issue counts are historical.

@@ -169,3 +169,16 @@ a loopback TCP test exercises incomplete headers and ordinary GET.
 These are direct Kestrel protections, not full DoS prevention or
 security guarantees for reverse proxies, Azure staging, TLS,
 HTTP/3 or distributed SaaS quotas. Parent #37 stays open.
+
+## JSON receive fairness per authenticated actor (#161)
+
+The API's 32 default concurrent *JSON receive* slots are now shared
+with an additional **per-OIDC tenant+subject** cap: optional
+RequestBody:MaxConcurrentReadsPerActor, default **4** (or the global
+limit if smaller), valid 1..MaxConcurrentReads. Exhausted actor or
+process slots return the same 503 request_body_busy/no-store response
+without reading JSON. The limiter uses verified bearer claims, never
+X-Forwarded-For; it removes idle actor keys and releases slots before
+normal handler work. This is only per-process/actor protection, not
+a global tenant budget, distributed quota, ingress WAF or production
+readiness. Parent #37 remains open.

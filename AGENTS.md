@@ -1148,3 +1148,25 @@ times out without running any handler. Normal requests must still work.
 Never claim this covers slow TLS handshakes, upstream proxies/WAF,
 HTTP/3, per-tenant distributed quotas, binary media or GDPR readiness.
 #37 stays OPEN.
+
+## Active-only actor JSON intake fairness (#161 / ADR 0060)
+
+In addition to the globally shared per-instance JSON-read slots
+(ADR 0058/#159), no one authenticated OIDC tenant+subject may monopolize
+all slots. RequestBody:MaxConcurrentReadsPerActor is optional (default
+min(4, MaxConcurrentReads), valid 1..MaxConcurrentReads). Reject invalid
+operator values at startup. Acquire global AND actor read capacity
+atomically using one short lock and NO queue; only AFTER 413/415 cheap
+checks and OIDC/rate-limit/authorization. Use the existing signed-
+claims-derived ApiRateLimitPolicy.PartitionKey, never user-provided
+X-Forwarded-For/tenant headers. On exhaustion return the SAME generic
+503 request_body_busy/no-store/Retry-After:1 without reading any bytes.
+Release once on all existing paths (408, 413, disconnect, stream
+fault, normal read); release BEFORE endpoint processing. Remove actor
+key from the in-memory dictionary immediately when its active read
+count becomes zero. Number of retained keys must never exceed
+active global read permits; never log/store key values or user bytes.
+The authenticated context is validated by OIDC upstream, NOT by this
+limiter. Anonymous fallback uses direct network peer only. This is
+per ACTOR/per PROCESS fairness, NOT per-tenant, per-cluster, HTTP
+connection, media or external service quota. Keep #37/#2 OPEN.

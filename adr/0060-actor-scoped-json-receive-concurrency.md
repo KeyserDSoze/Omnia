@@ -21,8 +21,8 @@ dictionary under a short lock makes bounded cardinality explicit.
 
 ## Decision
 
-Preserve \`RequestBody:MaxConcurrentReads\` 1..256 default 32 and
-introduce optional \`RequestBody:MaxConcurrentReadsPerActor\`,
+Preserve `RequestBody:MaxConcurrentReads` 1..256 default 32 and
+introduce optional `RequestBody:MaxConcurrentReadsPerActor`,
 default min(4, global) and valid **1..global**. Invalid explicit
 configuration rejects application startup.
 
@@ -31,10 +31,10 @@ authorization and 413/415 cheap rejection, the JSON body guard
 acquires a lease under one lock only if BOTH total active reads
 and that actor's active reads are below their limits. No queue,
 wait, retry, buffer allocation or ReadAsync takes place when
-saturated; return HTTP 503 with only \`request_body_busy\`,
-\`Retry-After: 1\` and \`Cache-Control: no-store\`.
+saturated; return HTTP 503 with only `request_body_busy`,
+`Retry-After: 1` and `Cache-Control: no-store`.
 
-Use the same \`ApiRateLimitPolicy.PartitionKey(context)\` as the
+Use the same `ApiRateLimitPolicy.PartitionKey(context)` as the
 authenticated rate limiter. It uses the length-framed tenant_id+sub
 from the validated bearer JWT; if no valid authenticated principal
 exists, only the network peer IP (not X-Forwarded-For) provides the

@@ -217,8 +217,21 @@ public sealed class S3ObjectLockVersionPinService
             string.IsNullOrWhiteSpace(ownerSubject))
             throw Invalid();
 
-        var scope = PreEraseExecutionClaimScope.Compute(requestId,
-            tenantId, ownerSubject, scopeKey);
+        // Domain-separated pin actor scope: plaintext tenant/subject is
+        // used only in this in-memory HMAC input, never stored in S3.
+        // The original receipt's independently scoped MAC is validated
+        // by ImmutableAttemptEvidence.VerifyAsync before pin acceptance.
+        var actorPayload = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            schemaVersion = 1,
+            purpose = "omnia-s3-pin-actor-scope-v1",
+            requestId = requestId.ToString("N"),
+            tenantId,
+            ownerSubject
+        });
+        byte[] scope;
+        try { scope = HMACSHA256.HashData(scopeKey, actorPayload); }
+        finally { CryptographicOperations.ZeroMemory(actorPayload); }
         try
         {
             var scopeMac = Convert.ToBase64String(scope);

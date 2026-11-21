@@ -93,7 +93,7 @@ public sealed class ApiTenantRequestWindowTests
     {
         var limiter = new ApiTenantRequestWindowLimiter(7, 2, new ManualClock());
         var attempts = await Task.WhenAll(Enumerable.Range(0, 128)
-            .Select(_ => Task.Run(() => limiter.TryAcquire("tenant:a", out _))));
+            .Select(i => Task.Run(() => limiter.TryAcquire("tenant:a", out _))));
         Assert.Equal(7, attempts.Count(admitted => admitted));
         Assert.Equal(1, limiter.TrackedTenantPartitions);
         Assert.False(limiter.TryAcquire("tenant:a", out var retry));

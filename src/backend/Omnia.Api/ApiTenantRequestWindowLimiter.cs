@@ -69,10 +69,11 @@ public sealed class ApiTenantRequestWindowLimiter
         retryAfterSeconds = 0;
         lock (_gate)
         {
-            // Avoid an O(N) dictionary walk per request. Expired entries are
-            // reclaimed periodically on traffic or immediately on pressure;
-            // cardinality remains bounded even under many distinct tenants.
-            if (now >= _nextSweepAt || _windows.Count >= MaxTrackedTenants)
+            // Avoid an O(N) dictionary walk on EVERY rejected request when
+            // capacity is full. Sweep at most once per 15s of request traffic;
+            // if a full map contains newly expired partitions between sweeps,
+            // fail closed briefly until the next sweep, never bypass capacity.
+            if (now >= _nextSweepAt)
             {
                 RemoveExpired(now);
                 _nextSweepAt = now + CleanupInterval;

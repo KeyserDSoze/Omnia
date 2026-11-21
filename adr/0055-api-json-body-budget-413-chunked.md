@@ -65,16 +65,28 @@ and config outside the permitted range is refused.
 No test sends user personal data; no test claims real OIDC
 validation (the separate real-browser/JWKS workflow covers it).
 
-- RED test-first commit `5ed18198`:
-  [Omnia CI](https://github.com/KeyserDSoze/Omnia/actions/runs/44925769441)
-  result must be checked before claiming observed RED.
-- Implementation `00a38732` + middleware/endpoint registration
-  `8b3c2845`:
-  [Omnia CI](https://github.com/KeyserDSoze/Omnia/actions/runs/44925867948)
-  result pending at ADR authoring.
-- This ADR modifies the HEAD. Verify ALL 3 Actions
-  Omnia CI, OIDC real-browser E2E, Pages on the
-  final commit SHA before closing the child #156.
+- **RED verificato**: test-first
+  [`5ed18198`](https://github.com/KeyserDSoze/Omnia/commit/5ed18198b59c8d13e529bfe93609243f46c101f2),
+  [CI 44925769441](https://github.com/KeyserDSoze/Omnia/actions/runs/44925769441)
+  **FAILURE attesa CS0103** nei test Integration per `ApiJsonBodyBudget`
+  mancante; Domain 19/19, S3 16/16 e Azure 31/31 erano
+  passati prima della compilazione Integration.
+- **GREEN verificato**: implementazione classe
+  [`00a38732`](https://github.com/KeyserDSoze/Omnia/commit/00a38732a5cf6897588b722b2a523184fe19825e),
+  registrazione API e config
+  [`8b3c2845`](https://github.com/KeyserDSoze/Omnia/commit/8b3c2845c2fa8575179d63a8a3eac6123d5a2bcd),
+  ADR/docs [`a0565c74`](https://github.com/KeyserDSoze/Omnia/commit/a0565c74c9420f3a8797c41bd4fbb88b39100773).
+  [CI 44926025165](https://github.com/KeyserDSoze/Omnia/actions/runs/44926025165)
+  **SUCCESS** sullo stesso SHA: 82/82 real PostgreSQL Integration
+  (inclusi HTTP 413/415 e chunked), 19/19 Domain, 16/16 SeaweedFS
+  S3, 31/31 Azure SDK; recovery/PITR fisici, Docker e mobile.
+  [OIDC 44926025187](https://github.com/KeyserDSoze/Omnia/actions/runs/44926025187)
+  e [Pages 44926025208](https://github.com/KeyserDSoze/Omnia/actions/runs/44926025208)
+  **SUCCESS** sul commit `a0565c74`.
+- L'aggiornamento ADR con questa prova crea un **nuovo commit main**:
+  prima della chiusura verificare nuovamente CI/OIDC/Pages tutte
+  GREEN sullo SHA finale. I test non dimostrano produzione anti-DDoS,
+  quote distribuite, WAF o gestione sicura degli upload media.
 
 ## Limitazioni, threat model, privacy
 

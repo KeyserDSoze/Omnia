@@ -74,6 +74,12 @@ var maxJsonBytes = ApiJsonBodyBudget.ValidateLimit(
 var jsonBodyReadTimeoutMs = ApiJsonBodyBudget.ValidateReadTimeoutMilliseconds(
     builder.Configuration.GetValue<int?>("RequestBody:ReadTimeoutMilliseconds") ??
     ApiJsonBodyBudget.DefaultReadTimeoutMilliseconds);
+// One shared, process-local cap for concurrently receiving JSON bodies.
+// The permit never spans downstream handler execution; this is not an
+// ingress connection cap or a distributed SaaS quota.
+var jsonBodyReadLimiter = new ApiJsonBodyReadConcurrencyLimiter(
+    builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentReads") ??
+    ApiJsonBodyReadConcurrencyLimiter.DefaultMaxConcurrentReads);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -185,7 +191,8 @@ app.UseAuthorization();
 // Authentication and rate limiting happen BEFORE buffering any user bytes.
 // No credentials or request content are logged by the bounded guard.
 app.Use((context, next) =>
-    ApiJsonBodyBudget.InvokeAsync(context, next, maxJsonBytes, jsonBodyReadTimeoutMs));
+    ApiJsonBodyBudget.InvokeAsync(context, next, maxJsonBytes, jsonBodyReadTimeoutMs,
+        jsonBodyReadLimiter));
 app.MapGet("/health", () => Results.Ok(new { status = "ok", product = "Omnia" }));
 app.MapGet("/ready", async (NpgsqlDataSource db, CancellationToken ct) =>
 {

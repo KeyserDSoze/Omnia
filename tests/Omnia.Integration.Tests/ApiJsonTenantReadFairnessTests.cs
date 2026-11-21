@@ -81,6 +81,100 @@ public sealed class ApiJsonTenantReadFairnessTests
         await AssertAcceptedAsync(limiter, "tenant-one", "actor-five");
     }
 
+    [Fact]
+    public void TenantBudgetConfigAndIdlePartitionsAreBounded()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiJsonBodyReadConcurrencyLimiter(8, 2, 0));
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiJsonBodyReadConcurrencyLimiter(8, 2, 9));
+        Assert.Equal(16, new ApiJsonBodyReadConcurrencyLimiter(32).MaxConcurrentReadsPerTenant);
+        Assert.Equal(8, new ApiJsonBodyReadConcurrencyLimiter(8).MaxConcurrentReadsPerTenant);
+        Assert.Equal(1, new ApiJsonBodyReadConcurrencyLimiter(1).MaxConcurrentReadsPerTenant);
+        Assert.Equal(6, new ApiJsonBodyReadConcurrencyLimiter(8, 2, 6).MaxConcurrentReadsPerTenant);
+        var limiter = new ApiJsonBodyReadConcurrencyLimiter(8, 2, 6);
+        Assert.Throws<ArgumentException>(() =>
+            limiter.TryAcquire("actor", new string('x', 257)));
+        Assert.Equal(0, limiter.ActiveTenantPartitions);
+
+        for (var i = 0; i < 1000; i++)
+        {
+            using (var lease = limiter.TryAcquire($"actor:{i}", $"tenant:{i}"))
+            {
+                Assert.NotNull(lease);
+                Assert.Equal(1, limiter.ActiveActorPartitions);
+                Assert.Equal(1, limiter.ActiveTenantPartitions);
+            }
+            Assert.Equal(0, limiter.ActiveActorPartitions);
+            Assert.Equal(0, limiter.ActiveTenantPartitions);
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentTenantAndGlobalAdmissionAreAtomicAndEvicted()
+    {
+        var limiter = new ApiJsonBodyReadConcurrencyLimiter(8, 2, 6);
+        var held = await Task.WhenAll(Enumerable.Range(0, 128)
+            .Select(i => Task.Run(() =>
+                limiter.TryAcquire($"actor:{i}", "tenant:one"))));
+        try
+        {
+            Assert.Equal(6, held.Count(x => x is not null));
+            Assert.Equal(6, limiter.ActiveActorPartitions);
+            Assert.Equal(1, limiter.ActiveTenantPartitions);
+            Assert.Null(limiter.TryAcquire("another-actor", "tenant:one"));
+
+            using var other1 = limiter.TryAcquire("actor:other1", "tenant:two");
+            using var other2 = limiter.TryAcquire("actor:other2", "tenant:two");
+            Assert.NotNull(other1);
+            Assert.NotNull(other2);
+            Assert.Equal(2, limiter.ActiveTenantPartitions);
+            Assert.Null(limiter.TryAcquire("actor:third", "tenant:three"));
+        }
+        finally
+        {
+            foreach (var lease in held.Where(x => x is not null))
+            {
+                lease!.Dispose();
+                lease.Dispose(); // Releasing twice must never corrupt counts.
+            }
+        }
+        Assert.Equal(0, limiter.ActiveActorPartitions);
+        Assert.Equal(0, limiter.ActiveTenantPartitions);
+        using var reused = limiter.TryAcquire("actor:reused", "tenant:one");
+        Assert.NotNull(reused);
+    }
+
+    [Fact]
+    public void TenantPartitionUsesSignedClaimsAndNeverForwardedHeaders()
+    {
+        using var source = new MemoryStream();
+        var actor1 = Request(source, "tenant-a", "subject-one");
+        var actor2 = Request(source, "tenant-a", "subject-two");
+        var otherTenant = Request(source, "tenant-b", "subject-one");
+
+        Assert.Equal(ApiRateLimitPolicy.TenantPartitionKey(actor1),
+            ApiRateLimitPolicy.TenantPartitionKey(actor2));
+        Assert.NotEqual(ApiRateLimitPolicy.PartitionKey(actor1),
+            ApiRateLimitPolicy.PartitionKey(actor2));
+        Assert.NotEqual(ApiRateLimitPolicy.TenantPartitionKey(actor1),
+            ApiRateLimitPolicy.TenantPartitionKey(otherTenant));
+        actor1.Request.Headers["X-Tenant-Id"] = "tenant-b";
+        actor1.Request.Headers["X-Forwarded-For"] = "198.51.100.77";
+        Assert.Equal(ApiRateLimitPolicy.TenantPartitionKey(actor2),
+            ApiRateLimitPolicy.TenantPartitionKey(actor1));
+
+        // Duplicate or malformed signed claims must never be accepted as
+        // distinct quota partitions. Malformed auth uses network-peer fallback.
+        actor1.User = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("tenant_id", "tenant-a"),
+             new Claim("tenant_id", "tenant-b"),
+             new Claim("sub", "subject-one")], "synthetic-fixture"));
+        Assert.StartsWith("anonymous:", ApiRateLimitPolicy.TenantPartitionKey(actor1));
+        Assert.Equal(ApiRateLimitPolicy.PartitionKey(actor1),
+            ApiRateLimitPolicy.TenantPartitionKey(actor1));
+    }
+
     private static async Task AssertAcceptedAsync(
         ApiJsonBodyReadConcurrencyLimiter limiter, string tenant, string subject)
     {

@@ -21,7 +21,7 @@ public sealed class ApiJsonActorReadFairnessTests
         Assert.Throws<InvalidOperationException>(() =>
             new ApiJsonBodyReadConcurrencyLimiter(8, 9));
         Assert.Throws<ArgumentException>(() =>
-            new ApiJsonBodyReadConcurrencyLimiter(8).TryAcquire(new string('x', 513)));
+            new ApiJsonBodyReadConcurrencyLimiter(8).TryAcquire(new string('x', 513), "test-tenant"));
 
         Assert.Equal(4, new ApiJsonBodyReadConcurrencyLimiter(8).MaxConcurrentReadsPerActor);
         Assert.Equal(1, new ApiJsonBodyReadConcurrencyLimiter(1).MaxConcurrentReadsPerActor);
@@ -30,7 +30,7 @@ public sealed class ApiJsonActorReadFairnessTests
         var limiter = new ApiJsonBodyReadConcurrencyLimiter(8, 2);
         for (var index = 0; index < 1000; index++)
         {
-            using (var lease = limiter.TryAcquire($"synthetic-account:{index}"))
+            using (var lease = limiter.TryAcquire($"synthetic-account:{index}", "test-tenant"))
             {
                 Assert.NotNull(lease);
                 Assert.Equal(1, limiter.ActiveActorPartitions);
@@ -45,7 +45,7 @@ public sealed class ApiJsonActorReadFairnessTests
     {
         var limiter = new ApiJsonBodyReadConcurrencyLimiter(8, 2);
         var results = await Task.WhenAll(Enumerable.Range(0, 128)
-            .Select(_ => Task.Run(() => limiter.TryAcquire("signed:tenant:actor-one"))));
+            .Select(_ => Task.Run(() => limiter.TryAcquire("signed:tenant:actor-one", "signed:tenant"))));
         try
         {
             Assert.Equal(2, results.Count(lease => lease is not null));
@@ -59,11 +59,11 @@ public sealed class ApiJsonActorReadFairnessTests
                 {
                     for (var i = 0; i < 2; i++)
                         other.Add(Assert.IsAssignableFrom<IDisposable>(
-                            limiter.TryAcquire($"signed:tenant:{actor}")));
+                            limiter.TryAcquire($"signed:tenant:{actor}", "signed:tenant")));
                 }
 
                 Assert.Equal(4, limiter.ActiveActorPartitions);
-                Assert.Null(limiter.TryAcquire("signed:tenant:actor-five"));
+                Assert.Null(limiter.TryAcquire("signed:tenant:actor-five", "signed:tenant"));
             }
             finally
             {
@@ -80,7 +80,7 @@ public sealed class ApiJsonActorReadFairnessTests
             }
         }
         Assert.Equal(0, limiter.ActiveActorPartitions);
-        using var reopened = limiter.TryAcquire("signed:tenant:actor-one");
+        using var reopened = limiter.TryAcquire("signed:tenant:actor-one", "signed:tenant");
         Assert.NotNull(reopened);
     }
 

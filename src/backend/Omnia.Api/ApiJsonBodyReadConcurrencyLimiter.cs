@@ -1,10 +1,11 @@
 namespace Omnia.Api;
 
 /// <summary>
-/// Bounded process-local, non-queuing admission for JSON body reads.
-/// Admission is atomic across the total and per-actor budgets. Actor partitions
-/// exist only while a body is being read and are erased when idle.
-/// This is NOT a distributed or per-tenant resource quota.
+/// Bounded process-local non-queued admission for JSON request body reads.
+/// Global, tenant and actor counts change atomically under ONE lock.
+/// Actor/tenant partitions exist only while reads are in progress and
+/// are immediately deleted when their active count reaches zero.
+/// NOT a multi-replica quota or a guaranteed per-tenant reservation.
 /// </summary>
 public sealed class ApiJsonBodyReadConcurrencyLimiter
 {
@@ -12,94 +13,130 @@ public sealed class ApiJsonBodyReadConcurrencyLimiter
     public const int MinimumMaxConcurrentReads = 1;
     public const int MaximumMaxConcurrentReads = 256;
     public const int DefaultMaxConcurrentReadsPerActor = 4;
+    public const int DefaultMaxConcurrentReadsPerTenant = 16;
 
-    // The signed-claim partition key produced by ApiRateLimitPolicy is
-    // length-framed and bounded. This extra bound forbids accidental
-    // unbounded string retention from a future caller.
+    // The two keys are derived from one validated OIDC identity. Bounds are
+    // defensive and don't retain unbounded strings for future call sites.
     private const int MaximumActorPartitionKeyLength = 512;
+    private const int MaximumTenantPartitionKeyLength = 256;
     private readonly object _gate = new();
     private readonly Dictionary<string, int> _activeByActor =
+        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _activeByTenant =
         new(StringComparer.Ordinal);
     private int _totalActive;
 
     public int MaxConcurrentReads { get; }
     public int MaxConcurrentReadsPerActor { get; }
+    public int MaxConcurrentReadsPerTenant { get; }
 
-    /// <summary>Only the count is exposed: never expose actor keys in diagnostics.</summary>
+    /// <summary>Count only; never expose the actor key or tenant key.</summary>
     public int ActiveActorPartitions
     {
         get { lock (_gate) return _activeByActor.Count; }
     }
 
+    /// <summary>Count only; never expose the tenant key.</summary>
+    public int ActiveTenantPartitions
+    {
+        get { lock (_gate) return _activeByTenant.Count; }
+    }
+
     public ApiJsonBodyReadConcurrencyLimiter(
-        int maxConcurrentReads, int? maxConcurrentReadsPerActor = null)
+        int maxConcurrentReads,
+        int? maxConcurrentReadsPerActor = null,
+        int? maxConcurrentReadsPerTenant = null)
     {
         if (maxConcurrentReads is < MinimumMaxConcurrentReads or > MaximumMaxConcurrentReads)
             throw new InvalidOperationException(
                 "RequestBody:MaxConcurrentReads must be between 1 and 256.");
 
-        // When operators reduce the global limit below the default actor
-        // limit, derive a safe default rather than fail an otherwise valid
-        // pre-existing deployment configuration.
         var perActor = maxConcurrentReadsPerActor ??
             Math.Min(DefaultMaxConcurrentReadsPerActor, maxConcurrentReads);
         if (perActor < 1 || perActor > maxConcurrentReads)
             throw new InvalidOperationException(
                 "RequestBody:MaxConcurrentReadsPerActor must be between 1 and MaxConcurrentReads.");
 
+        var perTenant = maxConcurrentReadsPerTenant ??
+            Math.Min(DefaultMaxConcurrentReadsPerTenant, maxConcurrentReads);
+        if (perTenant < 1 || perTenant > maxConcurrentReads)
+            throw new InvalidOperationException(
+                "RequestBody:MaxConcurrentReadsPerTenant must be between 1 and MaxConcurrentReads.");
+
         MaxConcurrentReads = maxConcurrentReads;
         MaxConcurrentReadsPerActor = perActor;
+        MaxConcurrentReadsPerTenant = perTenant;
     }
 
     /// <summary>
-    /// No waiting/queueing. Call only with ApiRateLimitPolicy.PartitionKey from
-    /// the authenticated HttpContext (anonymous fallback: actual peer IP).
+    /// Nonblocking admission. Both partition keys MUST come from the
+    /// authenticated HttpContext using ApiRateLimitPolicy; not headers.
     /// </summary>
-    public IDisposable? TryAcquire(string actorPartitionKey)
+    public IDisposable? TryAcquire(
+        string actorPartitionKey, string tenantPartitionKey)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(actorPartitionKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantPartitionKey);
         if (actorPartitionKey.Length > MaximumActorPartitionKeyLength)
             throw new ArgumentException("Actor partition key is too long.",
                 nameof(actorPartitionKey));
+        if (tenantPartitionKey.Length > MaximumTenantPartitionKeyLength)
+            throw new ArgumentException("Tenant partition key is too long.",
+                nameof(tenantPartitionKey));
 
         lock (_gate)
         {
             if (_totalActive >= MaxConcurrentReads)
                 return null;
 
+            _activeByTenant.TryGetValue(tenantPartitionKey, out var tenantActive);
+            if (tenantActive >= MaxConcurrentReadsPerTenant)
+                return null;
+
             _activeByActor.TryGetValue(actorPartitionKey, out var actorActive);
             if (actorActive >= MaxConcurrentReadsPerActor)
                 return null;
 
+            // All three counters are incremented together, or not at all.
             _totalActive++;
+            _activeByTenant[tenantPartitionKey] = tenantActive + 1;
             _activeByActor[actorPartitionKey] = actorActive + 1;
-            return new Permit(this, actorPartitionKey);
+            return new Permit(this, actorPartitionKey, tenantPartitionKey);
         }
     }
 
-    private void Release(string actorPartitionKey)
+    private void Release(string actorPartitionKey, string tenantPartitionKey)
     {
         lock (_gate)
         {
-            var remaining = _activeByActor[actorPartitionKey] - 1;
-            if (remaining == 0)
+            var actorRemaining = _activeByActor[actorPartitionKey] - 1;
+            if (actorRemaining == 0)
                 _activeByActor.Remove(actorPartitionKey);
             else
-                _activeByActor[actorPartitionKey] = remaining;
+                _activeByActor[actorPartitionKey] = actorRemaining;
+
+            var tenantRemaining = _activeByTenant[tenantPartitionKey] - 1;
+            if (tenantRemaining == 0)
+                _activeByTenant.Remove(tenantPartitionKey);
+            else
+                _activeByTenant[tenantPartitionKey] = tenantRemaining;
+
             _totalActive--;
         }
     }
 
     private sealed class Permit(
-        ApiJsonBodyReadConcurrencyLimiter owner, string actorPartitionKey) : IDisposable
+        ApiJsonBodyReadConcurrencyLimiter owner,
+        string actorPartitionKey, string tenantPartitionKey) : IDisposable
     {
         private ApiJsonBodyReadConcurrencyLimiter? _owner = owner;
 
         public void Dispose()
         {
-            // Release once even with the nested using safety net and the
-            // explicit early Dispose before downstream endpoint execution.
-            Interlocked.Exchange(ref _owner, null)?.Release(actorPartitionKey);
+            // Safe both on early Dispose before the handler and later using
+            // cleanup, as well as on exceptions, 408/413 and disconnects.
+            Interlocked.Exchange(ref _owner, null)?
+                .Release(actorPartitionKey, tenantPartitionKey);
         }
     }
 }

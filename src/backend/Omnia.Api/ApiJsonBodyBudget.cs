@@ -91,7 +91,8 @@ public static class ApiJsonBodyBudget
         // Use the same collision-safe partition as the authenticated rate
         // limiter; never derive an actor from user-supplied headers.
         using var readPermit = concurrencyLimiter?.TryAcquire(
-            ApiRateLimitPolicy.PartitionKey(context));
+            ApiRateLimitPolicy.PartitionKey(context),
+            ApiRateLimitPolicy.TenantPartitionKey(context));
         if (concurrencyLimiter is not null && readPermit is null)
         {
             context.Response.Headers["Retry-After"] = "1";

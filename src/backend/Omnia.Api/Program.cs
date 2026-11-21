@@ -80,7 +80,8 @@ var jsonBodyReadTimeoutMs = ApiJsonBodyBudget.ValidateReadTimeoutMilliseconds(
 var jsonBodyReadLimiter = new ApiJsonBodyReadConcurrencyLimiter(
     builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentReads") ??
     ApiJsonBodyReadConcurrencyLimiter.DefaultMaxConcurrentReads,
-    builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentReadsPerActor"));
+    builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentReadsPerActor"),
+    builder.Configuration.GetValue<int?>("RequestBody:MaxConcurrentReadsPerTenant"));
 // Validate transport limits BEFORE starting Kestrel or opening any sockets.
 var requestHeadersTimeoutMs = builder.Configuration.GetValue<int?>(
     "Transport:RequestHeadersTimeoutMilliseconds") ??

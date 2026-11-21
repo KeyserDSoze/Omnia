@@ -88,7 +88,10 @@ public static class ApiJsonBodyBudget
         // The lease is acquired after cheap 413/415 checks but before any
         // buffer allocation or ReadAsync; it is shared across API requests.
         // The using statement releases on timeout, abort, 413 or exceptions.
-        using var readPermit = concurrencyLimiter?.TryAcquire();
+        // Use the same collision-safe partition as the authenticated rate
+        // limiter; never derive an actor from user-supplied headers.
+        using var readPermit = concurrencyLimiter?.TryAcquire(
+            ApiRateLimitPolicy.PartitionKey(context));
         if (concurrencyLimiter is not null && readPermit is null)
         {
             context.Response.Headers["Retry-After"] = "1";

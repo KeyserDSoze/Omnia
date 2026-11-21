@@ -1,3 +1,5 @@
+using Microsoft.Net.Http.Headers;
+
 namespace Omnia.Api;
 
 /// <summary>
@@ -69,6 +71,18 @@ public static class ApiJsonBodyBudget
             return;
         }
 
+        // JSON endpoints must reject unsupported/malformed media types before
+        // allocating a buffer or reading a single request-body byte. Minimal
+        // API binding would reject them later, after this middleware buffered
+        // the body; charset and duplicate parameters must also fail closed.
+        if (!HasSupportedJsonMediaType(context.Request))
+        {
+            await RejectAsync(context,
+                StatusCodes.Status415UnsupportedMediaType,
+                "unsupported_media_type");
+            return;
+        }
+
         // Do not trust absent/forged Content-Length. Never buffer more than
         // max+1 bytes, even for streaming/chunked requests. A SINGLE total
         // deadline covers all reads so a trickle cannot reset the timer.
@@ -126,6 +140,29 @@ public static class ApiJsonBodyBudget
         {
             context.Request.Body = original;
         }
+    }
+
+    private static bool HasSupportedJsonMediaType(HttpRequest request)
+    {
+        // Use the same JSON media-family recognition as Minimal API binding:
+        // application/json and application/*+json, never text/plain or XML.
+        if (!request.HasJsonContentType() ||
+            !MediaTypeHeaderValue.TryParse(request.ContentType, out var parsed))
+            return false;
+
+        var sawCharset = false;
+        foreach (var parameter in parsed.Parameters)
+        {
+            if (sawCharset ||
+                !string.Equals(parameter.Name.ToString(), "charset",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    HeaderUtilities.RemoveQuotes(parameter.Value).ToString(),
+                    "utf-8", StringComparison.OrdinalIgnoreCase))
+                return false;
+            sawCharset = true;
+        }
+        return true;
     }
 
     private static async Task RejectAsync(

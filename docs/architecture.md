@@ -439,3 +439,4 @@ non attesta DELETE COMMIT e nessuna route/worker
 ottiene capacità di ripresa. La CI usa due bucket
 dello stesso SeaweedFS, perciò non prova custody
 offsite indipendente o monotonicità globale.
+undefined

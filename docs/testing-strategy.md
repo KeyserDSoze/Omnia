@@ -306,3 +306,16 @@ PRIMA di qualsiasi HEAD/GET. Quando la singola versione è valida
 ricontrolla due versioni AzureLocked e la firma HMAC attore;
 nessuna porta di write è invocata. Non costituisce custodia
 indipendente o autorizzazione a riaprire dati dopo PITR.
+
+### JSON request-body budget 413/415 anche senza Content-Length (#156)
+
+Test `ApiJsonBodyBudgetTests` usa TestServer + vera istanza PostgreSQL
+con ruoli separati e auth header **solo test**; controlla 413 con
+dimensione dichiarata e body chunked/streamed di dimensione superiore
+al limite, 415 per gzip, small JSON ancora disponibile al model binder,
+`GET /health` e consensi non toccati, configurazioni invalide
+rifiutate. Eseguire con `OMNIA_TEST_DB`, `OMNIA_TEST_APP_DB`,
+`OMNIA_TEST_RETENTION_DB`, `OMNIA_TEST_KEYRING_FILE` disponibili.
+Non inviare contenuti reali; nessun log di payload. Questo test
+non garantisce WAF/ingress production, slowloris, quote distribuite,
+upload audio o vera autenticazione OIDC, che ha la sua E2E.

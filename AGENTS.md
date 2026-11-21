@@ -1059,3 +1059,20 @@ monotonicity, source DELETE COMMIT or a right to retry or release.
 No provider write/DELETE, API registration, worker, replay or ready.
 Scripted Azure SDK HTTP != real Azure WORM/offsite/IAM. Keep
 #144/#141/#109/#31 OPEN.
+
+## JSON API body budget / no implicit decompression (#156 / ADR 0055)
+
+All authenticated POST/PUT/PATCH `/api/v1` requests MUST pass
+`ApiJsonBodyBudget` AFTER OIDC authentication, per-principal
+rate-limiting and authorization but BEFORE model binding/DB/AI.
+The default limit is 65536 bytes (`RequestBody:MaxJsonBytes`, valid
+1024..65536); Kestrel's separate 70KiB limit is insufficient for
+TestServer or arbitrary ingress. Return 413 for declared oversized
+Content-Length AND for chunked/no-length streams by reading at most
+budget+1 bytes. Reject Content-Encoding except absent or identity
+with 415; do not decompress request bodies or log their contents.
+Preserve safe small JSON exactly, keep health and GET untouched and
+rate-limit/consent/RLS unchanged. Test with real PostgreSQL
+WebApplicationFactory and fake auth header only inside tests.
+This is NOT a distributed/connector/media quota, DDoS gateway, slow
+body timeout, real OIDC attestation or GDPR release. #37 remains OPEN.

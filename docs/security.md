@@ -865,3 +865,17 @@ ruoli indipendenti, attestazione owner S3,
 vault/HSM, signing audit, replica e offsite
 prima di produzione. La CI a due bucket
 non dimostra un trust domain separato.
+
+## Limite body JSON HTTP autenticato (#156 / ADR 0055)
+
+`RequestBody:MaxJsonBytes` (default 65536, range 1024..65536 validato
+prima dell'avvio) limita i body dei POST/PUT/PATCH `/api/v1` dopo
+autenticazione, rate limiting e autorizzazione, prima del JSON binder.
+`Content-Length` maggiore del limite => 413;
+`Transfer-Encoding: chunked` o Content-Length assente non lo aggirano:
+solo al massimo max+1 byte vengono letti in un buffer temporaneo.
+`Content-Encoding: gzip/br/deflate` => 415, nessuna decompressione.
+Body valido viene riprodotto invariato, errori senza PII e
+`Cache-Control: no-store`. Kestrel 70KiB resta una difesa separata.
+Non è controllo di upload binari, slow-client timeout, WAF/DDOS o
+quota distribuita fra repliche. La parent #37 resta OPEN.

@@ -93,3 +93,13 @@ soltanto la cronologia **visibile del PIN firmato** via Azure SDK
 in sola lettura. NON completa l'epic #144 o le issue #141/#109/#31.
 I numeri originali 14 epics/116 child nel backlog sono uno snapshot
 del 17 novembre: verificare i contatori reali su GitHub.
+
+## HTTP JSON anti-abuse slice (#156, ADR 0055)
+
+La child [#156](https://github.com/KeyserDSoze/Omnia/issues/156)
+aggiorna la parent [#37](https://github.com/KeyserDSoze/Omnia/issues/37):
+413/415 fail-closed per JSON POST/PUT/PATCH `/api/v1`, incluso
+chunked e Content-Length mancante, senza perdere il body valido.
+Parent #37 ancora aperta per quote distribuite, media, connector,
+slow-body timeout, testing di carico e WAF. Contatori issue nel
+backlog storico non rappresentano lo stato corrente di GitHub.

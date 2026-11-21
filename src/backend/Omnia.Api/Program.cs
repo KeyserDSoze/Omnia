@@ -65,6 +65,13 @@ builder.Services.AddAuthorization();
 var requestsPerMinute = builder.Configuration.GetValue<int?>("RateLimit:RequestsPerMinute") ?? 120;
 if (requestsPerMinute is < 1 or > 1000)
     throw new InvalidOperationException("RateLimit:RequestsPerMinute must be between 1 and 1000.");
+ // Tenant-wide request/minute budget is separate from existing actor policy.
+ // Bounded windows are stored only on this process, never across replicas.
+var tenantRequestLimiter = new ApiTenantRequestWindowLimiter(
+    builder.Configuration.GetValue<int?>("RateLimit:TenantRequestsPerMinute") ??
+    ApiTenantRequestWindowLimiter.DefaultTenantRequestsPerMinute,
+    builder.Configuration.GetValue<int?>("RateLimit:MaxTrackedTenants") ??
+    ApiTenantRequestWindowLimiter.DefaultMaxTrackedTenants);
 // The Kestrel body-size limit is NOT sufficient for TestServer and
 // alternate hosts. Bound JSON mutations in the application as well.
 var maxJsonBytes = ApiJsonBodyBudget.ValidateLimit(
@@ -215,6 +222,10 @@ app.UseCors("browser");
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+// Additional aggregate tenant quota for authenticated GET/POST/PUT/PATCH/DELETE
+// API requests. It never overrides the existing per-account minute policy.
+app.Use((context, next) =>
+    ApiTenantRequestRateBudget.InvokeAsync(context, next, tenantRequestLimiter));
 // Authentication and rate limiting happen BEFORE buffering any user bytes.
 // No credentials or request content are logged by the bounded guard.
 app.Use((context, next) =>

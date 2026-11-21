@@ -81,6 +81,13 @@ dall'esito dei test.
 
 ## Verifiche TDD
 
-La prova RED e GREEN completa si registra sulle issue solo
-dopo aver verificato i run effettivi GitHub Actions sul medesimo
-HEAD. Non chiudere #144 o #141 per test con server finto.
+
+## Evidenza TDD verificata — 2026-11-21
+
+- **RED test-first**: [commit a0b234bb](https://github.com/KeyserDSoze/Omnia/commit/a0b234bbd9b7d1b4fe62aa7bc9401fa942edb907), [CI 44888345925](https://github.com/KeyserDSoze/Omnia/actions/runs/44888345925) **failure attesa** CS0234/CS0246 per adapter Azure non ancora definito.
+- **Secondo RED negative-metadata**: [CI 44888375998](https://github.com/KeyserDSoze/Omnia/actions/runs/44888375998), compilazione Azure OK, 2/3 test verdi e 1 negativo `unknown policy mode` fallito con `ArgumentOutOfRangeException` emessa dall'SDK. Fix `14b26bc2`: catch fail-closed per enum sconosciuto e formati invalidi.
+- **Hardening**: [commit df498bc7](https://github.com/KeyserDSoze/Omnia/commit/df498bc73e45c13a19d1cc5bd53369c794476d17), test di incoerenza VersionId / ETag / ContentLength tra HEAD e GET; il reader rifiuta qualsiasi sostituzione.
+- **GREEN ultimo commit implementativo**: [Omnia CI 44888632016](https://github.com/KeyserDSoze/Omnia/actions/runs/44888632016) **SUCCESS** con 4/4 Azure SDK HTTP contract, 2/2 S3 Object Lock su SeaweedFS reali, 19/19 Domain, 80/80 PostgreSQL Integration, PITR primario/THIRD/FOURTH/DUAL, Docker/mobile. [OIDC 44888631958](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631958) e [Pages 44888631988](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631988) **SUCCESS**, stesso SHA.
+- Il log della CI segnala ancora `PHYSICAL_DUAL_CLAIM_PITR_UNSAFE_REPLAY_OBSERVED` e `PHYSICAL_DUAL_CLAIM_PITR_REMAINED_QUARANTINED`: il test dimostra il pericolo del rollback simultaneo, non una soluzione di custodia.
+- La #146 viene completata **solo per il reader Azure SDK su HTTP sintetico**. Restano aperte #144/#141/#109: Azure *reale* versione Locked e delete-deny con Managed Identity, vault/chiavi, monotonic version pins, COMMIT primario e DR gate.
+

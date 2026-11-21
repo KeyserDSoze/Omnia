@@ -701,8 +701,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Reader Azure.Storage.Blobs separate from API: exact
   BlobClient.WithVersion for HEAD+GET, version-level Locked
   ImmutabilityPolicy and UTC retention, size and ETag checks.
-- [ ] Verify real RED/GREEN runs and all latest-main Actions
-  before closing only #146.
+- [x] **RED/GREEN verificata**: [RED adapter absent 44888345925](https://github.com/KeyserDSoze/Omnia/actions/runs/44888345925), [RED unknown enum 44888375998](https://github.com/KeyserDSoze/Omnia/actions/runs/44888375998), [GREEN CI 44888632016](https://github.com/KeyserDSoze/Omnia/actions/runs/44888632016) (4/4 Azure SDK HTTP, 2/2 S3 reali, 19/19 Domain, 80/80 Integration, PITR/Docker/mobile), [OIDC 44888631958](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631958), [Pages 44888631988](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631988) tutte SUCCESS sul commit implementativo `df498bc7`. #146 chiudibile solo per test HTTP SDK. #144 e #141 aperte.
 - [ ] #144 P0: Azure REAL locked version-level WORM staging
   + Managed Identity/RBAC + separate administration,
   S3 offsite, persistent monotone pin authority, delete 403

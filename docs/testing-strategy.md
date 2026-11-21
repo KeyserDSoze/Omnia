@@ -139,3 +139,10 @@ da una istanza Azure. Azurite NON deve essere usato
 come prova di version-level WORM. Test reale in tenant
 Azure staging con Locked immutability + Managed Identity
 e 403 DELETE sono ancora da implementare (#144).
+
+### Azure Blob SDK HTTP provider read contract — TDD verifica finale (#146)
+
+- [RED 44888345925](https://github.com/KeyserDSoze/Omnia/actions/runs/44888345925) test-first prima dell'adapter, errore CS0234/CS0246 come atteso.
+- [RED 44888375998](https://github.com/KeyserDSoze/Omnia/actions/runs/44888375998): policy sconosciuta causa eccezione SDK; il reader è stato reso fail-closed e aggiunti test di HEAD/GET mismatch.
+- [CI GREEN 44888632016](https://github.com/KeyserDSoze/Omnia/actions/runs/44888632016) sul commit `df498bc7`: **4/4 test Azure SDK HTTP sintetici**; 2/2 real S3 SeaweedFS, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali e Docker/mobile; [OIDC 44888631958](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631958) e [Pages 44888631988](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631988) SUCCESS sullo stesso SHA.
+- Questa è una prova di SDK contro risposte HTTP simulate, non di version-level Azure WORM realmente Locked su tenant/account Azure o resistenza al DELETE. Mantenere #144/#141 aperte.

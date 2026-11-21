@@ -36,7 +36,7 @@ public sealed class S3ObjectLockAttemptReaderTests
                 requestId, "ci-s3-tenant", "ci-s3-actor", scope, evidence);
             var key = ImmutableAttemptEvidence.ObjectKey(requestId);
             var firstVersion = await PutAsync(client, bucket, key, content,
-                ObjectLockRetentionMode.Compliance);
+                ObjectLockMode.Compliance);
             Assert.False(string.IsNullOrWhiteSpace(firstVersion));
             Assert.NotEqual("null", firstVersion);
             Assert.NotEqual("latest", firstVersion);
@@ -55,7 +55,7 @@ public sealed class S3ObjectLockAttemptReaderTests
             // A later unprotected version is allowed, but MUST NOT replace
             // the old pinned, retained version in a verified observation.
             var later = await PutAsync(client, bucket, key, content,
-                ObjectLockRetentionMode.Governance);
+                ObjectLockMode.Governance);
             Assert.NotEqual(firstVersion, later);
             await Assert.ThrowsAsync<InvalidDataException>(() =>
                 ImmutableAttemptEvidence.VerifyAsync(reader,
@@ -178,7 +178,7 @@ public sealed class S3ObjectLockAttemptReaderTests
     }
 
     private static async Task<string> PutAsync(IAmazonS3 client, string bucket,
-        string key, byte[] data, ObjectLockRetentionMode? mode)
+        string key, byte[] data, ObjectLockMode? mode)
     {
         using var body = new MemoryStream(data, writable: false);
         var put = new PutObjectRequest

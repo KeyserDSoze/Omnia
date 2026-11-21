@@ -240,3 +240,15 @@ senza inferire assenza, autorizzare retry, replay, DELETE o `ready`.
 Test finti negano chiave/versione estranea, cursor non valido e
 catalogo mancante prima di un GET. Questi test non sostituiscono
 provider offsite reali, account/IAM isolati o un watermark monotono.
+
+### Azure Blob scripted WORM PUT/lock fail-closed (#151 / ADR 0050)
+
+I contratti xUnit su Azure.Storage.Blobs verificano PUT condizionale
+con opzione Retry.MaxRetries=0, x-ms-version-id, PUT immutability
+policy Locked sulla versione esatta, e readback HEAD/GET bloccato
+con MAC/retention. Lost ACK dopo PUT, lock 403, versione mancante,
+readback Unlocked/expired/foreign e actor MAC invalido devono
+produrre solo `Uncertain`. Un caso positivo NON autorizza DELETE,
+retry, recupero o rilascio. Il responder HTTP **non è Azure WORM**;
+prove reali managed identity, network, policy e account offsite
+restano negli acceptance criteria della parent #144.

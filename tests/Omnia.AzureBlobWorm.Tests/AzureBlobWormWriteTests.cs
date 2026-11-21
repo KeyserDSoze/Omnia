@@ -198,7 +198,9 @@ public sealed class AzureBlobWormWriteTests
                 throw new IOException("Synthetic PUT ack lost after commit.");
 
             var status = isLock && Failure == "deny-lock"
-                ? HttpStatusCode.Forbidden : HttpStatusCode.OK;
+                ? HttpStatusCode.Forbidden
+                : request.Method == HttpMethod.Put && !isLock
+                    ? HttpStatusCode.Created : HttpStatusCode.OK;
             var response = new HttpResponseMessage(status)
             {
                 RequestMessage = request,

@@ -978,3 +978,19 @@ absence of earlier attempts, source DELETE COMMIT or offsite custody.
 The audit has NO writer, retry, replay, API DI or recovery release action.
 Test with two synthetic same-admin SeaweedFS buckets and a deliberate
 second COMPLIANCE object after a delete marker. #144/#141/#109/#31 OPEN.
+
+## Azure Blob one-shot upload + exact version lock (#151 / ADR 0050)
+
+Azure custom blob version-level immutability on upload MAY start
+**Unlocked**. The writer MUST validate the scoped evidence HMAC and
+UTC future retention before any upload. Use SDK options with
+Retry.MaxRetries=0 (the writer owns the SDK client), single conditional
+PUT If-None-Match:*; require the returned exact UTC VersionId,
+then set Locked policy on **WithVersion(id)** and verify via the
+read-only Azure pinned HEAD+GET adapter. A timeout or failure between
+PUT and lock is **UNCERTAIN**, never safe to retry or delete. Even a
+positive readback does not prove source DELETE COMMIT, global
+anti-rollback, independent custody or permission to release traffic.
+All real Azure RBAC, staging WORM and key custody are future gates;
+scripted SDK HTTP contracts are synthetic. Never connect this
+provider to REST DELETE, replay or ready; #144/#141/#109/#31 OPEN.

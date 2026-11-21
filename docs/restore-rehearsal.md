@@ -1043,3 +1043,17 @@ un nuovo tentativo. Un solo pin visibile non prova che la lista sia
 completa o che il servizio risieda fuori dal failure domain comune:
 non è autorizzazione `ready`, conferma di DELETE COMMIT, audit GDPR
 o ripristino sicuro. #144/#141/#109/#31 restano aperte.
+
+## Azure SDK WORM one-shot upload e lock per-version (#151 / ADR 0050)
+
+Un nuovo writer Azure Blob (isolato dal runtime API) prova il protocollo
+`Upload If-None-Match:*` con policy custom **Unlocked**, riceve un
+VersionId esplicito, chiede `SetImmutabilityPolicy Locked` **sulla
+stessa versione**, poi richiede HEAD/GET per-version a
+`AzureBlobWormAttemptReader`. Se manca ACK, versione o lock, il
+risultato rimane incerto, senza retry e senza liberare la quarantena.
+Gli unit test esercitano il vero SDK .NET con risposte HTTP sintetiche,
+**non** la piattaforma Azure. Servono ancora RBAC/IAM separati,
+account versioning e WORM reale su staging, replica offsite,
+autorità monotona, post-COMMIT e GDPR review. Il gap fra PUT e lock
+resta non atomico; #144/#141/#109/#31 restano OPEN.

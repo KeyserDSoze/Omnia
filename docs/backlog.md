@@ -157,3 +157,15 @@ release before handler and remove idle actor/tenant partitions.
 Not a reserved-fair tenant scheduler or distributed multi-replica
 quota, nor a media/upload/WAF/GDPR completion. The original issue
 counts in this historical backlog are NOT current live counts.
+
+## P0 bounded JSON buffer lifetime across slow handlers (#163 / ADR 0062)
+
+Child https://github.com/KeyserDSoze/Omnia/issues/163 under #37
+adds independent process-local max concurrent buffered JSON
+requests (default 64, valid 1..256), acquired before read, held
+during downstream handler, released after completed processing
+or any error, without changing 32/16/4 JSON read quotas.
+HTTP 503 request_buffer_busy before any body read on saturation.
+This does not bound total process memory, all DB/AI concurrency,
+cross-replica quotas, tenant fairness, WAF/ingress or binary/media
+uploads. Parent #37 and privacy epic #2 remain OPEN.

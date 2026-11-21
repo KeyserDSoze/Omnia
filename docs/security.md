@@ -1042,3 +1042,25 @@ use them all. Not distributed across replicas, not a rate-limit
 by time or an HTTP/2 connection budget; no media/connector quotas,
 upstream WAF/ingress, DDoS/load test or GDPR go-live attestations.
 Parent #37 and epic #2 remain OPEN.
+
+## Middleware-owned JSON buffer lifetime bound (#163 / ADR 0062)
+
+Earlier JSON 32/16/4 READ slots release before handler execution,
+yet each buffered <=64KiB MemoryStream lives until the handler ends.
+An arbitrary number of fast-body/slow-handler requests could retain
+many distinct bounded streams. A SECOND process-local limiter now
+caps buffers alive through handler work (default 64, valid 1..256,
+fail startup on invalid configuration), independently of read slots.
+It acquires before any buffer allocation/read, after OIDC, 429,
+authorization and 413/415 checks; on saturation it returns 503
+request_buffer_busy, Cache-Control:no-store, Retry-After:1, no body
+read, handler or identity echo. Buffer permit is held for both read
+and downstream handler and released after MemoryStream disposal, or
+on timeout, streamed oversize, client abort, stream/handler failure.
+The read permit still releases before handler so read capacity is
+not monopolized by DB/AI operations. Default buffer contents total
+<=64*65536 = 4MiB in simultaneously middleware-owned JSON bodies;
+this does NOT bound copies, runtime memory, DB/AI allocations,
+non-JSON endpoints, sockets, TLS/ingress, media, or distributed
+concurrency. No new data processing, storage, identity scope,
+consent, RLS or GDPR readiness. Parent #37 and #2 remain OPEN.

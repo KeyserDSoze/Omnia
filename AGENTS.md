@@ -1195,3 +1195,21 @@ never exceed globally active reads and keys must never be logged.
 bound per tenant on ONE process's read-phase concurrency, NOT a fair
 reservation under global exhaustion, a cluster quota or GDPR approval.
 Parent #37 and epic #2 OPEN.
+
+## Retained JSON request-buffer concurrency (#163 / ADR 0062)
+
+Preserve existing 32/16/4 READ concurrency (process/tenant/actor) and
+release read permits BEFORE endpoint execution. Independently cap
+concurrently retained JSON MemoryStream buffers across handler work
+with one per-process ApiJsonBufferedRequestLimiter, configured by
+RequestBody:MaxConcurrentBufferedRequests (default 64, valid 1..256;
+fail startup on invalid values). Acquire nonblocking after OIDC, rate
+limiting, authorization and cheap 413/415 prechecks, BEFORE buffer
+allocation or ReadAsync. On exhaustion reject HTTP 503 request_buffer_busy,
+Retry-After:1 and no-store, without reading bytes, logging identity or
+executing handler. Release buffered permit only AFTER handler and
+MemoryStream disposal, on success, 408, 413 streamed, disconnect, or
+any stream/handler exception. Idempotent permit and zero queue/wait.
+This is not tenant processing fairness, a DB/AI cap, full memory
+ceiling, a cross-replica quota, ingress protection or GDPR signoff.
+Parent #37 and epic #2 stay OPEN.

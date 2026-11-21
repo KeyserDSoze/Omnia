@@ -197,3 +197,15 @@ reading bytes and slots return before endpoint work. Idle
 tenant/actor keys are immediately discarded. This is NOT a
 cross-node budget, capacity reservation for every tenant, WAF,
 binary media limit or production/GDPR security release; #37 open.
+
+## Bounded live JSON buffers across handler processing (#163)
+
+The API additionally caps the number of middleware-owned buffered
+JSON requests still in progress, even AFTER read permits have
+released. RequestBody:MaxConcurrentBufferedRequests defaults to 64,
+valid 1..256. It returns generic 503 request_buffer_busy, no-store
+and Retry-After:1 before reading any rejected body, without a queue.
+The slot is retained until the bounded JSON MemoryStream and handler
+are complete. The 32/16/4 process/tenant/actor receive quotas
+still release before endpoint work. This is not a full memory ceiling,
+a DB/AI limit, a distributed/tenant-fair quota or GDPR release.

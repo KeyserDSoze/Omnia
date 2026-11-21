@@ -477,3 +477,14 @@ idle keys under one lock and retain no persisted quota identity.
 This layer does not protect DB/AI handler concurrency, cross-replica
 limits or reserve capacity for other tenants if the global
 limit has already been reached.
+
+## JSON buffering across slow API handlers (ADR 0062)
+
+Authenticated JSON POST/PUT/PATCH under /api/v1 has two distinct
+admission layers after 413/415: 32/16/4 process/tenant/actor read
+permits that release before handlers, and an independent per-instance
+buffered-request permit (default 64) held until bounded MemoryStream
+and downstream handler are finished. Both are nonqueueing, 503 on
+saturation and release on all error paths. This only bounds the
+number of middleware-owned live buffers; no DB/AI cap, distributed
+quota, per-tenant processing fairness or total memory bound.

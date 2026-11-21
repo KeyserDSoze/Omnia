@@ -781,3 +781,14 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [ ] Parent #37 and epic #2 remain OPEN for global/tenant-wide
   fair scheduling, multi-instance/distributed control, WAF,
   media/storage/connector quotas and production review.
+
+## P0 #163 JSON retained-buffer lifetime (ADR 0062)
+
+- [x] Bounded concurrent in-memory JSON request streams during
+  downstream handler work with independent instance cap 64.
+- [x] TDD test-first and multi-failure cleanup regression tests.
+- [ ] Verify full CI, real PostgreSQL, physical PITR, Docker,
+  mobile, OIDC browser, Pages all SUCCESS on final SHA; issue #163
+  is the evidence authority.
+- [ ] Keep #37/#2 OPEN: distributed/tenant-fair processing,
+  media/connector/storage quotas, WAF/ingress, load/GDPR review.

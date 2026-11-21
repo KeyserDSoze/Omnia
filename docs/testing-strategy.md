@@ -433,3 +433,20 @@ final main SHA: xUnit Domain+PostgreSQL/RLS, provider S3/Azure,
 physical PITR/witness, Docker, mobile/Playwright, Keycloak browser
 OIDC E2E and GitHub Pages. Attach workflow URLs to #162 before
 closing; do not close #37/#2.
+
+## TDD: retained JSON buffer admission (#163 / ADR 0062)
+
+New synthetic ApiJsonBufferedRequestTests requires separate
+read and retained-buffer slots. A complete small JSON body enters
+an intentionally slow handler, retaining its single buffer permit,
+but releasing its independent read permit; a second request
+must receive 503 with no ReadAsync, no handler and no leaked payload.
+After handler completion the next JSON succeeds. Tests validate
+noqueue acquisition, idempotence, parallel 128 contenders limited
+to 3 slots, invalid 0/257 startup bounds, 413/415 prechecks, GET
+bypass, success after timeout 408, streamed oversize 413, client
+abort, input stream exception and thrown downstream handler. Synthetic
+Stream tests do not replace actual Keycloak browser E2E, PostgreSQL
+RLS, S3/Azure provider contracts, physical PITR, Docker, mobile,
+Pages or realistic ingress load testing. RED/GREEN exact Actions
+SHA/run evidence is recorded in #163 before closing.

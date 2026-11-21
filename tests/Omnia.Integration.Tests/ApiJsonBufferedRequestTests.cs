@@ -36,6 +36,29 @@ public sealed class ApiJsonBufferedRequestTests
     }
 
     [Fact]
+    public async Task ParallelBufferAdmissionsCannotOvercommit()
+    {
+        var limiter = new ApiJsonBufferedRequestLimiter(3);
+        var leases = await Task.WhenAll(Enumerable.Range(0, 128)
+            .Select(_ => Task.Run(() => limiter.TryAcquire())));
+        try
+        {
+            Assert.Equal(3, leases.Count(x => x is not null));
+            Assert.Null(limiter.TryAcquire());
+        }
+        finally
+        {
+            foreach (var lease in leases.Where(x => x is not null))
+            {
+                lease!.Dispose();
+                lease.Dispose();
+            }
+        }
+        using var reopened = limiter.TryAcquire();
+        Assert.NotNull(reopened);
+    }
+
+    [Fact]
     public async Task SlowHandlerRetainsBufferSlotButNotReadSlot()
     {
         var readLimiter = new ApiJsonBodyReadConcurrencyLimiter(1);

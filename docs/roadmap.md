@@ -718,7 +718,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   retainUntil UTC, VersionId pinned e readback
   COMPLIANCE con actor MAC. Solo `Observed`/`Uncertain`,
   mai un token di DELETE/replay/recovery.
-- [ ] RED/GREEN CI sullo SHA finale da registrare.
+- [x] **RED/GREEN verify**: [RED initial 44891077685](https://github.com/KeyserDSoze/Omnia/actions/runs/44891077685), [RED provider/retention 44891542059](https://github.com/KeyserDSoze/Omnia/actions/runs/44891542059), [GREEN CI 44891839494](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839494), [OIDC 44891839549](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839549), [Pages 44891839509](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839509) tutte SUCCESS su `5b237395`; 7/7 S3 e 4/4 Azure SDK contract, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali.
 - [ ] #144/#141 ancora OPEN: offsite admin indipendente,
   Azure WORM staging, external monotonic pin, source
   COMMIT certificate, writer OIDC e global DR quarantine.
@@ -729,8 +729,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   effettiva abbreviata rispetto al PUT richiesto;
   il publisher ora ritorna `Uncertain` in entrambi i casi.
 - [x] XUnit impedisce adapter AWS con retry SDK attivi.
-- [ ] Raccogliere prove RED/GREEN GitHub Actions sullo
-  SHA finale prima della chiusura #147.
+- [x] **TDD RED/GREEN confermata**: [RED 44891542059](https://github.com/KeyserDSoze/Omnia/actions/runs/44891542059) per provider/retention errati, [GREEN CI 44891839494](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839494) su `5b237395` (7/7 S3, 4/4 Azure, 19/19 Domain, 80/80 PostgreSQL), [OIDC 44891839549](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839549), [Pages 44891839509](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839509) tutte SUCCESS.
 - [ ] #144/#141: pin version ID e authority esterna
   indipendente dal runner e da tutti i PGDATA, fonte
   autenticata COMMIT primaria, Azure WORM staging.

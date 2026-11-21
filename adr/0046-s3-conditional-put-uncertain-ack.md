@@ -116,6 +116,11 @@ al PostgreSQL primario o gate di accesso.
 
 ## Evidenze RED/GREEN
 
-Allegare run di GitHub Actions RED/GREEN e SHA soltanto
-dopo verifica dei log; #147 non si chiude fino alle
-Actions complete sul main finale. Non chiudere #144/#141.
+**RED test-first:** [CI 44891077685](https://github.com/KeyserDSoze/Omnia/actions/runs/44891077685) su `68c5eade` fallisce per i tipi publisher ancora mancanti (CS0246). **GREEN base:** [CI 44891269611](https://github.com/KeyserDSoze/Omnia/actions/runs/44891269611) su `2b25c73c` SUCCESS: 5/5 S3, 4/4 Azure HTTP, 19/19 Domain, 80/80 PG Integration, PITR reali e Docker/mobile; [OIDC 44891269662](https://github.com/KeyserDSoze/Omnia/actions/runs/44891269662) e [Pages 44891269617](https://github.com/KeyserDSoze/Omnia/actions/runs/44891269617) SUCCESS.
+
+**RED regressione policy:** [CI 44891542059](https://github.com/KeyserDSoze/Omnia/actions/runs/44891542059) su `f3826cef`, 5/6 S3 passati e uno fallito per accettazione erronea di mode AzureLocked/retention abbreviata. **GREEN corretta:** [commit 5b237395](https://github.com/KeyserDSoze/Omnia/commit/5b2373953f4c375927077704009315454e7a9ede), [CI 44891839494](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839494) **SUCCESS**: 7/7 S3 Object Lock (condizionale reale SeaweedFS + fault injection), 4/4 Azure SDK mock HTTP, 19/19 Domain, 80/80 PostgreSQL Integration, PITR/Docker/mobile. [OIDC E2E 44891839549](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839549) e [Pages 44891839509](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839509) **SUCCESS**, medesimo SHA. Log: `PHYSICAL_DUAL_CLAIM_PITR_UNSAFE_REPLAY_OBSERVED` e `PHYSICAL_DUAL_CLAIM_PITR_REMAINED_QUARANTINED`; la protezione reale anti-rollback resta aperta.
+
+Le Actions di una eventuale modifica successiva vanno nuovamente
+verificate prima di dichiarare `main` verde. **Non chiudere
+#144/#141**: storage remoto su host indipendente, authority
+monotona, source COMMIT e recovery gate non sono stati sviluppati.

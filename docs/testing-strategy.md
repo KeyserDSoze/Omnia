@@ -172,3 +172,11 @@ e retention verificate e confronto con la richiesta.
 configurazioni SDK con retry nascosti prima di una PUT.
 Le suite continuano a usare il backend SeaweedFS
 effimero, non authority offsite.
+
+### Risultati TDD #147 PUT conditional + retention mode/readback
+
+- [RED 44891077685](https://github.com/KeyserDSoze/Omnia/actions/runs/44891077685): assenza publisher/port prima della sua implementazione.
+- [GREEN 44891269611](https://github.com/KeyserDSoze/Omnia/actions/runs/44891269611): 5/5 S3 suite, altri test e PITR SUCCESS.
+- [RED hardening 44891542059](https://github.com/KeyserDSoze/Omnia/actions/runs/44891542059): 1/6 S3 fallito per accettazione di provider mode AzureLocked o retainUntil effettiva inferiore alla richiesta.
+- [GREEN 44891839494](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839494) sul commit `5b237395`: **7/7 S3 real protocol + fake faults**, **4/4 Azure SDK fake HTTP**, **19/19 Domain**, **80/80 PostgreSQL Integration**, PITR e Docker/mobile SUCCESS; [OIDC 44891839549](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839549), [Pages 44891839509](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839509) SUCCESS. Test dual PITR dimostra ancora replay NON sicuro, quarantena mantenuta.
+- CI SeaweedFS è sullo stesso runner e non prova offsite immutable custody. #144/#141 OPEN.

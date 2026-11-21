@@ -124,7 +124,7 @@ public static class ImmutableAttemptEvidence
         // Do not let a restored DB point the verifier at a different store,
         // version, or at an unbounded mutable/latest object view.
         if (!ValidToken(expectedStoreIdentity, 256) ||
-            !ValidToken(expectedVersionId, 256) ||
+            !ValidVersionId(expectedVersionId) ||
             nowUtc.Offset != TimeSpan.Zero)
             throw Invalid();
 
@@ -148,7 +148,7 @@ public static class ImmutableAttemptEvidence
                 StringComparison.Ordinal) ||
             !string.Equals(observed.VersionId, expectedVersionId,
                 StringComparison.Ordinal) ||
-            !ValidToken(observed.VersionId, 256) ||
+            !ValidVersionId(observed.VersionId) ||
             !ValidToken(observed.StoreIdentity, 256) ||
             observed.ImmutabilityMode is not (
                 ImmutableAttemptImmutabilityMode.S3Compliance or
@@ -275,6 +275,13 @@ public static class ImmutableAttemptEvidence
             CryptographicOperations.FixedTimeEquals(scopeKey, evidenceKey))
             throw Invalid();
     }
+
+    // Refuse mutable/current-object fallbacks: S3 unversioned objects use
+    // VersionId="null"; "latest" is not an immutable object version.
+    private static bool ValidVersionId(string? value) =>
+        ValidToken(value, 256) &&
+        !string.Equals(value, "null", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(value, "latest", StringComparison.OrdinalIgnoreCase);
 
     private static bool ValidToken(string? value, int maxLength) =>
         value is { Length: > 0 } &&

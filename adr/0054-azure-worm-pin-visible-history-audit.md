@@ -70,17 +70,27 @@ al writer. Il vero SDK Azure è interrogato tramite responder HTTP
 sintetico che verifica `include=versions,deleted,deletedwithversions,snapshots`
 e `prefix=` key PIN esatta. Non è stata chiamata Azure live.
 
-- RED test-first commit `b7a9de3f`:
-  [GitHub CI 44922335677](https://github.com/KeyserDSoze/Omnia/actions/runs/44922335677).
-  Verificare l'esito prima di attestare RED avvenuto.
-- Implementazione `5b2770d1` e estensione strict-key
-  `1384ab66`:
-  [CI 44922394452](https://github.com/KeyserDSoze/Omnia/actions/runs/44922394452).
-  Attendere e registrare prova GREEN.
-- Prima di chiudere #155, confermare **CI, OIDC real-browser
-  e Pages SUCCESS sullo stesso SHA finale** e includere i link
-  in issue. Eventuali nuove modifiche producono un nuovo HEAD
-  da verificare separatamente.
+- **RED verificato**: test-first commit [`b7a9de3f`](https://github.com/KeyserDSoze/Omnia/commit/b7a9de3fa139d903748ce3bc2c9dad4180ca33d6),
+  [CI 44922335677](https://github.com/KeyserDSoze/Omnia/actions/runs/44922335677)
+  **FAILURE attesa CS0246**, nuovo `AzureBlobWormPinHistoryAudit` mancante;
+  19/19 Domain e 16/16 S3 passarono prima del compile failure.
+- **Prima GREEN FALLITA**: [`5b2770d1`](https://github.com/KeyserDSoze/Omnia/commit/5b2770d104f43f1168a3d5f83bb8d8fa46597300)
+  e estensione namespace PIN [`1384ab66`](https://github.com/KeyserDSoze/Omnia/commit/1384ab66dd8b9fbe01e185542bd072a4466cc672);
+  [CI 44922394452](https://github.com/KeyserDSoze/Omnia/actions/runs/44922394452):
+  **30/31 test Azure**; `<NextMarker></NextMarker>` è serializzato
+  dallo SDK come continuazione vuota `""`, non `null`.
+- **GREEN confermato**: [`8a66275d`](https://github.com/KeyserDSoze/Omnia/commit/8a66275d5b69e4be2072c3c9b41cc4a74fdba0c1)
+  normalizza **soltanto** il marcatore vuoto a fine sequenza,
+  lasciando whitespace/cursori ciclici/troncati `Uncertain`.
+  [CI 44922616061](https://github.com/KeyserDSoze/Omnia/actions/runs/44922616061)
+  **SUCCESS**: 31/31 Azure, 16/16 S3 SeaweedFS, 19/19 Domain,
+  80/80 PostgreSQL Integration, PITR fisici, Docker, mobile.
+  [OIDC E2E 44922616076](https://github.com/KeyserDSoze/Omnia/actions/runs/44922616076)
+  e [Pages 44922616110](https://github.com/KeyserDSoze/Omnia/actions/runs/44922616110)
+  **SUCCESS sullo stesso SHA**.
+- Questo aggiornamento ADR produce un nuovo commit `main`;
+  i tre gate finali vanno verificati nuovamente prima di chiudere #155.
+  La green CI sintetica NON certifica Azure WORM offsite o monotonicity.
 
 ## Rischi residui e GDPR
 

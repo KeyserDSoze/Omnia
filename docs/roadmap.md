@@ -749,3 +749,21 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   attesta source DELETE COMMIT o global DR gate;
   Azure version-level WORM staging e privacy review
   ancora mancanti.
+
+## #149 — S3 signed cross-bucket exact VersionId pin (ADR 0048)
+
+- [x] Test TDD-first RED per doppio bucket Object Lock,
+  pin canonico HMAC con 3 chiavi distinte, VersionId
+  esatti e recupero positivo dopo latest delete marker,
+  con fault injection lost pin ACK.
+- [x] Pin writer e reader S3 real protocol con GET
+  version-specific + GetObjectRetention COMPLIANCE
+  ed expiration confronto con la ricevuta.
+- [ ] Annotare RED/GREEN e tutte le Actions verdi sul
+  commit main finale prima di chiudere **solo** #149.
+- [ ] **#144/#141 P0 rimangono OPEN**: due bucket same-runner
+  non equivalgono a authority indipendente; serve
+  durable monotonic version-pin external control plane,
+  segregated accounts/keys/IAM, offsite retention,
+  Azure staging WORM, source DELETE COMMIT and
+  authenticated global recovery gate.

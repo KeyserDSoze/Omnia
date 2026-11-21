@@ -429,3 +429,17 @@ e limitazione della retention, protezione e revoca chiavi,
 audit e definizione del ciclo di vita WORM sono
 obblighi da studiare in produzione; i test sintetici
 non attestano GDPR art.17 o disponibilità offsite.
+
+## Pin WORM pseudonimizzato non equivale a completata cancellazione (ADR 0048)
+
+Il PIN S3 contiene UUID, identità logica dello store
+e VersionId, oltre a scope MAC e signature HMAC.
+Non contiene tenant o soggetto plaintext,
+ma resta dato **pseudonimizzato** e necessita
+valutazione GDPR delle finalità, minima retention
+possibile, location offsite, accessi, scadenza
+e perdita/rotazione chiavi. Il PIN riguarda
+esclusivamente un tentativo osservato,
+non attesta commit del DELETE primario,
+cancellazione dei derivati/backup o diritto
+alla cancellazione soddisfatto. No recovery-ready.

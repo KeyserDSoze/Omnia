@@ -940,3 +940,28 @@ history enumeration, including under a latest delete
 marker. This runs on SAME CI runner; does not pin versions
 monotonically in independently administered offsite
 custody or release the API. #144/#141/#109/#31 OPEN.
+
+## S3 cross-bucket immutable exact-version pin (#149 / ADR 0048)
+
+`S3ObjectLockVersionPinService` signs a minimal canonical
+pin envelope containing request UUID, evidence store identity,
+exact evidence VersionId, actor-scope HMAC and a dedicated
+pin HMAC. Require three distinct 32-byte keys
+(scope/evidence/pin), no tenant/subject plaintext in the S3
+body. Verify original exact S3 COMPLIANCE evidence
+before any pin PUT. Pin's one-shot PutObject uses
+conditional IfNoneMatch, COMPLIANCE, MD5 transport
+and an AWS client with MaxErrorRetry=0, then verifies
+the exact pin VersionId via `S3ObjectLockPinReader` and
+the original evidence VersionId; pin expiry must not
+precede the evidenced retention. Never read mutable
+latest. Any unknown ACK, missing/foreign version,
+tampered pin, bad HMAC, shorter retention, governance
+or provider failure must produce Uncertain, NEVER
+no-attempt, new DELETE, retry, replay or ready.
+Two *buckets* on the SAME CI SeaweedFS host do
+NOT mean independently administered or physically
+offsite custody; caller obtains both version IDs and
+still needs independently durable monotonic pins
+outside restorable PostgreSQL. No REST DI wiring.
+#144/#141/#109/#31/#32 remain OPEN.

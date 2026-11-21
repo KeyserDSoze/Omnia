@@ -202,3 +202,22 @@ source commit primario.
 - [RED 44896553267](https://github.com/KeyserDSoze/Omnia/actions/runs/44896553267) sul commit `5b6aa349`: CS0246 su reconciler e port test-first mancanti.
 - [GREEN 44896756880](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756880) su `d218100f`: **10/10 S3 provider protocol + negative history**, 4/4 Azure SDK fake HTTP, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali/Docker/mobile; [OIDC 44896756790](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756790), [Pages 44896756867](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756867) SUCCESS.
 - La detection del replay pericoloso dopo dual-PGDATA PITR continua a richiedere quarantena, non può essere sbloccata dal nuovo reconciler. Zero/multiple/incomplete S3 version listing non prova l'assenza di tentativi. #144/#141 P0 OPEN.
+
+## S3 signed exact-version pin on second Object Lock bucket (ADR 0048 / #149)
+
+La suite `S3ObjectLockVersionPinTests` usa
+AWS SDK v4 reale, 2 bucket SeaweedFS locked
+effimeri sullo stesso host: verifica ricezione
+COMPLIANCE, pin firmato con 3 MAC key distinte,
+retention versioned e GET+GetObjectRetention,
+version ID exact-match anche dopo latest
+delete marker; una versione GOVERNANCE
+successiva non può sostituire la pin del test.
+Negativi: attore diverso, signature pinKey
+diversa, VersionId null/latest/mismatched,
+lost ACK dopo PUT confermata dal server
+senza auto-retry e nuovo controllo positivo
+con un VersionId esternamente noto simulato.
+TDD RED prima delle classi; non attribuire
+a questa suite garanzie di monotonicity,
+provider independence o legal GDPR.

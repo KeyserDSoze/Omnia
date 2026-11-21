@@ -1013,3 +1013,20 @@ non attendibile non consentono retry, DELETE o READY.
 Non prova la sopravvivenza allo stesso host fault o al
 rollback simultaneo di PGDATA e custodia: nessuna
 autorità offsite è stata ancora provisioned.
+
+## Pin WORM di versione S3 su secondo bucket, CI-only (ADR 0048)
+
+Il test crea due bucket S3 ObjectLock su SeaweedFS
+nel runner comune; pubblica una ricevuta synthetic
+COMPLIANCE, firma e scrive un PIN nel secondo
+bucket e verifica **entrambi i VersionId** e
+rispettive retention. Un DELETE senza VersionId
+crea delete marker ma lascia la vecchia versione;
+un tentativo su VersionId protetta è 403.
+Simulare perdita dell'ACK del PIN **dopo**
+COMMIT S3: il risultato rimane Uncertain fino
+a controllo successivo con VersionId conosciuto
+indipendentemente. Il test non recupera il PIN
+da un authority esterna autonoma né bypassa
+quarantena PITR multi-database. Nessuna
+prova di source DELETE COMMIT.

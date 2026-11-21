@@ -844,3 +844,24 @@ risultato `Uncertain`, senza retry, DELETE o READY.
 Un attaccante con controllo amministrativo sul bucket
 può manipolare il catalogo e la disponibilità; questo
 non è ancora pin monotono in un trust domain separato.
+
+## Pin S3 firmato, trust boundary ancora non separato (ADR 0048)
+
+Un PIN deve essere protetto per l'**esatto** VersionId
+di ricevuta originale e l'esatta versione del PIN.
+Lo schema canonico include UUID, store identity,
+VersionId, scopeMac HMAC e mac HMAC dedicato:
+3 chiavi distinte scope/evidence/pin, mai MAC
+validata con una chiave condivisa impropriamente.
+Il contenuto non include tenant/subject plaintext.
+Rifiutare HTTP denial, pin scaduto/accorciato,
+modalità GOVERNANCE, VersionId null/latest,
+mismatch dello store, versioni successive o ACK
+persi. Un delete marker latest non modifica la
+vecchia versione COMPLIANCE. Un pin può essere
+false-positive se chiavi o provider sono sotto il
+medesimo amministratore compromesso: definire
+ruoli indipendenti, attestazione owner S3,
+vault/HSM, signing audit, replica e offsite
+prima di produzione. La CI a due bucket
+non dimostra un trust domain separato.

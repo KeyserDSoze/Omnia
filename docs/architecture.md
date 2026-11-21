@@ -424,3 +424,18 @@ versione positiva HMAC/retention/scope può produrre
 `PreviouslyObserved`; cataloghi vuoti o ambigui sono
 `Uncertain`. La lista non è un'autorità monotona
 offsite e non si collega a REST o release.
+
+## S3 exact-version signed pin witness candidate (ADR 0048)
+
+La slice S3 aggiunge `S3ObjectLockVersionPinService`
+e `S3ObjectLockPinReader`. Il primo verifica la ricevuta
+firmata HMAC ADR0043 in COMPLIANCE, poi scrive una
+**seconda versione firmata** nel namespace pin WORM,
+sull'archiviazione S3 configurata separatamente.
+Il readback richiede due VersionId espliciti, verifica
+metadata reali e signature; non si fida di `latest`
+o di uno stato DB post-PITR. Una versione positiva
+non attesta DELETE COMMIT e nessuna route/worker
+ottiene capacità di ripresa. La CI usa due bucket
+dello stesso SeaweedFS, perciò non prova custody
+offsite indipendente o monotonicità globale.

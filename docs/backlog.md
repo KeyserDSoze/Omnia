@@ -145,3 +145,15 @@ release-before-handler invariants. It does not add distributed,
 cross-tenant or multi-account fairness, provider quotas or WAF;
 [father #37](https://github.com/KeyserDSoze/Omnia/issues/37)
 remains OPEN. Original backlog issue counts are historical.
+
+## P0 process-local per-tenant JSON body receive admission (#162, ADR 0061)
+
+Child [#162](https://github.com/KeyserDSoze/Omnia/issues/162)
+extends #159 and #161 under [#37](https://github.com/KeyserDSoze/Omnia/issues/37):
+three atomic budgets for globally active JSON reads, one validated
+OIDC tenant and one validated tenant+subject actor. Default process
+caps 32/16/4 (global/tenant/actor); reject 503 without body read,
+release before handler and remove idle actor/tenant partitions.
+Not a reserved-fair tenant scheduler or distributed multi-replica
+quota, nor a media/upload/WAF/GDPR completion. The original issue
+counts in this historical backlog are NOT current live counts.

@@ -462,3 +462,18 @@ reads are active and removes them upon release, preventing idle
 principal cardinality growth. The read lease is released before
 the Minimal API handler/DB work. No new personal-data persistence,
 no distributed quota and no tenant-wide fair sharing are claimed.
+
+## OIDC tenant JSON receive isolation (ADR 0061)
+
+An additional tenant-level intake bound applies ONLY while the API
+receives authenticated JSON POST/PUT/PATCH /api/v1 bodies, after
+OIDC/rate limiting/authorization and byte/media rejection. The
+single process-local limiter atomically controls global (default
+32), signed tenant (default 16) and signed actor (default 4)
+concurrent reads. Tenant partition keys are derived from uniquely
+validated tenant_id claims and are independent of sub; the existing
+actor key remains tenant+sub length-framed. Both dictionaries evict
+idle keys under one lock and retain no persisted quota identity.
+This layer does not protect DB/AI handler concurrency, cross-replica
+limits or reserve capacity for other tenants if the global
+limit has already been reached.

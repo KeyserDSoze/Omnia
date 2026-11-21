@@ -408,3 +408,28 @@ replacement for the real Keycloak/JWKS E2E authentication suite.
 Retain real PostgreSQL RLS, Domain, S3/Azure, physical PITR, Docker,
 mobile, browser/OIDC and Pages gate checks on FINAL SHA. Record
 RED and GREEN exact run IDs in #161. Parent #37 stays OPEN.
+
+## TDD RED→GREEN tenant intake admission (#162 / ADR 0061)
+
+The test-first ApiJsonTenantReadFairnessTests holds SIXTEEN
+synthetic cancellation-aware JSON reads from four authenticated
+actors of ONE tenant using default global=32 and actor=4. A
+seventeenth from another actor of that tenant MUST immediately
+receive generic 503/no-store/Retry-After:1 without any body read
+or handler; another tenant can proceed using still-free global
+slots. Forged tenant/forwarded headers do not change partition.
+RED is an observed behavioral failure on commit 2765bcae:
+CI 44954479076, 1 failed / 120 passed, the extra same-tenant
+request reached the handler. Tests also verify unique tenant keys
+for same subject, duplicate signed claims fall back to anonymous
+network peer; config bounds and default clamp, 128 parallel
+admissions with atomic 6-per-tenant/8-global limits, idempotent
+release, and 1000 sequential tenant keys are evicted when idle.
+Existing #159/#161 suites re-test 408, 413/415 and handler release.
+
+These middleware tests use synthetic ClaimsPrincipal and Stream,
+not real JWT proof or load/DDoS benchmarks. Continue full CI on
+final main SHA: xUnit Domain+PostgreSQL/RLS, provider S3/Azure,
+physical PITR/witness, Docker, mobile/Playwright, Keycloak browser
+OIDC E2E and GitHub Pages. Attach workflow URLs to #162 before
+closing; do not close #37/#2.

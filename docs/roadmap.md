@@ -766,3 +766,18 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   segregated accounts/keys/IAM, offsite retention,
   Azure staging WORM, source DELETE COMMIT and
   authenticated global recovery gate.
+
+## P0 #162 — Tenant-level JSON intake quota (ADR 0061)
+
+- [x] Scoped child of #37 extends #159/#161 with an atomic
+  global/tenant/actor cap during authenticated JSON receiving
+  (default 32/16/4) and immediate eviction of idle keys.
+- [x] Test-first RED behavioral evidence: CI 44954479076,
+  120/121 integration passed; extra same-tenant reader wrongly
+  entered handler prior to feature implementation.
+- [ ] Exact final main SHA must have successful CI including
+  real PostgreSQL/RLS, PITR/witness, S3/Azure, Docker, mobile,
+  OIDC browser and Pages; see issue #162 for live evidence.
+- [ ] Parent #37 and epic #2 remain OPEN for global/tenant-wide
+  fair scheduling, multi-instance/distributed control, WAF,
+  media/storage/connector quotas and production review.

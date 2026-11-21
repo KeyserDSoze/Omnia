@@ -1006,3 +1006,39 @@ cover unvalidated traffic/other HTTP methods, impose limits on
 completed handler memory, throttle binary connectors/media, replace
 Kestrel/TLS/proxy/WAF, prove denial-of-service protection or GDPR
 readiness. #37 and #2 still OPEN.
+
+## OIDC tenant-scoped JSON body intake cap (#162 / ADR 0061)
+
+Previous global 32-slot and per-actor 4-slot JSON read budgets could
+be exhausted by many verified actor identities from the SAME tenant.
+The application now enforces, in addition, an active-only tenant cap:
+optional `RequestBody:MaxConcurrentReadsPerTenant`, default
+min(16, MaxConcurrentReads), valid 1..global. Any explicitly invalid
+value rejects API startup. Existing `RequestBody:MaxConcurrentReads`
+and `RequestBody:MaxConcurrentReadsPerActor` remain unchanged.
+
+ApiRateLimitPolicy derives BOTH actor (length-framed tenant+sub) and
+tenant (length-framed tenant_id) keys from the same authenticated
+JWT claims after OIDC and authorization; never from X-Tenant-Id,
+X-Forwarded-For, request JSON, or client-specified tenancy.
+Duplicate/empty/oversized claims use the same actual network-peer
+anonymous fallback as before; mutation endpoints still demand valid
+authorization and the DB still enforces RLS and consents. Three
+admission counters are modified atomically under ONE short lock after
+413/415 prechecks, before allocating body buffers or ReadAsync.
+Exhaustion gives identical non-identifying HTTP 503
+request_body_busy, no-store and Retry-After:1. On 408 deadline,
+413 streamed oversize, disconnect, stream exception and complete
+receive, the idempotent lease releases all three counters; it is
+released BEFORE normal application processing.
+
+Two dictionaries retain ONLY actively receiving actor/tenant keys:
+when a count drops to zero the key is removed. No keys/payloads are
+logged or exposed; only anonymous counts are available to tests.
+At most the global concurrent read count partitions can be live.
+This bounds instance-local tenant resource monopolization but does
+NOT guarantee a tenant any global slot when other tenants already
+use them all. Not distributed across replicas, not a rate-limit
+by time or an HTTP/2 connection budget; no media/connector quotas,
+upstream WAF/ingress, DDoS/load test or GDPR go-live attestations.
+Parent #37 and epic #2 remain OPEN.

@@ -182,3 +182,18 @@ X-Forwarded-For; it removes idle actor keys and releases slots before
 normal handler work. This is only per-process/actor protection, not
 a global tenant budget, distributed quota, ingress WAF or production
 readiness. Parent #37 remains open.
+
+## Per-tenant JSON intake resource cap (#162 / ADR 0061)
+
+The .NET 10 API now applies **three** process-local, nonqueueing
+concurrent *JSON body receiving* limits: global default 32,
+tenant default 16 (or lower global), and actor default 4 (or
+lower global). Configure optional
+`RequestBody:MaxConcurrentReadsPerTenant` 1..MaxConcurrentReads;
+unsafe settings reject startup. Tenant identity is derived only
+from OIDC-validated tenant_id claims, not X-Forwarded-For or
+client tenancy headers. Saturation responds 503/no-store before
+reading bytes and slots return before endpoint work. Idle
+tenant/actor keys are immediately discarded. This is NOT a
+cross-node budget, capacity reservation for every tenant, WAF,
+binary media limit or production/GDPR security release; #37 open.

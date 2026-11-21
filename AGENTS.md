@@ -1170,3 +1170,28 @@ The authenticated context is validated by OIDC upstream, NOT by this
 limiter. Anonymous fallback uses direct network peer only. This is
 per ACTOR/per PROCESS fairness, NOT per-tenant, per-cluster, HTTP
 connection, media or external service quota. Keep #37/#2 OPEN.
+
+## Tenant-scoped JSON receive budget (#162 / ADR 0061)
+
+The shared instance JSON reader admission control must atomically enforce
+three budgets BEFORE body reads: global default 32, verified OIDC actor
+default min(4, global), and verified OIDC tenant default min(16, global).
+RequestBody:MaxConcurrentReadsPerTenant is optional, valid 1..global;
+invalid explicit values fail startup. Derive tenant identity using
+ApiRateLimitPolicy.TenantPartitionKey from the same validated JWT claims
+as PartitionKey; tenant_id must be unique/nonempty/bounded and is NEVER
+taken from request headers, untrusted X-Forwarded-For or body. Invalid/
+unauthenticated actors share the existing anonymous network-peer
+fallback, although API mutations require authorization upstream.
+
+Global, tenant and actor counts must change together under ONE short
+lock and never queue/wait. Saturated requests return existing generic
+503 request_body_busy/no-store/Retry-After:1, without request-body
+read/handler. Release all counters exactly once after successful receive
+or timeout/disconnect/413/stream error, before binding/DB work. Evict
+both actor and tenant entries immediately at zero; live partitions
+never exceed globally active reads and keys must never be logged.
+413/415, OIDC, 429, RLS and consent are unchanged. This is an upper
+bound per tenant on ONE process's read-phase concurrency, NOT a fair
+reservation under global exhaustion, a cluster quota or GDPR approval.
+Parent #37 and epic #2 OPEN.

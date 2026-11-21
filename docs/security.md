@@ -1064,3 +1064,36 @@ this does NOT bound copies, runtime memory, DB/AI allocations,
 non-JSON endpoints, sockets, TLS/ingress, media, or distributed
 concurrency. No new data processing, storage, identity scope,
 consent, RLS or GDPR readiness. Parent #37 and #2 remain OPEN.
+
+## Per-tenant cap for middleware-owned buffered JSON lifetimes (#164, ADR 0063)
+
+ADR 0062 globally bounds retained JSON buffers (64 default) across
+the downstream handler lifetime, but any number of distinct users
+in one tenant could monopolize those slots. This slice adds an
+atomic *per-process tenant ceiling*, default min(16, global), valid
+explicit override RequestBody:MaxConcurrentBufferedRequestsPerTenant
+between 1 and MaxConcurrentBufferedRequests inclusive. The override
+is optional; missing config clamps automatically if global is
+lowered. Explicit out-of-range config fails before serving.
+
+The same authenticated tenant_id+sub claims already validated
+upstream by OIDC produce an ApiRateLimitPolicy.TenantPartitionKey;
+client X-Tenant-Id/X-Forwarded-For cannot move the limit. Invalid
+claims fall back to the direct network peer, but mutation endpoints
+still require valid authorization. After cheap 413/415 checks,
+global and tenant retained-buffer capacity are checked and
+incremented together under ONE short lock. Saturation returns
+the same generic request_buffer_busy 503, no-store, Retry-After:1
+before body read or handler, without revealing actor, tenant or
+payload. The buffer lease spans successful read + downstream
+processing; it releases on all 408, streamed 413, client abort,
+stream/handler fault or success. Idle tenant counts are removed
+immediately, so at most the global slot count of keys exist.
+
+Read permits 32/16/4 remain independent and release before the
+handler. This buffer ceiling does NOT reserve capacity for other
+tenants after the global limit is fully consumed, coordinate
+replicas, cap all managed memory/parser copies or DB/AI work,
+enforce per-user handler concurrency or provide production
+ingress, WAF, load testing or GDPR approval. No additional
+tenant identity storage or consent change. #37 and #2 OPEN.

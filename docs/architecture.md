@@ -488,3 +488,17 @@ and downstream handler are finished. Both are nonqueueing, 503 on
 saturation and release on all error paths. This only bounds the
 number of middleware-owned live buffers; no DB/AI cap, distributed
 quota, per-tenant processing fairness or total memory bound.
+
+## Per-tenant bounded JSON buffers across handler lifetime (ADR 0063)
+
+Beyond existing global/tenant/actor body-RECEIVE quota 32/16/4,
+the API retains a separate buffered JSON request permit across
+the downstream handler. Buffered admission now checks process-wide
+default 64 AND verified OIDC tenant default 16 atomically under one
+lock; keys only exist while the corresponding request is in
+progress. Tenant partitions come from validated JWT tenant_id
+and require a valid sub, never user-controlled headers; idle
+entries are removed when count reaches zero. The byte-limited
+MemoryStream is disposed before the buffered permit releases.
+This imposes a bounded tenant ceiling on live middleware-owned
+JSON buffers but no fair reservation or global cluster guarantee.

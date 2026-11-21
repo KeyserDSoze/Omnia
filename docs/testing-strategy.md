@@ -450,3 +450,29 @@ Stream tests do not replace actual Keycloak browser E2E, PostgreSQL
 RLS, S3/Azure provider contracts, physical PITR, Docker, mobile,
 Pages or realistic ingress load testing. RED/GREEN exact Actions
 SHA/run evidence is recorded in #163 before closing.
+
+## TDD retained JSON buffer tenant fairness (#164 / ADR 0063)
+
+Behavior-first ApiJsonBufferedTenantFairnessTests holds SIXTEEN
+fully read JSON buffers in slow synthetic handlers for different
+subjects of tenant A while the per-process buffer cap is 32.
+The seventeenth request of another tenant A actor must return
+generic 503 request_buffer_busy with no ReadAsync/handler; tenant B
+must still succeed using spare global capacity. Forged
+X-Tenant-Id/X-Forwarded-For do not change the tenant partition.
+Test-first commit c6b0abed produced RED CI 44957612052:
+one expected integration failure because the rejected request
+actually tried to read from MustNotReadStream; all 129 existing
+integration tests passed. Additional unit-style xUnit contracts
+test 128 parallel attempts with 4-per-tenant/8-global quotas,
+immediate eviction across 1000 synthetic tenant keys, invalid
+and auto-clamped defaults and idempotent dispose. Existing #163
+tests continue to enforce 408/413/415, abort, handler exception,
+zero queue, GET bypass and early release of read permits.
+
+All synthetic ClaimsPrincipal streams are scaffolds, NOT a JWT
+verification, load-test or real production ingress attestation.
+Keep real PostgreSQL/RLS integration, Domain, S3/Azure contracts,
+physical WAL/PITR, Docker, mobile/Playwright, real Keycloak/OIDC
+browser and GitHub Pages gates passing on exact FINAL main SHA.
+Attach complete RED/GREEN evidence in #164; #37/#2 stay OPEN.

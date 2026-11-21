@@ -792,3 +792,22 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   is the evidence authority.
 - [ ] Keep #37/#2 OPEN: distributed/tenant-fair processing,
   media/connector/storage quotas, WAF/ingress, load/GDPR review.
+
+## P0 #164 — Tenant ceiling for buffered JSON processing (ADR 0063)
+
+- [x] TDD behavioral RED: test-only c6b0abed,
+  CI 44957612052 129/130 Integration passed; tenant A
+  request wrongly read when spare GLOBAL buffers existed.
+- [x] Atomic global/tenant buffer counts during slow handler
+  lifetime, defaults 64/16; explicit config valid 1..global
+  and default auto-clamp. No tenant key retention when idle.
+- [ ] Final same SHA success required for CI (PostgreSQL,
+  provider contracts, PITR/Docker/mobile), OIDC real-browser
+  and Pages; exact workflow evidence maintained in #164.
+- [ ] Parent #37 and privacy epic #2 still OPEN: cross-replica
+  distributed quota, reserved-fair processing, ingress/WAF,
+  media/AI/storage/connector budgets, realistic load and GDPR.
+
+Historical #162/#163 checkboxes above refer to earlier candidates;
+their child issues contain the final successful CI/OIDC/Pages
+evidence and both are already CLOSED. They are NOT open work.

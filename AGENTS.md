@@ -1213,3 +1213,25 @@ any stream/handler exception. Idempotent permit and zero queue/wait.
 This is not tenant processing fairness, a DB/AI cap, full memory
 ceiling, a cross-replica quota, ingress protection or GDPR signoff.
 Parent #37 and epic #2 stay OPEN.
+
+## Active-only tenant fairness for buffered JSON handler lifetimes (#164 / ADR 0063)
+
+The middleware-owned buffered JSON request limiter (#163) must atomically
+enforce BOTH a per-instance global cap (default 64) and per-validated-
+OIDC-tenant cap (default min(16,global)). Operator override:
+RequestBody:MaxConcurrentBufferedRequestsPerTenant optional, 1..global;
+bad explicit values reject startup. Leave appsettings default unset
+so a smaller global budget clamps the tenant default automatically.
+Use ONLY ApiRateLimitPolicy.TenantPartitionKey(context) after OIDC,
+rate limiting and authorization; never X-Tenant-Id, forwarded headers
+or JSON body. Acquire before buffer allocation/body read, no queue:
+saturation 503 request_buffer_busy/no-store/Retry-After:1 without
+reading or reaching the handler. One lock protects global+tenant
+admission/release, count entries only active tenants, drop at zero;
+key count <= global active slots, do not log/store keys. Hold buffer
+permit THROUGH handler execution; still release READ permits
+32/16/4 BEFORE handler. Release all leases on 408/413, abort,
+stream/handler faults and success, idempotently. NOT a guaranteed
+fair-share reserve when global pool full, per-actor processing,
+cross-replica distributed quota, WAF/media/connector protection or
+GDPR release. Keep parent #37 and epic #2 OPEN.

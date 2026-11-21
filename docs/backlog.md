@@ -169,3 +169,19 @@ HTTP 503 request_buffer_busy before any body read on saturation.
 This does not bound total process memory, all DB/AI concurrency,
 cross-replica quotas, tenant fairness, WAF/ingress or binary/media
 uploads. Parent #37 and privacy epic #2 remain OPEN.
+
+## P0 per-tenant bound for retained JSON handler buffers (#164, ADR 0063)
+
+Child [#164](https://github.com/KeyserDSoze/Omnia/issues/164)
+extends [#163](https://github.com/KeyserDSoze/Omnia/issues/163)
+under [#37](https://github.com/KeyserDSoze/Omnia/issues/37):
+additional per-process/verified-tenant admission for completed
+JSON buffers retained during slow handlers. Default 64 global,
+16 per tenant (or auto-clamped to a lower global), nonqueue
+atomic limits, 503 no-read on tenant saturation, release after
+handler and eviction of idle tenant keys. Does not change
+32/16/4 receive-only permits. No per-actor handler fairness,
+distributed service, guaranteed reserved tenant capacity,
+connector/media/AI quotas, WAF, realistic load or GDPR go-live.
+Original backlog counts are historical, not current GitHub issue
+counts.

@@ -209,3 +209,18 @@ The slot is retained until the bounded JSON MemoryStream and handler
 are complete. The 32/16/4 process/tenant/actor receive quotas
 still release before endpoint work. This is not a full memory ceiling,
 a DB/AI limit, a distributed/tenant-fair quota or GDPR release.
+
+## Per-tenant retained JSON request cap (#164 / ADR 0063)
+
+The API now prevents one OIDC tenant from occupying every
+middleware-owned JSON buffer during slow downstream handlers:
+defaults **64 globally / 16 per tenant**, with an optional
+RequestBody:MaxConcurrentBufferedRequestsPerTenant setting
+(1..global, auto-clamped default). Both active counters are
+atomic, 503 request_buffer_busy before reading or entering a
+handler when full, no queue and automatic eviction of inactive
+tenant entries. Existing 32/16/4 JSON READ budgets release
+before handler and are unaffected. Does not reserve guaranteed
+slots if global capacity is full, span replicas or limit total
+process memory, DB/AI, media connectors or upstream WAF.
+#37 remains OPEN.

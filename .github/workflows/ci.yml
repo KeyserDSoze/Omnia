@@ -90,8 +90,60 @@ jobs:
             exit 1
           }
 
-      - name: REAL S3 Object Lock protocol test — CI-only RED
+      # The official MinIO Community Docker image was withdrawn in 2026.
+      # SeaweedFS speaks the same S3 Object Lock/versioning protocol and has
+      # a maintained official OSS container. This is a SAME-RUNNER test,
+      # never offsite custody, user data, or production WORM evidence.
+      - name: Start disposable S3-compatible Object Lock service (CI only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          access="$(openssl rand -hex 16)"
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$access"
+          echo "::add-mask::$secret"
+          echo "OMNIA_TEST_S3_ACCESS=$access" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_S3_SECRET=$secret" >> "$GITHUB_ENV"
+          echo "OMNIA_TEST_S3_ENDPOINT=http://127.0.0.1:18433" >> "$GITHUB_ENV"
+          echo "OMNIA_S3_CI_ONLY=1" >> "$GITHUB_ENV"
+          auth="$RUNNER_TEMP/omnia-s3-auth.json"
+          jq -nc --arg access "$access" --arg secret "$secret" \
+            '{identities:[{name:"ci-s3-admin",
+              credentials:[{accessKey:$access,secretKey:$secret}],
+              actions:["Admin","Read","Write","List","Tagging"]}]}' > "$auth"
+          chmod 600 "$auth"
+          docker run -d --rm --name omnia-ci-s3-object-lock \
+            -v "$auth:/etc/seaweedfs/s3.json:ro" \
+            -p 127.0.0.1:18433:8333 \
+            chrislusf/seaweedfs:4.47 \
+            server -s3 -s3.config=/etc/seaweedfs/s3.json \
+              -dir=/data -master.volumeSizeLimitMB=64
+          ready=0
+          for i in $(seq 1 80); do
+            # Unauthorized or signed S3 API responses both prove the
+            # socket is accepting HTTP. Never log admin credentials.
+            status="$(curl -sS -o /dev/null -w '%{http_code}' \
+              --connect-timeout 2 http://127.0.0.1:18433/ || true)"
+            if [[ "$status" =~ ^[245][0-9][0-9]$ ]]; then
+              ready=1; break
+            fi
+            sleep 2
+          done
+          if [[ "$ready" != 1 ]]; then
+            docker logs --tail 90 omnia-ci-s3-object-lock || true
+            echo "S3 Object Lock service not available." >&2
+            exit 1
+          fi
+
+      - name: Real S3 Object Lock version-pinned adapter integration tests
         run: dotnet test tests/Omnia.S3ObjectLock.Tests/Omnia.S3ObjectLock.Tests.csproj -c Release
+      - name: Stop disposable S3-compatible service
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f omnia-ci-s3-object-lock >/dev/null 2>&1 || true
+          rm -f -- "$RUNNER_TEMP/omnia-s3-auth.json"
+
 
       - name: Start disposable PostgreSQL 17 / pgvector
         shell: bash

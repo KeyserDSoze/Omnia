@@ -358,3 +358,17 @@ not affected. Tests exercise real PostgreSQL via xUnit and JWT/OIDC
 through Playwright Keycloak. This only governs HTTP caches honoring
 origin headers, not service-worker Cache API, downloads, backups or
 rogue CDN rules; wider privacy/security gates remain open.
+
+
+## Navigazione note precedenti — Web (#174 / ADR 0073)
+
+La timeline Web autenticata non si interrompe più dopo le ultime 30 note:
+\`GET /api/v1/memories/page?limit=10&before=<cursor>\` serve lotti limitati,
+ordinati per timestamp e UUID con \`nextCursor\` soltanto se restano
+record. "Carica altre note" accoda senza duplicati e senza memorizzare note
+o cursori in localStorage. La navigazione è isolata da JWT/RLS lato
+PostgreSQL e invalidata su logout, nuova sessione, revoca, cancellazione
+e refresh. Il vecchio \`GET /api/v1/memories\` array resta compatibile.
+Il cursore non è una credenziale; pagine successive non sono uno snapshot
+immutabile in presenza di nuove note retrodatate o scadenze. Native,
+sincronizzazione offline cifrata e rilascio per dati reali restano aperti.

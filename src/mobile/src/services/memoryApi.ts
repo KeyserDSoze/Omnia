@@ -21,6 +21,12 @@ export type RemoteMemory = {
   hasEmbedding: boolean;
 };
 
+/** The cursor is an opaque position, not a tenant selector or credential. */
+export type MemoryPageDto = {
+  items: RemoteMemory[];
+  nextCursor: string | null;
+};
+
 export type ErasureReceipt = {
   deletedMemories: number;
   deletedConsents: number;
@@ -132,7 +138,13 @@ export class MemoryApi {
     return this.request('DELETE', '/api/v1/consents/' + encodeURIComponent(id));
   }
   recent(): Promise<RemoteMemory[]> {
+    // Backwards-compatible endpoint retained for older clients.
     return this.request('GET', '/api/v1/memories?limit=30');
+  }
+  page(before?: string): Promise<MemoryPageDto> {
+    // The server bounds the page size and validates any opaque cursor.
+    return this.request('GET', '/api/v1/memories/page?limit=10' +
+      (before === undefined ? '' : '&before=' + encodeURIComponent(before)));
   }
 
   async exportPersonalData(): Promise<Blob> {

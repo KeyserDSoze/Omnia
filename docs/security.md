@@ -1322,3 +1322,23 @@ clear existing caches, JS Cache API, service-worker storage, local
 downloads, provider/backup copies or CDN rules that override origin.
 Do not declare GDPR or data release gate complete; #2/#31/#41 remain
 OPEN.
+
+
+## Web personal timeline keyset pages (#174 / ADR 0073)
+
+The canonical \`GET /api/v1/memories\` JSON array remains supported for old
+clients. Authenticated Expo Web now uses a bounded 10-note first page and
+explicitly loads older pages via \`GET /api/v1/memories/page\`. The server
+limits 1–50, rejects malformed/non-canonical cursors before touching SQL,
+orders by \`occurred_at DESC, id DESC\` with a parameterized tuple comparison
+and only returns \`nextCursor\` when a further page exists. Every page goes
+through the authenticated tenant/owner RLS scope and decrypts existing
+sealed payloads with the correct canonical UUID/AAD. The cursor contains
+only a time-position and UUID, is NOT a bearer token and cannot authorize
+or select another account. No new personal-data store/backup obligation.
+CloudViewEpoch rejects old pages/errors after refresh, revoke, erase,
+logout or new login; the client deduplicates by UUID in RAM and never
+persists payloads, cursor or tokens to web storage. Offline failure
+preserves the previous timeline and permits an explicit retry. This is
+not immutable snapshot isolation across concurrent writes, encrypted
+offline/native cross-device parity or a GDPR completion.

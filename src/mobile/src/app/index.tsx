@@ -5,7 +5,7 @@ import { normalizeMemo } from '../domain/tags';
 import { configuredWebMode, type WebMode } from '../services/config';
 import { createBrowserAuth, type BrowserAuth } from '../services/webAuth';
 import { MemoryApi, type ConsentDto, type RemoteMemory } from '../services/memoryApi';
-import { CloudViewEpoch } from '../services/cloudViewEpoch';
+import { CloudViewEpoch, appendUniqueById } from '../services/cloudViewEpoch';
 
 type LocalMemo = { id: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
@@ -28,6 +28,9 @@ export default function Home() {
   const p = palettes[mode];
   const [draft, setDraft] = useState('');
   const [memos, setMemos] = useState<LocalMemo[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState('');
   const [authState, setAuthState] = useState<'checking' | 'signed-out' | 'signed-in' | 'error'>(
     webMode.kind === 'cloud' ? 'checking' : 'signed-out');
   const [grant, setGrant] = useState<ConsentDto | null>(null);
@@ -38,6 +41,8 @@ export default function Home() {
   const authRef = useRef<BrowserAuth | null>(null);
   const apiRef = useRef<MemoryApi | null>(null);
   const cloudViewRef = useRef(new CloudViewEpoch());
+  const pageRequestRef = useRef(0);
+  const pagingInProgressRef = useRef(false);
   const sessionEpochRef = useRef(0);
   const logoutInProgressRef = useRef(false);
   const retryRef = useRef<{ raw: string; entry: ReturnType<typeof normalizeMemo> } | null>(null);
@@ -51,6 +56,11 @@ export default function Home() {
   function clearSignedInView() {
     sessionEpochRef.current++;
     cloudViewRef.current.invalidate();
+    pageRequestRef.current++;
+    pagingInProgressRef.current = false;
+    setLoadingOlder(false);
+    setOlderError('');
+    setNextCursor(null);
     setAuthState('signed-out');
     setMemos([]);
     setGrant(null);
@@ -70,12 +80,42 @@ export default function Home() {
   async function refreshCloud(): Promise<boolean> {
     const api = apiRef.current;
     if (!api) throw new Error('Connessione API non disponibile.');
-    // Only the newest response from the CURRENT signed-in session may
-    // repopulate the timeline; a pending request outlives logout otherwise.
-    return cloudViewRef.current.refresh(api, (consents, recent) => {
+    // A new first-page refresh supersedes in-flight older pages. Neither
+    // previous-account nor old-page responses may repopulate the timeline.
+    pageRequestRef.current++;
+    pagingInProgressRef.current = false;
+    setLoadingOlder(false);
+    setOlderError('');
+    return cloudViewRef.current.refresh(api, (consents, page) => {
       setGrant(activeManualGrant(consents));
-      setMemos(recent.map(timelineMemo));
+      setMemos(page.items.map(timelineMemo));
+      setNextCursor(page.nextCursor);
     });
+  }
+
+  async function loadOlder() {
+    if (authState !== 'signed-in' || !apiRef.current || !nextCursor ||
+        busy || pagingInProgressRef.current) return;
+    const epoch = sessionEpochRef.current;
+    const request = ++pageRequestRef.current;
+    pagingInProgressRef.current = true;
+    setLoadingOlder(true);
+    setOlderError('');
+    try {
+      await cloudViewRef.current.append(apiRef.current, nextCursor, page => {
+        setMemos(current => appendUniqueById(
+          current, page.items.map(timelineMemo)));
+        setNextCursor(page.nextCursor);
+      });
+    } catch {
+      if (sameSession(epoch) && pageRequestRef.current === request)
+        setOlderError('Impossibile caricare le note precedenti. Riprova.');
+    } finally {
+      if (pageRequestRef.current === request) {
+        pagingInProgressRef.current = false;
+        if (sameSession(epoch)) setLoadingOlder(false);
+      }
+    }
   }
 
   useEffect(() => {
@@ -224,6 +264,8 @@ export default function Home() {
       if (!sameSession(epoch)) return;
       setGrant(null);
       setMemos([]);
+      setNextCursor(null);
+      setOlderError('');
       setDraft('');
       retryRef.current = null;
       setAccepted(false);
@@ -345,12 +387,16 @@ export default function Home() {
             ) : (
               <>
                 <Pressable testID="sync-reload" onPress={() => {
+                  if (busy) return;
                   const epoch = sessionEpochRef.current;
+                  setBusy(true);
                   void refreshCloud().catch(() => {
                     if (sameSession(epoch))
                       setNotice('Impossibile aggiornare la timeline. Riprova.');
+                  }).finally(() => {
+                    if (sameSession(epoch)) setBusy(false);
                   });
-                }}
+                }} disabled={busy}
                   accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16 }]}>
                   <Text style={[styles.buttonText, heading]}>Aggiorna timeline</Text>
                 </Pressable>
@@ -480,6 +526,24 @@ export default function Home() {
             <Text style={[styles.memoTime, { color: p.subtle }]}>{memo.time} · {memo.tags.join(', ')}</Text>
             <Text style={[styles.memoText, heading]}>{memo.content}</Text>
           </View>)}
+          {webMode.kind === 'cloud' && authState === 'signed-in' && nextCursor && (
+            <Pressable testID="load-older" accessibilityRole="button"
+              accessibilityLabel="Carica note precedenti"
+              disabled={busy || loadingOlder}
+              onPress={() => { void loadOlder(); }}
+              style={[styles.secondaryButton, { backgroundColor: p.card2,
+                marginTop: 12, opacity: busy || loadingOlder ? 0.5 : 1 }]}>
+              <Text style={[styles.buttonText, heading]}>
+                {loadingOlder ? 'Caricamento…' : 'Carica altre note'}
+              </Text>
+            </Pressable>
+          )}
+          {!!olderError && authState === 'signed-in' && (
+            <Text testID="older-error" accessibilityRole="alert"
+              style={[styles.hint, { color: p.text, marginTop: 8 }]}>
+              {olderError}
+            </Text>
+          )}
         </View>
       </View>
       <View style={styles.features}>

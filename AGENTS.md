@@ -52,6 +52,20 @@ Every `/api/v1` response MUST set server-origin `Cache-Control: no-store`, `X-Co
 
 The live `/api/v1` request-rate middleware MUST run AFTER authentication and authorization and use `ApiAtomicRequestRateBudget` to admit actor+tenant windows together. The former `UseRateLimiter` / named policy and standalone `ApiActorRequestRateBudget` plus `ApiTenantRequestRateBudget` are NOT the live middleware; they are retained only for isolated legacy tests. Derive both signed partition keys from validated OIDC claims, never client headers. A 429 must neither spend the other minute budget nor allocate a fresh partition; no body/DB work on denial. Keep strict global/tenant/actor bounded cardinality and fail-fast config. The process-local fixed windows are NOT distributed SaaS quota, WAF, media limit or GDPR readiness.
 
+## Authenticated personal timeline pages (#174 / ADR 0073)
+
+The legacy `GET /api/v1/memories` array contract MUST remain available.
+The explicit `GET /api/v1/memories/page` contract returns limited, no-store
+`{items,nextCursor}`; max 50, default 10. Cursor is an exact, canonical
+UTC ticks+UUID keyset position, NEVER a bearer or tenant selector. Each SQL
+query stays in `PostgresActorScope` using claims from signed OIDC/JWT and
+FORCE RLS, `expires_at>now()`, parameterized tuple comparison and sealed
+payload AAD validation. No OFFSET or skip-based paging. Web older-page loads
+must be invalidated on logout, refresh, consent revoke/grant or erasure;
+deduplicate by canonical UUID, preserve visible notes/cursor on offline
+failure, and never persist personal pages/cursors/tokens in browser storage.
+Do not assert immutable multi-page snapshots or native/offline parity.
+
 ## OIDC Web authorization source of truth
 
 `src/mobile/src/services/webAuth.ts` is only for browser OAuth and must use a maintained OIDC library, authorization code + PKCE S256, session state/nonce checks, ephemeral in-memory tokens, correct redirect /Omnia/, and strict public HTTPS/loopback config. Do not add localStorage/AsyncStorage for tokens, don't store password/client_secret or trust client-supplied tenant IDs. Web captures must be API-confirmed, error states explicit, and manual scoped consent obtained first. Native OIDC requires separate Expo AuthSession + SecureStore with device smoke before claiming parity.

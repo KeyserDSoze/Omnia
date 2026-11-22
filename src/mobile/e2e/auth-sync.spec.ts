@@ -114,7 +114,7 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
   // the persisted timeline only, then reload it from PostgreSQL to prove
   // that revocation blocked a write instead of merely hiding an item.
   const reloadedFromApi = page.waitForResponse(response =>
-    response.url().includes('/api/v1/memories?') && response.status() === 200);
+    response.url().includes('/api/v1/memories/page?') && response.status() === 200);
   await page.getByTestId('sync-reload').click();
   await reloadedFromApi;
   await expect(page.getByTestId('memory-timeline').getByText(
@@ -150,7 +150,7 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
   await expect(page.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
 
   const afterErasure = page.waitForResponse(response =>
-    response.url().includes('/api/v1/memories?') && response.status() === 200);
+    response.url().includes('/api/v1/memories/page?') && response.status() === 200);
   await page.getByTestId('sync-reload').click();
   await afterErasure;
   await expect(page.getByTestId('memory-timeline').getByText(memoText)).toHaveCount(0);
@@ -200,7 +200,7 @@ test('logout does not re-display a real PostgreSQL note from an in-flight refres
   let received!: () => void;
   const hold = new Promise<void>(resolve => { deliver = resolve; });
   const upstreamReceived = new Promise<void>(resolve => { received = resolve; });
-  await page.route('**/api/v1/memories?*', async route => {
+  await page.route('**/api/v1/memories/page?*', async route => {
     const upstream = await route.fetch();
     if (upstream.status() !== 200) throw new Error('Real API failed during race test');
     received();
@@ -209,7 +209,7 @@ test('logout does not re-display a real PostgreSQL note from an in-flight refres
   });
 
   const lateResponse = page.waitForResponse(response =>
-    response.url().includes('/api/v1/memories?') && response.status() === 200);
+    response.url().includes('/api/v1/memories/page?') && response.status() === 200);
   await page.getByTestId('sync-reload').click();
   await upstreamReceived;
   await page.getByTestId('auth-logout').click();
@@ -251,13 +251,13 @@ test('real API 401 clears the signed-in browser timeline and consent', async ({ 
   // Genuine ASP.NET JwtBearer authentication challenge. Playwright changes
   // only one outgoing request header; it does NOT forge the response, access
   // token or PostgreSQL data. No bearer => real API answers 401.
-  await page.route('**/api/v1/memories?*', async route => {
+  await page.route('**/api/v1/memories/page?*', async route => {
     const headers = { ...route.request().headers() };
     delete headers.authorization;
     await route.continue({ headers });
   });
   const rejected = page.waitForResponse(response =>
-    response.url().includes('/api/v1/memories?') && response.status() === 401);
+    response.url().includes('/api/v1/memories/page?') && response.status() === 401);
   await page.getByTestId('sync-reload').click();
   await rejected;
 
@@ -294,7 +294,7 @@ test('logout while real PostgreSQL capture POST is awaiting its response', async
   const accepted = new Promise<void>(resolve => { received = resolve; });
   let startedAfterLogout = 0;
   let loggedOut = false;
-  await page.route('**/api/v1/memories?*', async route => {
+  await page.route('**/api/v1/memories/page?*', async route => {
     if (loggedOut) startedAfterLogout++;
     await route.continue();
   });
@@ -384,7 +384,7 @@ test('real OIDC private API responses are never HTTP cacheable', async ({ page }
   await page.goto('/Omnia/');
   await browserLogin(page, user1);
   const privateRead = page.waitForResponse(response =>
-    response.url().includes('/api/v1/memories?') && response.status() === 200);
+    response.url().includes('/api/v1/memories/page?') && response.status() === 200);
   await page.getByTestId('sync-reload').click();
   const actual = await privateRead;
   // RED #173: real ASP.NET + JWT + PostgreSQL response currently omits

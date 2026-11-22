@@ -4,7 +4,8 @@ using Omnia.Domain;
 
 namespace Omnia.Infrastructure;
 
-public sealed class PostgresMemoryRepository(NpgsqlDataSource db, IEnvelopeEncryption crypto) : IMemoryRepository
+public sealed class PostgresMemoryRepository(NpgsqlDataSource db, IEnvelopeEncryption crypto)
+    : IMemoryRepository, IMemoryPageRepository
 {
     public async Task<MemoryEntry> UpsertAsync(MemoryEntry entry, CancellationToken ct)
     {
@@ -104,21 +105,76 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db, IEnvelopeEncry
         var output = new List<MemorySummary>();
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-        {
-            var id = reader.GetGuid(0);
-            var summary = reader.GetString(2);
-            var tags = reader.GetFieldValue<string[]>(3);
-            if (!reader.IsDBNull(6))
-            {
-                // Never accept a corrupted envelope as redacted/empty content.
-                var sealedContent = SealedMemoryPayload.Decrypt(crypto,
-                    reader.GetFieldValue<byte[]>(6), tenantId, ownerSubject, id);
-                summary = sealedContent.Summary;
-                tags = sealedContent.Tags;
-            }
-            output.Add(new MemorySummary(id, reader.GetString(1), summary, tags,
-                reader.GetFieldValue<DateTimeOffset>(4), reader.GetBoolean(5)));
-        }
+            output.Add(ReadSummary(reader, tenantId, ownerSubject));
         return output;
+    }
+
+    public async Task<MemoryPage> PageAsync(
+        string tenantId, string ownerSubject, int limit, MemoryPageCursor? before,
+        CancellationToken ct)
+    {
+        // Application validates 1..50, but guard direct repository consumers.
+        if (limit is < 1 or > 50)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        await using var scope = await PostgresActorScope.OpenAsync(
+            db, tenantId, ownerSubject, ct);
+        // Fixed, parameterized query variants preserve (occurred_at DESC, id DESC)
+        // and never trust a cursor to choose owner, tenant, schema or SQL.
+        var sql = before is null ? """
+            SELECT id, source, summary, tags, occurred_at, embedding IS NOT NULL, sealed_payload
+            FROM memory_entries
+            WHERE tenant_id = @tenant AND owner_sub = @subject
+              AND expires_at > now()
+            ORDER BY occurred_at DESC, id DESC LIMIT @limit
+            """ : """
+            SELECT id, source, summary, tags, occurred_at, embedding IS NOT NULL, sealed_payload
+            FROM memory_entries
+            WHERE tenant_id = @tenant AND owner_sub = @subject
+              AND expires_at > now()
+              AND (occurred_at, id) < (@beforeAt, @beforeId)
+            ORDER BY occurred_at DESC, id DESC LIMIT @limit
+            """;
+        await using var command = new NpgsqlCommand(
+            sql, scope.Connection, scope.Transaction);
+        command.Parameters.AddWithValue("tenant", tenantId);
+        command.Parameters.AddWithValue("subject", ownerSubject);
+        command.Parameters.AddWithValue("limit", limit + 1);
+        if (before is not null)
+        {
+            command.Parameters.AddWithValue("beforeAt", before.OccurredAt);
+            command.Parameters.AddWithValue("beforeId", before.Id);
+        }
+
+        var result = new List<MemorySummary>(limit + 1);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            result.Add(ReadSummary(reader, tenantId, ownerSubject));
+
+        var hasMore = result.Count > limit;
+        if (hasMore) result.RemoveAt(result.Count - 1);
+        var last = result.Count == 0 ? null : result[^1];
+        return new MemoryPage(result, hasMore && last is not null
+            ? new MemoryPageCursor(last.OccurredAt, last.Id).Encode()
+            : null);
+    }
+
+    private MemorySummary ReadSummary(
+        NpgsqlDataReader reader, string tenantId, string ownerSubject)
+    {
+        var id = reader.GetGuid(0);
+        var summary = reader.GetString(2);
+        var tags = reader.GetFieldValue<string[]>(3);
+        if (!reader.IsDBNull(6))
+        {
+            // Fail closed: encrypted rows are never allowed to fall back
+            // to redacted SQL placeholders after auth/RLS.
+            var sealedContent = SealedMemoryPayload.Decrypt(crypto,
+                reader.GetFieldValue<byte[]>(6), tenantId, ownerSubject, id);
+            summary = sealedContent.Summary;
+            tags = sealedContent.Tags;
+        }
+        return new MemorySummary(id, reader.GetString(1), summary, tags,
+            reader.GetFieldValue<DateTimeOffset>(4), reader.GetBoolean(5));
     }
 }

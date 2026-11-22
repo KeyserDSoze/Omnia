@@ -140,7 +140,12 @@ if (string.IsNullOrWhiteSpace(keyRingPath))
 builder.Services.AddSingleton(EnvelopeKeyRing.FromFile(keyRingPath));
 builder.Services.AddSingleton<IEnvelopeEncryption>(sp =>
     new AesGcmEnvelopeEncryption(sp.GetRequiredService<EnvelopeKeyRing>()));
-builder.Services.AddScoped<IMemoryRepository, PostgresMemoryRepository>();
+builder.Services.AddScoped<PostgresMemoryRepository>();
+builder.Services.AddScoped<IMemoryRepository>(sp =>
+    sp.GetRequiredService<PostgresMemoryRepository>());
+builder.Services.AddScoped<IMemoryPageRepository>(sp =>
+    sp.GetRequiredService<PostgresMemoryRepository>());
+builder.Services.AddScoped<IMemoryPageCatalog, MemoryPageCatalog>();
 builder.Services.AddScoped<PostgresConsentRepository>();
 builder.Services.AddScoped<IConsentRepository>(sp => sp.GetRequiredService<PostgresConsentRepository>());
 builder.Services.AddScoped<IConsentGuard>(sp => sp.GetRequiredService<PostgresConsentRepository>());
@@ -290,6 +295,24 @@ memories.MapPost("", async (CaptureMemoryCommand input, IMemoryCatalog catalog,
     }
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
     catch (JsonException) { return Results.BadRequest(new { error = "Invalid JSON content." }); }
+});
+// Additive keyset pagination; existing array-shaped GET /memories stays
+// unchanged for older clients. The cursor only positions a signed/RLS read.
+memories.MapGet("/page", async (IMemoryPageCatalog catalog,
+    ClaimsPrincipal user, int? limit, string? before, CancellationToken ct) =>
+{
+    var identity = Identity(user);
+    if (identity is null) return Results.Forbid();
+    try
+    {
+        var page = await catalog.PageAsync(
+            identity.Value.Tenant, identity.Value.Subject, limit, before, ct);
+        return Results.Ok(new { page.Items, page.NextCursor });
+    }
+    catch (ArgumentException)
+    {
+        return Results.BadRequest(new { error = "invalid_memory_page" });
+    }
 });
 memories.MapGet("", async (IMemoryCatalog catalog, ClaimsPrincipal user, int? limit, CancellationToken ct) =>
 {

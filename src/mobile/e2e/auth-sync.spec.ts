@@ -235,8 +235,12 @@ test('real API 401 clears the signed-in browser timeline and consent', async ({ 
 
   await page.goto('/Omnia/');
   await browserLogin(page, user1);
-  await page.getByTestId('consent-accept').click();
-  await page.getByTestId('grant-consent').click();
+  // Earlier real-browser scenarios may have left this synthetic user's
+  // consent active in the same disposable PostgreSQL test instance.
+  if (await page.getByTestId('consent-accept').count() > 0) {
+    await page.getByTestId('consent-accept').click();
+    await page.getByTestId('grant-consent').click();
+  }
   await expect(page.getByTestId('consent-state')).toContainText('Autorizzazione attiva');
 
   const privateNote = 'Nota privata su 401 ' + Date.now();

@@ -33,6 +33,11 @@ export class CloudApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
 }
 
+/** A prior login's HTTP result cannot be delivered into a newer session. */
+export class StaleCloudSessionError extends CloudApiError {
+  constructor() { super('Risposta di una sessione non più attiva.', 401); }
+}
+
 export type CloudSessionBoundary = {
   /** The active browser session generation, incremented on logout/401. */
   currentEpoch: () => number;
@@ -46,6 +51,11 @@ export class MemoryApi {
     private readonly token: () => Promise<string>,
     private readonly session?: CloudSessionBoundary
   ) { }
+
+  private assertCurrent(epoch: number): void {
+    if (this.session && this.session.currentEpoch() !== epoch)
+      throw new StaleCloudSessionError();
+  }
 
   private notifyUnauthorized(epoch: number): void {
     // A late 401 from an earlier signed-in account must NEVER logout a new one.
@@ -63,8 +73,7 @@ export class MemoryApi {
       this.notifyUnauthorized(epoch);
       throw error;
     }
-    if (this.session && this.session.currentEpoch() !== epoch)
-      throw new CloudApiError('Sessione cambiata. Accedi di nuovo.', 401);
+    this.assertCurrent(epoch);
     return bearer;
   }
 
@@ -86,8 +95,11 @@ export class MemoryApi {
         ...(body === undefined ? {} : { body: JSON.stringify(body) })
       });
     } catch {
+      this.assertCurrent(epoch);
       throw new CloudApiError('API non raggiungibile. Nota non sincronizzata, riprova.', 0);
     }
+    // Do not even deserialize an old account's HTTP result after logout.
+    this.assertCurrent(epoch);
     if (!response.ok) {
       if (response.status === 401) {
         this.notifyUnauthorized(epoch);
@@ -98,7 +110,9 @@ export class MemoryApi {
       throw new CloudApiError('Errore del server (' + response.status + '). Nessuna conferma di salvataggio.', response.status);
     }
     if (response.status === 204) return undefined as T;
-    return response.json() as Promise<T>;
+    const result = await response.json() as T;
+    this.assertCurrent(epoch); // body consumption may itself be delayed
+    return result;
   }
 
   listConsents(): Promise<ConsentDto[]> {
@@ -134,8 +148,10 @@ export class MemoryApi {
         headers: { Authorization: 'Bearer ' + bearer, Accept: 'application/json' }
       });
     } catch {
+      this.assertCurrent(epoch);
       throw new CloudApiError('Esportazione non disponibile: verifica connessione e accesso.', 0);
     }
+    this.assertCurrent(epoch);
     if (!response.ok) {
       if (response.status === 401) {
         this.notifyUnauthorized(epoch);
@@ -144,7 +160,9 @@ export class MemoryApi {
       if (response.status === 429) throw new CloudApiError('Troppe richieste. Riprova.', 429);
       throw new CloudApiError('Esportazione non riuscita (' + response.status + ').', response.status);
     }
-    return response.blob();
+    const archive = await response.blob();
+    this.assertCurrent(epoch); // never release a late private archive to the UI
+    return archive;
   }
 
   erasePersonalData(confirmation: string): Promise<ErasureReceipt> {

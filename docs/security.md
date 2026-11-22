@@ -1284,3 +1284,21 @@ outbound GET*, so a genuine .NET JWT middleware returns 401 rather than
 fabricating HTTP status in Playwright. This is local browser isolation,
 not identity-provider-wide revocation, native parity or GDPR erasure.
 P0 parents #39/#41/#1/#2 remain OPEN.
+
+
+## Web logout during in-flight API requests (#172 / ADR 0071)
+An explicit Expo Web logout must NEVER be silently rejected because a
+capture, consent change, primary PostgreSQL erasure or private export is
+busy. The browser invalidates its current OIDC session epoch and clears
+private UI synchronously before best-effort provider token revocation.
+Old mutation completions and errors cannot update the new session,
+trigger follow-up GETs or download a private archive; the MemoryApi
+transport rejects late JSON/blob bodies even if returned with 200/201.
+A request already authorized and accepted by the real PostgreSQL API
+can persist after logout: the user is told the result is uncertain
+until the next login, never misled into believing the backend write
+was cancelled. E2E uses real signed Keycloak requests and real server
+201/export bodies, deferring only browser response delivery.
+This is NOT a universal logout, token revocation across devices,
+offline media cancellation or complete GDPR erasure. RLS and source
+consent remain enforced by the server. #41/#39/#1/#2 stay open.

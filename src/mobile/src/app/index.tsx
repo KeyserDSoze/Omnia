@@ -39,6 +39,7 @@ export default function Home() {
   const apiRef = useRef<MemoryApi | null>(null);
   const cloudViewRef = useRef(new CloudViewEpoch());
   const sessionEpochRef = useRef(0);
+  const logoutInProgressRef = useRef(false);
   const retryRef = useRef<{ raw: string; entry: ReturnType<typeof normalizeMemo> } | null>(null);
   const [recording, setRecording] = useState(false);
   const [audioUri, setAudioUri] = useState<string | null>(null);
@@ -58,6 +59,12 @@ export default function Home() {
     setEraseAcknowledged(false);
     setDraft('');
     retryRef.current = null;
+    // Release a pending mutation's disabled controls after API 401/logout.
+    setBusy(false);
+  }
+
+  function sameSession(epoch: number): boolean {
+    return sessionEpochRef.current === epoch;
   }
 
   async function refreshCloud(): Promise<boolean> {
@@ -74,6 +81,7 @@ export default function Home() {
   useEffect(() => {
     if (webMode.kind !== 'cloud') return;
     let live = true;
+    const bootEpoch = sessionEpochRef.current;
     const auth = createBrowserAuth(webMode.config);
     authRef.current = auth;
     apiRef.current = new MemoryApi(webMode.config, () => auth.accessToken(), {
@@ -82,25 +90,28 @@ export default function Home() {
         // Triggered only by a current-session 401 (or missing local token).
         // Never await a provider here: clear all visible personal data first.
         clearSignedInView();
+        const epoch = sessionEpochRef.current;
         setNotice('Sessione non valida. Accedi di nuovo.');
         void auth.discardLocalSession().catch(() => {
-          setNotice('Sessione non valida. Chiudi la scheda e accedi di nuovo.');
+          if (sameSession(epoch))
+            setNotice('Sessione non valida. Chiudi la scheda e accedi di nuovo.');
         });
       }
     });
     void (async () => {
       try {
         await auth.handleRedirect();
+        if (!live || !sameSession(bootEpoch)) return;
         if (!await auth.hasSession()) {
-          if (live) setAuthState('signed-out');
+          if (live && sameSession(bootEpoch)) setAuthState('signed-out');
           return;
         }
-        if (live) {
+        if (live && sameSession(bootEpoch)) {
           setAuthState('signed-in');
           await refreshCloud();
         }
       } catch (error) {
-        if (live) {
+        if (live && sameSession(bootEpoch)) {
           setAuthState('error');
           setNotice(error instanceof Error ? error.message : 'Autenticazione non riuscita.');
         }
@@ -108,6 +119,7 @@ export default function Home() {
     })();
     return () => {
       live = false;
+      sessionEpochRef.current++;
       cloudViewRef.current.invalidate();
     };
   }, []);
@@ -119,54 +131,68 @@ export default function Home() {
   }
 
   async function logout() {
-    if (busy) return;
-    // Invalidate before any await: a pending authenticated GET may complete
-    // while OIDC token revocation is in flight. Clear personal UI immediately.
-    clearSignedInView();
-    setBusy(true);
+    // Never block a user-requested logout for a slow or unresponsive API.
+    // A POST already accepted by PostgreSQL is NOT rolled back by signout.
+    if (logoutInProgressRef.current) return;
+    logoutInProgressRef.current = true;
+    const hadPendingRequest = busy;
+    clearSignedInView(); // synchronous invalidation before provider I/O
+    setBusy(true); // block another login until local removal has completed
     let revoked = true;
     try { await authRef.current?.logout(); }
     catch { revoked = false; }
     finally {
+      logoutInProgressRef.current = false;
       setBusy(false);
-      setNotice(revoked ? 'Sessione locale chiusa e revoca token richiesta.' :
-        'Sessione locale chiusa; revoca remota non confermata. Chiudi anche la sessione del provider.');
+      const uncertainty = hadPendingRequest
+        ? ' Una richiesta già inviata potrebbe essere stata elaborata dal server. Verifica i dati al prossimo accesso.'
+        : '';
+      setNotice((revoked ? 'Sessione locale chiusa e revoca token richiesta.' :
+        'Sessione locale chiusa; revoca remota non confermata. Chiudi anche la sessione del provider.') +
+        uncertainty);
     }
   }
 
   async function grantConsent() {
     if (!accepted || !apiRef.current || busy || authState !== 'signed-in') return;
+    const epoch = sessionEpochRef.current;
     cloudViewRef.current.invalidate();
     setBusy(true);
     try {
       await apiRef.current.grantManualCapture();
-      if (!await refreshCloud()) return;
+      if (!sameSession(epoch) || !await refreshCloud() || !sameSession(epoch)) return;
       setAccepted(false);
       setNotice('Autorizzazione attiva per le tue note manuali (30 giorni).');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Consenso non salvato.');
-    } finally { setBusy(false); }
+      if (sameSession(epoch))
+        setNotice(error instanceof Error ? error.message : 'Consenso non salvato.');
+    } finally { if (sameSession(epoch)) setBusy(false); }
   }
 
   async function revokeConsent() {
     if (!grant || !apiRef.current || busy) return;
+    const epoch = sessionEpochRef.current;
     cloudViewRef.current.invalidate();
     setBusy(true);
     try {
       await apiRef.current.revokeConsent(grant.id);
+      if (!sameSession(epoch)) return;
       setGrant(null);
       setAccepted(false);
       setNotice('Consenso revocato: niente nuove note. I dati precedenti restano finché non saranno cancellati.');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Impossibile revocare il consenso.');
-    } finally { setBusy(false); }
+      if (sameSession(epoch))
+        setNotice(error instanceof Error ? error.message : 'Impossibile revocare il consenso.');
+    } finally { if (sameSession(epoch)) setBusy(false); }
   }
 
   async function exportPersonalData() {
     if (webMode.kind !== 'cloud' || authState !== 'signed-in' || !apiRef.current || busy) return;
+    const epoch = sessionEpochRef.current;
     setBusy(true);
     try {
       const archive = await apiRef.current.exportPersonalData();
+      if (!sameSession(epoch)) return; // never download an old session's archive
       if (archive.size === 0) throw new Error('Il server ha restituito un file vuoto.');
       const objectUrl = URL.createObjectURL(archive);
       try {
@@ -182,17 +208,20 @@ export default function Home() {
       }
       setNotice('Esportazione JSON avviata. Contiene dati riservati: conserva il file al sicuro.');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Esportazione non riuscita.');
-    } finally { setBusy(false); }
+      if (sameSession(epoch))
+        setNotice(error instanceof Error ? error.message : 'Esportazione non riuscita.');
+    } finally { if (sameSession(epoch)) setBusy(false); }
   }
 
   async function erasePersonalData() {
     if (webMode.kind !== 'cloud' || authState !== 'signed-in' || !apiRef.current ||
         busy || erasePhrase !== 'ELIMINA' || !eraseAcknowledged) return;
+    const epoch = sessionEpochRef.current;
     cloudViewRef.current.invalidate();
     setBusy(true);
     try {
       const receipt = await apiRef.current.erasePersonalData('ERASE_MY_DATA');
+      if (!sameSession(epoch)) return;
       setGrant(null);
       setMemos([]);
       setDraft('');
@@ -204,8 +233,9 @@ export default function Home() {
         receipt.deletedMemories + ' note e ' + receipt.deletedConsents +
         ' consensi. Backup e sistemi esterni non inclusi.');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Cancellazione non confermata. Riprova.');
-    } finally { setBusy(false); }
+      if (sameSession(epoch))
+        setNotice(error instanceof Error ? error.message : 'Cancellazione non confermata. Riprova.');
+    } finally { if (sameSession(epoch)) setBusy(false); }
   }
 
   async function captureText() {
@@ -231,18 +261,28 @@ export default function Home() {
       }
       const api = apiRef.current;
       if (!api) throw new Error('API non inizializzata.');
+      const epoch = sessionEpochRef.current;
       const entry = retryRef.current?.raw === normalized.content ? retryRef.current.entry : normalized;
       retryRef.current = { raw: normalized.content, entry };
       setBusy(true);
-      await api.save(entry);
-      retryRef.current = null;
-      setDraft('');
-      setNotice('Nota salvata nel cloud.');
-      try { await refreshCloud(); }
-      catch { setNotice('Nota salvata, ma la timeline non è aggiornata. Usa Aggiorna.'); }
+      try {
+        await api.save(entry);
+        if (!sameSession(epoch)) return;
+        retryRef.current = null;
+        setDraft('');
+        setNotice('Nota salvata nel cloud.');
+        try { await refreshCloud(); }
+        catch {
+          if (sameSession(epoch))
+            setNotice('Nota salvata, ma la timeline non è aggiornata. Usa Aggiorna.');
+        }
+      } catch (error) {
+        if (sameSession(epoch))
+          setNotice(error instanceof Error ? error.message : 'Salvataggio non confermato. Riprova.');
+      } finally { if (sameSession(epoch)) setBusy(false); }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Salvataggio non confermato. Riprova.');
-    } finally { setBusy(false); }
+      setNotice(error instanceof Error ? error.message : 'Nota non valida.');
+    }
   }
 
   async function captureAudio() {
@@ -304,8 +344,13 @@ export default function Home() {
               </Pressable>
             ) : (
               <>
-                <Pressable testID="sync-reload" onPress={() => { void refreshCloud().catch(() =>
-                  setNotice('Impossibile aggiornare la timeline. Riprova.')); }}
+                <Pressable testID="sync-reload" onPress={() => {
+                  const epoch = sessionEpochRef.current;
+                  void refreshCloud().catch(() => {
+                    if (sameSession(epoch))
+                      setNotice('Impossibile aggiornare la timeline. Riprova.');
+                  });
+                }}
                   accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16 }]}>
                   <Text style={[styles.buttonText, heading]}>Aggiorna timeline</Text>
                 </Pressable>

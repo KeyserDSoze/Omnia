@@ -332,3 +332,16 @@ timeline, then removes only the outgoing Authorization header so the real
 API produces 401; Vitest covers error/reordering cases. This is not a
 global Keycloak logout, token revocation of other devices or production
 privacy/GDPR signoff.
+
+
+## In-flight Web logout and pending operations (#172 / ADR 0071)
+Expo Web logout now preempts slow authenticated requests. It immediately
+clears local private notes, consent, drafts and confirmation, regardless
+of whether a capture or personal export is in flight. Late responses
+cannot repopulate another session's UI, trigger refreshes or download
+a private JSON export. An already accepted server mutation is NOT
+rolled back by closing the browser session: Omnia explicitly warns
+that a request may have been processed and must be checked at the
+next login. Real Keycloak/JWT/PostgreSQL browser scenarios and
+deferred-promise Vitest tests exercise the behavior; native/device
+and production privacy gates remain outstanding.

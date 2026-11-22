@@ -580,3 +580,51 @@ test('real Keycloak stale-device withdrawal revokes the newer same-scope consent
   expect(forbidden.status()).toBe(403);
   expect((await forbidden.json()).error).toBe('consent_required');
 });
+
+
+test('real Keycloak captures at the same clock instant must not collide (#177)', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!user1 || !password) throw new Error('Missing ephemeral real OIDC account');
+  await page.goto('/Omnia/');
+  await browserLogin(page, user1);
+  if (await page.getByTestId('consent-accept').count() > 0) {
+    await page.getByTestId('consent-accept').click();
+    await page.getByTestId('grant-consent').click();
+  }
+  await expect(page.getByTestId('consent-state')).toContainText('Autorizzazione attiva');
+
+  // Freeze only the capture ISO timestamp, not the Keycloak token clock:
+  // actual browser -> bearer JWT -> ASP.NET -> PostgreSQL remain untouched.
+  const fixedInstant = await page.evaluate(() => {
+    const instant = new Date().toISOString();
+    Date.prototype.toISOString = () => instant;
+    return instant;
+  });
+  const sent: Array<{ occurredAt: string; externalId: string }> = [];
+  page.on('request', req => {
+    if (req.method() === 'POST' && req.url().endsWith('/api/v1/memories')) {
+      const body = req.postDataJSON() as { occurredAt: string; externalId: string };
+      sent.push({ occurredAt: body.occurredAt, externalId: body.externalId });
+    }
+  });
+  const firstNote = 'Prima nota stesso istante ' + Date.now();
+  const secondNote = 'Seconda nota stesso istante ' + Date.now();
+  await page.getByTestId('memo-input').fill(firstNote);
+  const firstPost = page.waitForResponse(r =>
+    r.url().endsWith('/api/v1/memories') && r.request().method() === 'POST');
+  await page.getByTestId('save-memo').click();
+  expect((await firstPost).status()).toBe(200);
+  await expect(page.getByTestId('memory-timeline').getByText(firstNote)).toBeVisible();
+
+  await page.getByTestId('memo-input').fill(secondNote);
+  const secondPost = page.waitForResponse(r =>
+    r.url().endsWith('/api/v1/memories') && r.request().method() === 'POST');
+  await page.getByTestId('save-memo').click();
+  // RED: old Date-derived externalId causes a real PostgreSQL HTTP 409.
+  expect((await secondPost).status()).toBe(200);
+  await expect(page.getByTestId('memory-timeline').getByText(secondNote)).toBeVisible();
+  await expect(page.getByTestId('memory-timeline').getByText(firstNote)).toBeVisible();
+  expect(sent).toHaveLength(2);
+  expect(sent.map(s => s.occurredAt)).toEqual([fixedInstant, fixedInstant]);
+  expect(sent[0].externalId).not.toBe(sent[1].externalId);
+});

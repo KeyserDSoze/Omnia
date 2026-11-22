@@ -64,7 +64,9 @@ var actorRequestLimiter = new ApiActorRequestWindowLimiter(
     builder.Configuration.GetValue<int?>("RateLimit:RequestsPerMinute") ??
     ApiActorRequestWindowLimiter.DefaultRequestsPerMinute,
     builder.Configuration.GetValue<int?>("RateLimit:MaxTrackedActors") ??
-    ApiActorRequestWindowLimiter.DefaultMaxTrackedActors);
+    ApiActorRequestWindowLimiter.DefaultMaxTrackedActors,
+    maxTrackedActorsPerTenant: builder.Configuration.GetValue<int?>(
+        "RateLimit:MaxTrackedActorsPerTenant"));
  // Tenant-wide request/minute budget is separate from existing actor policy.
  // Bounded windows are stored only on this process, never across replicas.
 var tenantRequestLimiter = new ApiTenantRequestWindowLimiter(
@@ -202,7 +204,8 @@ app.UseCors("browser");
 app.UseAuthentication();
 app.UseAuthorization();
 // All quota keys come from OIDC-validated claims AFTER auth+authorization.
-// Per-actor minute admission must precede tenant minute admission; both
+// Per-actor minute admission is tenant-partition bounded and precedes
+// tenant minute admission; both
 // return fail-fast 429 without touching JSON bytes or endpoint/DB handlers.
 app.Use((context, next) =>
     ApiActorRequestRateBudget.InvokeAsync(context, next, actorRequestLimiter));

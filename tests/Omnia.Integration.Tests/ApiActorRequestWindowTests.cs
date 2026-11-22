@@ -25,9 +25,9 @@ public sealed class ApiActorRequestWindowTests
         Assert.Equal(120, limiter.RequestsPerMinute);
         Assert.Equal(8192, limiter.MaxTrackedActors);
         Assert.Equal(0, limiter.TrackedActorPartitions);
-        Assert.Throws<ArgumentException>(() => limiter.TryAcquire(" ", out _));
+        Assert.Throws<ArgumentException>(() => limiter.TryAcquire(" ", "tenant:fixture", out _));
         Assert.Throws<ArgumentException>(() =>
-            limiter.TryAcquire(new string('x', 513), out _));
+            limiter.TryAcquire(new string('x', 513), "tenant:fixture", out _));
         Assert.Equal(0, limiter.TrackedActorPartitions);
     }
 
@@ -36,16 +36,16 @@ public sealed class ApiActorRequestWindowTests
     {
         var clock = new ManualClock();
         var limiter = new ApiActorRequestWindowLimiter(2, 3, clock);
-        Assert.True(limiter.TryAcquire("account:one", out var retry));
+        Assert.True(limiter.TryAcquire("account:one", "tenant:fixture", out var retry));
         Assert.Equal(0, retry);
-        Assert.True(limiter.TryAcquire("account:one", out retry));
-        Assert.False(limiter.TryAcquire("account:one", out retry));
+        Assert.True(limiter.TryAcquire("account:one", "tenant:fixture", out retry));
+        Assert.False(limiter.TryAcquire("account:one", "tenant:fixture", out retry));
         Assert.Equal(60, retry);
         clock.Advance(TimeSpan.FromSeconds(59));
-        Assert.False(limiter.TryAcquire("account:one", out retry));
+        Assert.False(limiter.TryAcquire("account:one", "tenant:fixture", out retry));
         Assert.Equal(1, retry);
         clock.Advance(TimeSpan.FromSeconds(1));
-        Assert.True(limiter.TryAcquire("account:one", out retry));
+        Assert.True(limiter.TryAcquire("account:one", "tenant:fixture", out retry));
         Assert.Equal(0, retry);
         Assert.Equal(1, limiter.TrackedActorPartitions);
     }
@@ -55,20 +55,20 @@ public sealed class ApiActorRequestWindowTests
     {
         var clock = new ManualClock();
         var limiter = new ApiActorRequestWindowLimiter(3, 2, clock);
-        Assert.True(limiter.TryAcquire("account:first", out _));
-        Assert.True(limiter.TryAcquire("account:second", out _));
-        Assert.False(limiter.TryAcquire("account:third", out var retry));
+        Assert.True(limiter.TryAcquire("account:first", "tenant:fixture", out _));
+        Assert.True(limiter.TryAcquire("account:second", "tenant:fixture", out _));
+        Assert.False(limiter.TryAcquire("account:third", "tenant:fixture", out var retry));
         Assert.InRange(retry, 1, 60);
         Assert.Equal(2, limiter.TrackedActorPartitions);
-        Assert.True(limiter.TryAcquire("account:first", out _));
-        Assert.True(limiter.TryAcquire("account:first", out _));
-        Assert.False(limiter.TryAcquire("account:first", out _));
-        Assert.False(limiter.TryAcquire("account:third", out _));
+        Assert.True(limiter.TryAcquire("account:first", "tenant:fixture", out _));
+        Assert.True(limiter.TryAcquire("account:first", "tenant:fixture", out _));
+        Assert.False(limiter.TryAcquire("account:first", "tenant:fixture", out _));
+        Assert.False(limiter.TryAcquire("account:third", "tenant:fixture", out _));
 
         clock.Advance(TimeSpan.FromMinutes(1));
-        Assert.True(limiter.TryAcquire("account:third", out _));
+        Assert.True(limiter.TryAcquire("account:third", "tenant:fixture", out _));
         Assert.Equal(1, limiter.TrackedActorPartitions);
-        Assert.True(limiter.TryAcquire("account:first", out _));
+        Assert.True(limiter.TryAcquire("account:first", "tenant:fixture", out _));
     }
 
     [Fact]
@@ -78,11 +78,11 @@ public sealed class ApiActorRequestWindowTests
         var limiter = new ApiActorRequestWindowLimiter(1, 2, clock);
         for (var i = 0; i < 1000; i++)
         {
-            Assert.True(limiter.TryAcquire($"account:test:{i}", out _));
+            Assert.True(limiter.TryAcquire($"account:test:{i}", "tenant:fixture", out _));
             Assert.InRange(limiter.TrackedActorPartitions, 1, 2);
             clock.Advance(TimeSpan.FromMinutes(1));
         }
-        Assert.True(limiter.TryAcquire("account:last", out _));
+        Assert.True(limiter.TryAcquire("account:last", "tenant:fixture", out _));
         Assert.Equal(1, limiter.TrackedActorPartitions);
     }
 
@@ -91,13 +91,13 @@ public sealed class ApiActorRequestWindowTests
     {
         var limiter = new ApiActorRequestWindowLimiter(7, 2, new ManualClock());
         var admitted = await Task.WhenAll(Enumerable.Range(0, 128)
-            .Select(i => Task.Run(() => limiter.TryAcquire("account:first", out _))));
+            .Select(i => Task.Run(() => limiter.TryAcquire("account:first", "tenant:fixture", out _))));
         Assert.Equal(7, admitted.Count(x => x));
         Assert.Equal(1, limiter.TrackedActorPartitions);
-        Assert.False(limiter.TryAcquire("account:first", out var retry));
+        Assert.False(limiter.TryAcquire("account:first", "tenant:fixture", out var retry));
         Assert.InRange(retry, 1, 60);
-        Assert.True(limiter.TryAcquire("account:second", out _));
-        Assert.False(limiter.TryAcquire("account:third", out _));
+        Assert.True(limiter.TryAcquire("account:second", "tenant:fixture", out _));
+        Assert.False(limiter.TryAcquire("account:third", "tenant:fixture", out _));
     }
 
     [Fact]
@@ -170,6 +170,60 @@ public sealed class ApiActorRequestWindowTests
         }, limiter);
         Assert.True(called);
         Assert.Equal(StatusCodes.Status200OK, health.Response.StatusCode);
+    }
+
+
+    [Fact]
+    public void SignedTenantActorPartitionsAreBoundedAndReclaimedAfterExpiry()
+    {
+        var clock = new ManualClock();
+        var limiter = new ApiActorRequestWindowLimiter(
+            5, 3, clock, maxTrackedActorsPerTenant: 1);
+        Assert.Equal(1, limiter.MaxTrackedActorsPerTenant);
+        Assert.True(limiter.TryAcquire("account:a1", "tenant:A", out _));
+        Assert.False(limiter.TryAcquire("account:a2", "tenant:A", out var retry));
+        Assert.InRange(retry, 1, 60);
+        Assert.Equal(1, limiter.TrackedActorPartitions);
+        Assert.True(limiter.TryAcquire("account:a1", "tenant:A", out _));
+        Assert.True(limiter.TryAcquire("account:b1", "tenant:B", out _));
+        Assert.True(limiter.TryAcquire("account:c1", "tenant:C", out _));
+        Assert.Equal(3, limiter.TrackedActorPartitions);
+        Assert.False(limiter.TryAcquire("account:d1", "tenant:D", out _));
+
+        clock.Advance(TimeSpan.FromSeconds(60));
+        Assert.True(limiter.TryAcquire("account:a2", "tenant:A", out _));
+        Assert.Equal(1, limiter.TrackedActorPartitions);
+        Assert.True(limiter.TryAcquire("account:b2", "tenant:B", out _));
+    }
+
+    [Fact]
+    public async Task ConcurrentNewSubjectsCannotExceedOneTenantsPartitionCap()
+    {
+        var limiter = new ApiActorRequestWindowLimiter(
+            10, 4, new ManualClock(), maxTrackedActorsPerTenant: 2);
+        var results = await Task.WhenAll(Enumerable.Range(0, 128)
+            .Select(i => Task.Run(() =>
+                limiter.TryAcquire("account:" + i, "tenant:A", out _))));
+        Assert.Equal(2, results.Count(x => x));
+        Assert.Equal(2, limiter.TrackedActorPartitions);
+        Assert.True(limiter.TryAcquire("account:other", "tenant:B", out _));
+        Assert.Equal(3, limiter.TrackedActorPartitions);
+    }
+
+    [Fact]
+    public void PerTenantActorCardinalityMustRejectUnsafeConfiguration()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiActorRequestWindowLimiter(10, 3, maxTrackedActorsPerTenant: 0));
+        Assert.Throws<InvalidOperationException>(() =>
+            new ApiActorRequestWindowLimiter(10, 3, maxTrackedActorsPerTenant: 4));
+        var limiter = new ApiActorRequestWindowLimiter(10, 3);
+        Assert.Equal(3, limiter.MaxTrackedActorsPerTenant);
+        Assert.Throws<ArgumentException>(() =>
+            limiter.TryAcquire("account:a", " ", out _));
+        Assert.Throws<ArgumentException>(() =>
+            limiter.TryAcquire("account:a", new string('t', 257), out _));
+        Assert.Equal(0, limiter.TrackedActorPartitions);
     }
 
     private static DefaultHttpContext Context(string tenant, string actor, Stream body)

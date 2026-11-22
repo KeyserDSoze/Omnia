@@ -21,7 +21,9 @@ public static class ApiActorRequestRateBudget
         }
 
         if (!limiter.TryAcquire(
-            ApiRateLimitPolicy.PartitionKey(context), out var retryAfterSeconds))
+            ApiRateLimitPolicy.PartitionKey(context),
+            ApiRateLimitPolicy.TenantPartitionKey(context),
+            out var retryAfterSeconds))
         {
             await ApiRateBudgetRejection.WriteAsync(context, retryAfterSeconds);
             return;

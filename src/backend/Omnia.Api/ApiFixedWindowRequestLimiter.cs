@@ -3,7 +3,8 @@ namespace Omnia.Api;
 /// <summary>
 /// One process's bounded 60-second fixed windows, shared by actor and tenant
 /// quota adapters. A single lock makes admission and lazy expiry atomic.
-/// Never queue, retain credentials, log identities or grow beyond max keys.
+/// Optional per-group partition ceilings prevent one signed tenant from
+/// monopolizing the global actor window dictionary. No queues or log keys.
 /// </summary>
 internal sealed class ApiFixedWindowRequestLimiter
 {
@@ -16,16 +17,22 @@ internal sealed class ApiFixedWindowRequestLimiter
     private readonly int _requestLimit;
     private readonly int _maxPartitions;
     private readonly int _maximumKeyLength;
+    private readonly int? _maxPartitionsPerGroup;
     private readonly Dictionary<string, Window> _windows = new(StringComparer.Ordinal);
+    // Group cardinality is bounded by the number of active window entries;
+    // no independent unbounded tenant cache is introduced.
+    private readonly Dictionary<string, int> _groupCounts = new(StringComparer.Ordinal);
     private DateTimeOffset _nextSweepAt = DateTimeOffset.MinValue;
 
     public ApiFixedWindowRequestLimiter(
-        int requestLimit, int maxPartitions, int maximumKeyLength, TimeProvider? clock)
+        int requestLimit, int maxPartitions, int maximumKeyLength,
+        TimeProvider? clock, int? maxPartitionsPerGroup = null)
     {
         _requestLimit = requestLimit;
         _maxPartitions = maxPartitions;
         _maximumKeyLength = maximumKeyLength;
         _clock = clock ?? TimeProvider.System;
+        _maxPartitionsPerGroup = maxPartitionsPerGroup;
     }
 
     public int TrackedPartitions
@@ -34,21 +41,28 @@ internal sealed class ApiFixedWindowRequestLimiter
     }
 
     /// <summary>
-    /// Called only with signed-claims-derived actor or tenant partitions.
-    /// Expired keys are removed lazily once each 15s on request traffic,
-    /// never on a background task or full O(N) scan for every 429 denial.
+    /// Called only with identity partitions derived from signed OIDC claims.
+    /// Actor calls MUST supply the signed tenant partition as groupKey.
+    /// Expired windows and their group counts are removed in the same lock.
     /// </summary>
-    public bool TryAcquire(string partitionKey, out int retryAfterSeconds)
+    public bool TryAcquire(
+        string partitionKey, out int retryAfterSeconds, string? groupKey = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(partitionKey);
         if (partitionKey.Length > _maximumKeyLength)
             throw new ArgumentException("Rate partition key is too long.",
                 nameof(partitionKey));
+        if (_maxPartitionsPerGroup.HasValue &&
+            (string.IsNullOrWhiteSpace(groupKey) || groupKey.Length > 256))
+            throw new ArgumentException("Signed tenant partition is required and bounded.",
+                nameof(groupKey));
 
-        var now = _clock.GetUtcNow();
         retryAfterSeconds = 0;
         lock (_gate)
         {
+            // Obtain time AFTER taking the admission lock to avoid a stale
+            // timestamp from an earlier, delayed contender.
+            var now = _clock.GetUtcNow();
             if (now >= _nextSweepAt)
             {
                 RemoveExpired(now);
@@ -57,9 +71,13 @@ internal sealed class ApiFixedWindowRequestLimiter
 
             if (_windows.TryGetValue(partitionKey, out var current))
             {
+                if (!string.Equals(current.GroupKey, groupKey, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "Rate partition cannot change its tenant group.");
+
                 if (current.EndsAt <= now)
                 {
-                    _windows[partitionKey] = new Window(now + WindowDuration, 1);
+                    _windows[partitionKey] = new Window(now + WindowDuration, 1, groupKey);
                     return true;
                 }
 
@@ -76,31 +94,48 @@ internal sealed class ApiFixedWindowRequestLimiter
                 return true;
             }
 
-            if (_windows.Count >= _maxPartitions)
+            if (_maxPartitionsPerGroup is int perGroup &&
+                _groupCounts.GetValueOrDefault(groupKey!) >= perGroup)
             {
-                // Never evict an active actor/tenant to admit a new key.
-                // Hint when the next cleanup opportunity arrives; avoid
-                // scanning O(N) partitions on every denial under attack.
-                // The hint is not a guarantee that capacity will be free.
+                // Keep existing active actors admitted; new actors in this
+                // tenant fail closed, without evicting another tenant.
                 retryAfterSeconds = RetrySeconds(_nextSweepAt - now);
                 return false;
             }
 
-            _windows.Add(partitionKey, new Window(now + WindowDuration, 1));
+            if (_windows.Count >= _maxPartitions)
+            {
+                // No active eviction and no O(N) scan on every 429.
+                // Retry-After is a hint, not a promise of capacity.
+                retryAfterSeconds = RetrySeconds(_nextSweepAt - now);
+                return false;
+            }
+
+            _windows.Add(partitionKey, new Window(now + WindowDuration, 1, groupKey));
+            if (groupKey is not null)
+                _groupCounts[groupKey] = _groupCounts.GetValueOrDefault(groupKey) + 1;
             return true;
         }
     }
 
     private void RemoveExpired(DateTimeOffset now)
     {
-        foreach (var key in _windows
-            .Where(x => x.Value.EndsAt <= now)
-            .Select(x => x.Key).ToArray())
-            _windows.Remove(key);
+        foreach (var entry in _windows.Where(x => x.Value.EndsAt <= now).ToArray())
+        {
+            _windows.Remove(entry.Key);
+            if (entry.Value.GroupKey is not { } group)
+                continue;
+            var remaining = _groupCounts[group] - 1;
+            if (remaining == 0)
+                _groupCounts.Remove(group);
+            else
+                _groupCounts[group] = remaining;
+        }
     }
 
     private static int RetrySeconds(TimeSpan remaining) =>
         (int)Math.Clamp(Math.Ceiling(remaining.TotalSeconds), 1, WindowSeconds);
 
-    private readonly record struct Window(DateTimeOffset EndsAt, int Accepted);
+    private readonly record struct Window(
+        DateTimeOffset EndsAt, int Accepted, string? GroupKey);
 }

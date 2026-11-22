@@ -399,3 +399,57 @@ test('real OIDC private API responses are never HTTP cacheable', async ({ page }
   expect(challenge.headers()['cache-control']).toBe('no-store');
   expect(challenge.headers()['x-content-type-options']).toBe('nosniff');
 });
+
+
+test('real owner can load older encrypted PostgreSQL notes beyond the first timeline page', async ({ page }) => {
+  test.setTimeout(150_000);
+  if (!user1 || !password) throw new Error('Missing ephemeral OIDC test account');
+  await page.goto('/Omnia/');
+  await browserLogin(page, user1);
+  if (await page.getByTestId('consent-accept').count() > 0) {
+    await page.getByTestId('consent-accept').click();
+    await page.getByTestId('grant-consent').click();
+  }
+  await expect(page.getByTestId('consent-state')).toContainText('Autorizzazione attiva');
+
+  // Genuine UI -> Keycloak/JWT -> .NET API -> real PostgreSQL with RLS and
+  // sealed payload. No fake response or bypass of consent.
+  const prefix = 'Cronologia paginata E2E ' + Date.now();
+  const first = prefix + ' numero 00';
+  for (let n = 0; n < 12; n++) {
+    const note = prefix + ' numero ' + String(n).padStart(2, '0');
+    const stored = page.waitForResponse(r =>
+      r.url().endsWith('/api/v1/memories') &&
+      r.request().method() === 'POST' && r.status() === 200);
+    await page.getByTestId('memo-input').fill(note);
+    await page.getByTestId('save-memo').click();
+    await stored;
+    await expect(page.getByTestId('notice')).toContainText('Nota salvata');
+    await expect(page.getByTestId('memo-input')).toHaveValue('');
+  }
+
+  // RED: the previous UI only fetched 30 and offered no way to browse older
+  // rows. New UX initially shows 10 and must expose a real next-page cursor.
+  await expect(page.getByTestId('load-older')).toBeVisible();
+  await expect(page.getByTestId('memory-timeline').getByText(first)).toHaveCount(0);
+  const pageTwo = page.waitForResponse(r =>
+    r.url().includes('/api/v1/memories/page?') &&
+    r.url().includes('before=') &&
+    r.status() === 200);
+  await page.getByTestId('load-older').click();
+  const response = await pageTwo;
+  expect(response.headers()['cache-control']).toBe('no-store');
+  await expect(page.getByTestId('memory-timeline').getByText(first)).toBeVisible();
+  expect(await page.getByTestId('memory-timeline').getByText(first).count()).toBe(1);
+
+  await page.getByTestId('auth-logout').click();
+  await expect(page.getByTestId('auth-login')).toBeVisible();
+  await expect(page.getByTestId('memory-timeline').getByText(first)).toHaveCount(0);
+  await expect(page.getByTestId('load-older')).toHaveCount(0);
+
+  // After an actual new OIDC login the first page comes from the same
+  // canonical PostgreSQL database, not an offline/session cache.
+  await browserLogin(page, user1);
+  await expect(page.getByTestId('memory-timeline').getByText(
+    prefix + ' numero 11')).toBeVisible();
+});

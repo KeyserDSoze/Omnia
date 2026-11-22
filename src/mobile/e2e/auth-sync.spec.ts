@@ -227,3 +227,45 @@ test('logout does not re-display a real PostgreSQL note from an in-flight refres
   expect(browserStores.local.join(' ')).not.toContain('oidc.user');
   expect(browserStores.session.join(' ')).not.toContain('oidc.user');
 });
+
+
+test('real API 401 clears the signed-in browser timeline and consent', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!user1 || !password) throw new Error('Missing ephemeral OIDC test account');
+
+  await page.goto('/Omnia/');
+  await browserLogin(page, user1);
+  await page.getByTestId('consent-accept').click();
+  await page.getByTestId('grant-consent').click();
+  await expect(page.getByTestId('consent-state')).toContainText('Autorizzazione attiva');
+
+  const privateNote = 'Nota privata su 401 ' + Date.now();
+  await page.getByTestId('memo-input').fill(privateNote);
+  await page.getByTestId('save-memo').click();
+  await expect(page.getByTestId('memory-timeline').getByText(privateNote)).toBeVisible();
+
+  // Genuine ASP.NET JwtBearer authentication challenge. Playwright changes
+  // only one outgoing request header; it does NOT forge the response, access
+  // token or PostgreSQL data. No bearer => real API answers 401.
+  await page.route('**/api/v1/memories?*', async route => {
+    const headers = { ...route.request().headers() };
+    delete headers.authorization;
+    await route.continue({ headers });
+  });
+  const rejected = page.waitForResponse(response =>
+    response.url().includes('/api/v1/memories?') && response.status() === 401);
+  await page.getByTestId('sync-reload').click();
+  await rejected;
+
+  // RED #171: old UI merely shows "Impossibile aggiornare timeline", leaving
+  // the previous signed-in user and personal note visible after API 401.
+  await expect(page.getByTestId('auth-login')).toBeVisible();
+  await expect(page.getByTestId('memory-timeline').getByText(privateNote)).toHaveCount(0);
+  await expect(page.getByTestId('consent-state')).toHaveCount(0);
+  await expect(page.getByTestId('notice')).toContainText('Sessione non valida');
+  const stores = await page.evaluate(() => ({
+    local: Object.keys(localStorage), session: Object.keys(sessionStorage)
+  }));
+  expect(stores.local.join(' ')).not.toContain('oidc.user');
+  expect(stores.session.join(' ')).not.toContain('oidc.user');
+});

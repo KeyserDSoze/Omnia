@@ -303,7 +303,8 @@ test('logout while real PostgreSQL capture POST is awaiting its response', async
     // Real signed OIDC bearer, real endpoint and PostgreSQL commit. Only
     // delivery of the genuine accepted response is deferred, never faked.
     const server = await route.fetch();
-    expect(server.status()).toBe(201);
+    // Omnia's capture contract returns 200 OK with canonical row identity.
+    expect(server.status()).toBe(200);
     received();
     await hold;
     await route.fulfill({ response: server });

@@ -96,4 +96,86 @@ public sealed class ConsentPersistenceTests
             MemoryEntry.Capture(tenant, "u", source, "expired", "text/plain",
                 "Synthetic", "{}", "Synthetic", [], now), CancellationToken.None));
     }
+
+
+    [Fact]
+    public async Task RevokingHistoricalGrantIdWithdrawsCurrentSameScopeAfterAnotherDeviceRegrants()
+    {
+        // Restricted PostgreSQL runtime role, real FORCE RLS and actor locks.
+        // The original grant is deliberately no longer active when revoked.
+        await using var db = await OpenAsync();
+        var repo = new PostgresConsentRepository(db);
+        var memory = new PostgresMemoryRepository(db, TestEnvelopeCrypto.Create());
+        var tenant = "stale-revoke-" + Guid.NewGuid().ToString("N");
+        var source = "manual-" + Guid.NewGuid().ToString("N");
+        var unrelatedSource = "calendar-" + Guid.NewGuid().ToString("N");
+        var now = DateTimeOffset.UtcNow;
+
+        Task<ConsentGrant> Grant(string t, string subject, string s) =>
+            repo.GrantAsync(ConsentGrant.Issue(t, subject, s,
+                ConsentGrant.MemoryCapture, "privacy-v1", DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddDays(7)), default);
+
+        var stale = await Grant(tenant, "alice", source);
+        var current = await Grant(tenant, "alice", source);
+        var otherSource = await Grant(tenant, "alice", unrelatedSource);
+        var otherOwner = await Grant(tenant, "bob", source);
+        var otherTenant = await Grant(tenant + "-else", "alice", source);
+
+        var before = await repo.ListAsync(tenant, "alice", default);
+        var superseded = Assert.Single(before, g => g.Id == stale.Id);
+        var originalRevokedAt = Assert.IsType<DateTimeOffset>(superseded.RevokedAt);
+        Assert.Contains(before, g => g.Id == current.Id && g.IsActiveAt(DateTimeOffset.UtcNow));
+        Assert.False(superseded.IsActiveAt(DateTimeOffset.UtcNow));
+
+        // UI/device A still holds stale.Id, while device B already issued current.
+        // RED: old implementation returns true but only updates stale, leaving
+        // current active and allowing new ingestion despite apparent withdrawal.
+        Assert.True(await repo.RevokeAsync(tenant, "alice", stale.Id,
+            DateTimeOffset.UtcNow, default));
+        var after = await repo.ListAsync(tenant, "alice", default);
+        Assert.Equal(originalRevokedAt,
+            Assert.Single(after, g => g.Id == stale.Id).RevokedAt);
+        Assert.NotNull(Assert.Single(after, g => g.Id == current.Id).RevokedAt);
+        await Assert.ThrowsAsync<ConsentRequiredException>(() =>
+            repo.EnsureActiveAsync(tenant, "alice", source,
+                ConsentGrant.MemoryCapture, default));
+
+        var denied = MemoryEntry.Capture(tenant, "alice", source,
+            "post-withdrawal-" + Guid.NewGuid().ToString("N"), "text/plain",
+            "Synthetic after withdrawal", "{}", "Synthetic after withdrawal",
+            [], now);
+        await Assert.ThrowsAsync<ConsentRequiredException>(() =>
+            memory.UpsertAsync(denied, default));
+
+        // Revoking an old handle must never affect a different purpose/source
+        // or tenant/owner, even if they share the same source text.
+        await repo.EnsureActiveAsync(tenant, "alice", unrelatedSource,
+            ConsentGrant.MemoryCapture, default);
+        await repo.EnsureActiveAsync(tenant, "bob", source,
+            ConsentGrant.MemoryCapture, default);
+        await repo.EnsureActiveAsync(tenant + "-else", "alice", source,
+            ConsentGrant.MemoryCapture, default);
+        Assert.Contains(after, g => g.Id == otherSource.Id && g.RevokedAt is null);
+        Assert.False(await repo.RevokeAsync(tenant, "bob", stale.Id,
+            DateTimeOffset.UtcNow, default));
+        Assert.False(await repo.RevokeAsync(tenant + "-else", "alice", stale.Id,
+            DateTimeOffset.UtcNow, default));
+        Assert.False(await repo.RevokeAsync(tenant, "alice", Guid.NewGuid(),
+            DateTimeOffset.UtcNow, default));
+
+        // Repeating a valid withdrawal is idempotent; a NEW deliberate
+        // acceptance can grant the scope again, never silently after revoke.
+        Assert.True(await repo.RevokeAsync(tenant, "alice", stale.Id,
+            DateTimeOffset.UtcNow, default));
+        var renewed = await Grant(tenant, "alice", source);
+        await repo.EnsureActiveAsync(tenant, "alice", source,
+            ConsentGrant.MemoryCapture, default);
+        Assert.Null(Assert.Single(await repo.ListAsync(tenant, "alice", default),
+            g => g.Id == renewed.Id).RevokedAt);
+        Assert.NotEqual(current.Id, renewed.Id);
+        Assert.NotEqual(otherOwner.Id, renewed.Id);
+        Assert.NotEqual(otherTenant.Id, renewed.Id);
+    }
+
 }

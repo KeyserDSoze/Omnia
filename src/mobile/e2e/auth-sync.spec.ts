@@ -506,3 +506,77 @@ test('real signed capture idempotency rejects a different body with the same ext
   await expect(page.getByTestId('memory-timeline').getByText(originalNote + ' ALTERATO'))
     .toHaveCount(0);
 });
+
+
+test('real Keycloak stale-device withdrawal revokes the newer same-scope consent', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!user1 || !password) throw new Error('Missing ephemeral real OIDC account');
+  await page.goto('/Omnia/');
+  await browserLogin(page, user1);
+
+  // Independent of preceding E2E cases: start from an explicitly revoked
+  // manual source, then grant G1 via the browser under actual signed JWT.
+  if (await page.getByTestId('revoke-consent').count() > 0) {
+    await page.getByTestId('revoke-consent').click();
+    await expect(page.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
+  }
+  await page.getByTestId('consent-accept').click();
+  await page.getByTestId('grant-consent').click();
+  await expect(page.getByTestId('consent-state')).toContainText('Autorizzazione attiva');
+
+  let regrantStatus = -1;
+  let originalDeleteStatus = -1;
+  let signedBearer = '';
+  await page.route('**/api/v1/consents/*', async route => {
+    if (route.request().method() !== 'DELETE') return route.continue();
+    signedBearer = route.request().headers()['authorization'] ?? '';
+    expect(signedBearer).toMatch(/^Bearer .{20,}$/);
+
+    // Orchestrate the genuine two-device race: before G1's DELETE reaches
+    // ASP.NET, another authorized action creates G2. No fake token, response
+    // or DB mutation: actual Keycloak bearer and .NET consent POST.
+    const g2 = await page.request.post('http://127.0.0.1:8080/api/v1/consents', {
+      headers: { Authorization: signedBearer },
+      data: {
+        source: 'manual', purpose: 'memory.capture',
+        policyVersion: 'privacy-v1',
+        expiresAt: new Date(Date.now() + 20 * 24 * 3600 * 1000).toISOString(),
+        accepted: true
+      }
+    });
+    regrantStatus = g2.status();
+    const actualDelete = await route.fetch();
+    originalDeleteStatus = actualDelete.status();
+    await route.fulfill({ response: actualDelete });
+  });
+
+  await page.getByTestId('revoke-consent').click();
+  await expect(page.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
+  expect(regrantStatus).toBe(201);
+  expect(originalDeleteStatus).toBe(204);
+
+  const read = page.waitForResponse(r =>
+    r.url().endsWith('/api/v1/consents') &&
+    r.request().method() === 'GET' && r.status() === 200);
+  await page.getByTestId('sync-reload').click();
+  const actual = await read;
+  const ledger = await actual.json() as Array<{
+    source: string; purpose: string; active: boolean;
+  }>;
+  // RED: old DELETE(G1) succeeded but G2 remained active in real PostgreSQL
+  // and UI silently re-displays "Autorizzazione attiva" after refresh.
+  expect(ledger.some(g =>
+    g.source === 'manual' && g.purpose === 'memory.capture' && g.active)).toBe(false);
+  await expect(page.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
+
+  const forbidden = await page.request.post('http://127.0.0.1:8080/api/v1/memories', {
+    headers: { Authorization: signedBearer },
+    data: {
+      source: 'manual', externalId: 'after-stale-withdrawal-' + Date.now(),
+      contentType: 'text/plain', content: 'synthetic consent withdrawal must deny',
+      occurredAt: new Date().toISOString()
+    }
+  });
+  expect(forbidden.status()).toBe(403);
+  expect((await forbidden.json()).error).toBe('consent_required');
+});

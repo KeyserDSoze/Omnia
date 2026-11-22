@@ -386,3 +386,18 @@ campo di modifica e mostra un conflitto esplicito, non un logout.
 Una cattura *esplicita* dopo la scadenza, con consenso valido, può ancora
 riacquisire la chiave secondo la policy attuale. Questo non è editing,
 versionamento né sincronizzazione offline; #125/#41 restano aperte.
+
+
+## Revoca di consenso anche da un dispositivo rimasto indietro (#176 / ADR 0075)
+
+Se un dispositivo conosce ancora un ID consenso precedente (G1)
+ma un altro ha già sostituito quel consenso con G2 per la
+**stessa fonte/finalità**, DELETE G1 ora revoca anche il grant
+attivo G2 nel PostgreSQL primario. Il backend risolve lo scope
+solo dalla riga del soggetto JWT verificato, sotto actor lock
+e RLS; storico e scope altrui rimangono invariati.
+Una nuova cattura dopo la revoca riceve 403, anche se il
+device originario non aveva ancora visto G2. La revoca non
+cancella dati precedenti, né disabilita una scelta di consenso
+esplicita fatta dopo la revoca; non sostituisce la revoca
+di accessi provider/IdP o le procedure GDPR sui sistemi esterni.

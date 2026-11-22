@@ -443,3 +443,23 @@ esclusivamente un tentativo osservato,
 non attesta commit del DELETE primario,
 cancellazione dei derivati/backup o diritto
 alla cancellazione soddisfatto. No recovery-ready.
+
+
+## Revoca atomica di un grant dopo rinnovo su altro dispositivo (#176)
+
+DELETE /api/v1/consents/{id} usa ancora JWT per tenant+subject e il
+PostgresActorLock condiviso con grant/capture/erase. Da ADR 0075
+la revoca di un ID storico *proprio* G1 non agisce solo sul
+record G1: il backend ricostruisce la sua fonte/finalità dalla riga
+nel ledger e invalida nella **stessa transazione** ogni grant
+ancora non revocato per quell'attore+scope, incluso un G2
+rilasciato prima del DELETE da un altro device. Non modifica
+revoked_at di G1 storico, non invalida altri source/purpose,
+subject o tenant e non elimina note già salvate. 204 per ID
+proprio anche se già ritirato, 404 se ID sconosciuto/altrui.
+Se la persona concede *nuovamente* il consenso dopo questo
+commit, si applica la nuova scelta esplicita. La revoca non
+propaga immediatamente a browser offline, provider, backup
+o all'IdP; le prove reali sono nell'issue #176. La disciplina
+GDPR richiede ulteriori verifiche documentate, non è
+certificata da questo controllo.

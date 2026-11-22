@@ -1366,3 +1366,22 @@ as exact content after the server assigns a new time; use canonical
 stable source keys/time on the client. This does not imply offline
 queue, immutable multi-source versions or zero embedding-provider
 work. Keep #125/#41/#8/#2 OPEN.
+
+
+## Stale consent grant ID must withdraw current source/purpose (#176 / ADR 0075)
+
+PostgresConsentRepository.GrantAsync supersedes G1 with G2 for one
+tenant+subject+source+purpose, leaving G1 in the audit ledger.
+A second device may still issue DELETE /api/v1/consents/G1.
+RevokeAsync MUST take the shared actor advisory lock in the same
+PostgresActorScope restricted FORCE RLS transaction, resolve
+source/purpose ONLY from the selected ID belonging to the JWT actor,
+and revoke ALL currently unrevoked grants of that same exact scope,
+including G2. Never rely on user-controlled source, purpose, tenant
+or owner input. Preserve timestamps of already revoked history,
+scope isolation, and response semantics 204 own/idempotent,
+404 unknown/foreign. Consent withdrawal MUST take effect at the
+API capture gate, not merely clear browser UI. Regrant accepted AFTER
+withdrawal is a distinct explicit decision; no permanent source ban.
+Past notes, offline devices, provider grants, IdP sessions, external
+copies and GDPR legal review are still OPEN (#29/#41/#31/#2).

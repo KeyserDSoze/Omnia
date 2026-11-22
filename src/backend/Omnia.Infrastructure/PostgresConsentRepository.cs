@@ -70,18 +70,52 @@ public sealed class PostgresConsentRepository(NpgsqlDataSource db)
         await using var scope = await PostgresActorScope.OpenAsync(db, tenantId, ownerSubject, ct);
         await PostgresActorLock.AcquireAsync(scope.Connection, scope.Transaction,
             tenantId, ownerSubject, ct);
-        await using var command = new NpgsqlCommand("""
-            UPDATE consent_grants SET revoked_at = COALESCE(revoked_at, @now)
+        // An older device may still reference a superseded grant ID. Never
+        // treat revocation of that historical handle as successful while a
+        // newer grant with the SAME source+purpose is still effective.
+        // Fetch scope only from a persisted, actor-owned row under FORCE RLS,
+        // never from request input (the HTTP request selects only the UUID).
+        (string Source, string Purpose) targetScope;
+        await using (var target = new NpgsqlCommand("""
+            SELECT source, purpose
+            FROM consent_grants
             WHERE id = @id AND tenant_id = @tenant AND owner_sub = @owner
-            RETURNING id
-            """, scope.Connection, scope.Transaction);
-        command.Parameters.AddWithValue("id", id);
-        command.Parameters.AddWithValue("tenant", tenantId);
-        command.Parameters.AddWithValue("owner", ownerSubject);
-        command.Parameters.AddWithValue("now", now);
-        var changed = await command.ExecuteScalarAsync(ct) is Guid;
+            FOR UPDATE
+            """, scope.Connection, scope.Transaction))
+        {
+            target.Parameters.AddWithValue("id", id);
+            target.Parameters.AddWithValue("tenant", tenantId);
+            target.Parameters.AddWithValue("owner", ownerSubject);
+            await using var reader = await target.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                return false; // Unknown or foreign grant: never enumerate it.
+            targetScope = (reader.GetString(0), reader.GetString(1));
+        }
+
+        // Actor advisory lock serializes all first-party grant/regrant/revoke,
+        // capture and erase operations. Withdrawal takes effect on EVERY
+        // currently unrevoked record in this exact actor+source+purpose, even
+        // when the supplied ID has already been superseded and revoked.
+        // Keep the historical revoked_at timestamp unchanged for audit.
+        await using (var revoke = new NpgsqlCommand("""
+            UPDATE consent_grants SET revoked_at = @now
+            WHERE tenant_id = @tenant AND owner_sub = @owner
+              AND source = @source AND purpose = @purpose
+              AND revoked_at IS NULL
+            """, scope.Connection, scope.Transaction))
+        {
+            revoke.Parameters.AddWithValue("now", now);
+            revoke.Parameters.AddWithValue("tenant", tenantId);
+            revoke.Parameters.AddWithValue("owner", ownerSubject);
+            revoke.Parameters.AddWithValue("source", targetScope.Source);
+            revoke.Parameters.AddWithValue("purpose", targetScope.Purpose);
+            await revoke.ExecuteNonQueryAsync(ct);
+        }
+
         await scope.CommitAsync(ct);
-        return changed;
+        // Known, actor-owned ID is idempotently revocable even if all
+        // matching grants were already revoked in an earlier request.
+        return true;
     }
 
     public async Task<IReadOnlyList<ConsentGrant>> ListAsync(string tenantId,

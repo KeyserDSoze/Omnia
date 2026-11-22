@@ -1363,3 +1363,25 @@ success. The replay comparison decrypts sealed data with tenant/subject
 AAD and existing canonical UUID; tamper/unknown KEK errors fail closed.
 This does not implement versions/edits, provider-level dedup, native
 encrypted offline sync, external backups/erasure or GDPR compliance.
+
+
+## Revoca grant da device con ID storico (#176 / ADR 0075)
+
+Il ledger PostgreSQL preserva lo storico di rinnovo di consenso:
+con G1→G2, G1 è già revocato ma G2 può ancora autorizzare una cattura.
+Un vecchio device che conosce solo G1 e invia DELETE G1 non deve
+ottenere un falso successo lasciando G2 attivo. Il server, sotto
+PostgresActorLock e PostgresActorScope/FORCE RLS, ricava source e
+purpose **dalla riga di G1 riferita dall'ID e appartenente
+all'attore JWT**, poi revoca atomicamente tutte le autorizzazioni
+ancora non revocate con quell'esatto tenant+owner+source+purpose.
+I record già storici conservano il loro vecchio revoked_at.
+ID inesistente o altrui: 404, senza enumerazione; ID proprio
+già revocato: 204 idempotente. La UI può così confermare la
+revoca anche dopo un regrant fatto prima del DELETE su altro device.
+Un nuovo consenso esplicito *dopo* la revoca è ancora possibile:
+questa non è una interdizione persistente di fonte/finalità.
+La cattura successiva è realmente negata dall'API/PG, non solo
+nascosta in UI. Nessuna cancellazione di note già conservate,
+revoca universale del token Keycloak o propagazione su backup /
+provider/device offline è inclusa; #29/#31/#41 restano OPEN.

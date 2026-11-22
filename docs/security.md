@@ -1265,3 +1265,22 @@ by Playwright, not a fake endpoint or mocked JWT. This is UI-only defense:
 OIDC server revocation, RLS, 30-day retention, backend erasure and native
 devices remain separate security gates. Child #170 closes only after real
 RED/GREEN CI; #41 and privacy #2 stay OPEN.
+
+
+## Web OIDC API 401 session invalidation (#171 / ADR 0070)
+
+An API-generated HTTP 401 on a signed browser GET, capture POST, consent
+grant/revoke or privacy export/erase now invalidates the **current** client
+session epoch. Home immediately clears signed-in state, private timeline,
+active consent, pending drafts and erasure confirmation BEFORE local
+oidc-client-ts removeUser() runs. Delayed 401 from an obsolete account
+cannot sign out a newer generation; delayed successful reads remain blocked
+by ADR 0069's CloudViewEpoch. A failed local token getter also fails closed;
+a token that arrives after logout is never sent. 403/429/offline/5xx are
+explicit errors, not automatic logout. Only the API with validated OIDC
+JWT and PostgreSQL RLS can authorize data; no arbitrary tenant headers
+or browser-persisted tokens/notes. E2E injects *missing Authorization on
+outbound GET*, so a genuine .NET JWT middleware returns 401 rather than
+fabricating HTTP status in Playwright. This is local browser isolation,
+not identity-provider-wide revocation, native parity or GDPR erasure.
+P0 parents #39/#41/#1/#2 remain OPEN.

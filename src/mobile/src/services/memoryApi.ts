@@ -33,11 +33,44 @@ export class CloudApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
 }
 
+export type CloudSessionBoundary = {
+  /** The active browser session generation, incremented on logout/401. */
+  currentEpoch: () => number;
+  /** Synchronously clear private UI state and invalidate previous reads. */
+  unauthorized: () => void;
+};
+
 export class MemoryApi {
-  constructor(private readonly config: WebCloudConfig, private readonly token: () => Promise<string>) { }
+  constructor(
+    private readonly config: WebCloudConfig,
+    private readonly token: () => Promise<string>,
+    private readonly session?: CloudSessionBoundary
+  ) { }
+
+  private notifyUnauthorized(epoch: number): void {
+    // A late 401 from an earlier signed-in account must NEVER logout a new one.
+    if (this.session && this.session.currentEpoch() === epoch)
+      this.session.unauthorized();
+  }
+
+  private async bearerFor(epoch: number): Promise<string> {
+    let bearer: string;
+    try {
+      bearer = await this.token();
+    } catch (error) {
+      // Local OIDC token has already expired or cannot be refreshed.
+      // Fail closed without issuing an API request.
+      this.notifyUnauthorized(epoch);
+      throw error;
+    }
+    if (this.session && this.session.currentEpoch() !== epoch)
+      throw new CloudApiError('Sessione cambiata. Accedi di nuovo.', 401);
+    return bearer;
+  }
 
   private async request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
-    const bearer = await this.token();
+    const epoch = this.session?.currentEpoch() ?? 0;
+    const bearer = await this.bearerFor(epoch);
     let response: Response;
     try {
       response = await fetch(this.config.apiBaseUrl + path, {
@@ -56,7 +89,10 @@ export class MemoryApi {
       throw new CloudApiError('API non raggiungibile. Nota non sincronizzata, riprova.', 0);
     }
     if (!response.ok) {
-      if (response.status === 401) throw new CloudApiError('Sessione non valida. Accedi di nuovo.', 401);
+      if (response.status === 401) {
+        this.notifyUnauthorized(epoch);
+        throw new CloudApiError('Sessione non valida. Accedi di nuovo.', 401);
+      }
       if (response.status === 403) throw new CloudApiError('Consenso o permesso mancante.', 403);
       if (response.status === 429) throw new CloudApiError('Troppe richieste. Attendi e riprova.', 429);
       throw new CloudApiError('Errore del server (' + response.status + '). Nessuna conferma di salvataggio.', response.status);
@@ -86,7 +122,8 @@ export class MemoryApi {
   }
 
   async exportPersonalData(): Promise<Blob> {
-    const bearer = await this.token();
+    const epoch = this.session?.currentEpoch() ?? 0;
+    const bearer = await this.bearerFor(epoch);
     let response: Response;
     try {
       response = await fetch(this.config.apiBaseUrl + '/api/v1/privacy/export', {
@@ -100,7 +137,10 @@ export class MemoryApi {
       throw new CloudApiError('Esportazione non disponibile: verifica connessione e accesso.', 0);
     }
     if (!response.ok) {
-      if (response.status === 401) throw new CloudApiError('Sessione scaduta. Accedi di nuovo.', 401);
+      if (response.status === 401) {
+        this.notifyUnauthorized(epoch);
+        throw new CloudApiError('Sessione non valida. Accedi di nuovo.', 401);
+      }
       if (response.status === 429) throw new CloudApiError('Troppe richieste. Riprova.', 429);
       throw new CloudApiError('Esportazione non riuscita (' + response.status + ').', response.status);
     }

@@ -6,6 +6,8 @@ export interface BrowserAuth {
   hasSession(): Promise<boolean>;
   login(): Promise<void>;
   accessToken(): Promise<string>;
+  /** Local-only fail-closed handling when the API rejects bearer auth. */
+  discardLocalSession(): Promise<void>;
   logout(): Promise<void>;
 }
 
@@ -68,6 +70,7 @@ export function createBrowserAuth(config: WebCloudConfig): BrowserAuth {
       }
       return user.access_token;
     },
+    discardLocalSession: () => manager.removeUser(),
     async logout() {
       try {
         // Revocation is best effort. Even if offline, clear the only local token store.

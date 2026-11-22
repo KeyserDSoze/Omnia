@@ -38,18 +38,34 @@ export default function Home() {
   const authRef = useRef<BrowserAuth | null>(null);
   const apiRef = useRef<MemoryApi | null>(null);
   const cloudViewRef = useRef(new CloudViewEpoch());
+  const sessionEpochRef = useRef(0);
   const retryRef = useRef<{ raw: string; entry: ReturnType<typeof normalizeMemo> } | null>(null);
   const [recording, setRecording] = useState(false);
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
-  async function refreshCloud() {
+  // Invalidate the authenticated view before any awaited token/provider I/O.
+  // No signed-out or expired session may continue showing its old private notes.
+  function clearSignedInView() {
+    sessionEpochRef.current++;
+    cloudViewRef.current.invalidate();
+    setAuthState('signed-out');
+    setMemos([]);
+    setGrant(null);
+    setAccepted(false);
+    setErasePhrase('');
+    setEraseAcknowledged(false);
+    setDraft('');
+    retryRef.current = null;
+  }
+
+  async function refreshCloud(): Promise<boolean> {
     const api = apiRef.current;
     if (!api) throw new Error('Connessione API non disponibile.');
     // Only the newest response from the CURRENT signed-in session may
     // repopulate the timeline; a pending request outlives logout otherwise.
-    await cloudViewRef.current.refresh(api, (consents, recent) => {
+    return cloudViewRef.current.refresh(api, (consents, recent) => {
       setGrant(activeManualGrant(consents));
       setMemos(recent.map(timelineMemo));
     });
@@ -60,7 +76,18 @@ export default function Home() {
     let live = true;
     const auth = createBrowserAuth(webMode.config);
     authRef.current = auth;
-    apiRef.current = new MemoryApi(webMode.config, () => auth.accessToken());
+    apiRef.current = new MemoryApi(webMode.config, () => auth.accessToken(), {
+      currentEpoch: () => sessionEpochRef.current,
+      unauthorized: () => {
+        // Triggered only by a current-session 401 (or missing local token).
+        // Never await a provider here: clear all visible personal data first.
+        clearSignedInView();
+        setNotice('Sessione non valida. Accedi di nuovo.');
+        void auth.discardLocalSession().catch(() => {
+          setNotice('Sessione non valida. Chiudi la scheda e accedi di nuovo.');
+        });
+      }
+    });
     void (async () => {
       try {
         await auth.handleRedirect();
@@ -95,15 +122,7 @@ export default function Home() {
     if (busy) return;
     // Invalidate before any await: a pending authenticated GET may complete
     // while OIDC token revocation is in flight. Clear personal UI immediately.
-    cloudViewRef.current.invalidate();
-    setAuthState('signed-out');
-    setMemos([]);
-    setGrant(null);
-    setAccepted(false);
-    setErasePhrase('');
-    setEraseAcknowledged(false);
-    setDraft('');
-    retryRef.current = null;
+    clearSignedInView();
     setBusy(true);
     let revoked = true;
     try { await authRef.current?.logout(); }
@@ -121,7 +140,7 @@ export default function Home() {
     setBusy(true);
     try {
       await apiRef.current.grantManualCapture();
-      await refreshCloud();
+      if (!await refreshCloud()) return;
       setAccepted(false);
       setNotice('Autorizzazione attiva per le tue note manuali (30 giorni).');
     } catch (error) {

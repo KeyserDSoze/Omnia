@@ -318,3 +318,17 @@ the personal timeline immediately before attempting remote token revocation.
 A real Keycloak + JWT + PostgreSQL Playwright regression and deferred-promise
 Vitest tests guard this behavior. No client-side token or private-note storage
 is added; this does **not** assert native parity or global token revocation.
+
+
+## Browser bearer failure handling (#171 / ADR 0070)
+
+A genuine API 401 or failed in-memory OIDC token lookup now ends the
+visible Expo Web cloud session immediately, clearing private note/consent
+UI and pending draft/confirmation. Request epochs prevent a late 401
+from an older account from logging out the next session. 403, throttling
+and transient network failures remain explicit retryable errors.
+Playwright exercises an actual Keycloak-signed capture and PostgreSQL
+timeline, then removes only the outgoing Authorization header so the real
+API produces 401; Vitest covers error/reordering cases. This is not a
+global Keycloak logout, token revocation of other devices or production
+privacy/GDPR signoff.

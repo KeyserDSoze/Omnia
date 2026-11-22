@@ -1398,3 +1398,18 @@ and occurrence time via `retryRef`. Only local non-synchronizing
 native/demo mode may use a session-serial `demo-` fallback. This ID is
 not an auth token, tenant selector, cross-source dedupe or offline sync.
 #41/#125/#8/#2 still OPEN despite #177's narrow resolution.
+
+## Bounded consent ledger must expose active manual scope (#178 / ADR 0077)
+
+`PostgresConsentRepository.ListAsync` limits the actor-scoped result
+to 200 rows. NEVER use simple newest-first history ordering, which can
+hide the current `manual/memory.capture` grant behind older-scope
+renewal/revocation history, even while the backend correctly permits
+ingestion. Prioritize still-active manual first, then other active
+grants, then newest history, with deterministic UUID tie-break,
+within the same restricted `PostgresActorScope` and FORCE RLS.
+Authorization/revocation MUST continue to rely on the database
+actor identity and transactional active grant checks, not a Web DTO.
+Test with >200 newer expired/revoked synthetic records and negative
+cross-owner/tenant reads. No full paginated historical ledger or
+legal consent coverage; #29/#41/#2 stay OPEN.

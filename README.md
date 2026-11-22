@@ -411,3 +411,14 @@ originale in memoria, per rispettare la semantica idempotente #175.
 Browser senza generatore sicuro: salvataggio cloud negato, non
 fallback al timestamp. Le chiavi del solo demo locale non sono identità
 multi-device e nessuna sincronizzazione native/offline è dichiarata.
+
+## Ledger consensi: visibilità grant manual anche oltre 200 eventi storici (#178)
+
+La lista API dei consensi resta limitata a 200 elementi, ma dà
+precedenza all'autorizzazione `manual/memory.capture` tuttora valida,
+poi agli altri grant attivi e infine allo storico recente. In questo
+modo 260 rinnovi/scadenze/revoche non possono far apparire "nessun
+consenso" in Web quando la cattura manuale è tuttora autorizzata:
+la voce resta visibile e revocabile. Il gate reale di consenso continua
+a essere PostgreSQL con JWT/RLS. Il ledger completo non è ancora
+paginato; #29/#41/#2 rimangono aperte.

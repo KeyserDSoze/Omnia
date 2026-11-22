@@ -127,7 +127,17 @@ public sealed class PostgresConsentRepository(NpgsqlDataSource db)
                 policy_version, granted_at, expires_at, revoked_at
             FROM consent_grants
             WHERE tenant_id = @tenant AND owner_sub = @owner
-            ORDER BY granted_at DESC, id DESC LIMIT 200
+            -- The bounded public ledger is also used to show/revoke the
+            -- manual capture grant. Historical renewals must NEVER hide
+            -- a still-effective manual grant behind 200 newer old records.
+            -- PostgreSQL now() is stable for this actor-scoped transaction.
+            ORDER BY
+                (source = 'manual' AND purpose = 'memory.capture'
+                 AND revoked_at IS NULL AND granted_at <= now()
+                 AND expires_at > now()) DESC,
+                (revoked_at IS NULL AND granted_at <= now()
+                 AND expires_at > now()) DESC,
+                granted_at DESC, id DESC LIMIT 200
             """, scope.Connection, scope.Transaction);
         command.Parameters.AddWithValue("tenant", tenantId);
         command.Parameters.AddWithValue("owner", ownerSubject);

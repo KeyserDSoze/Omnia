@@ -1398,3 +1398,19 @@ entry and its UUID unchanged; never regenerate it on retry. IDs confer no
 authorization: the backend still uses signed OIDC claims, consent, FORCE
 RLS and immutable source-key collision rules. The local demo fallback
 serial is session-only; no claim of native/offline cloud identity parity.
+
+## Manual consent visibility under bounded history (#178 / ADR 0077)
+
+The first-party consent ledger is append-preserving and a historical
+regrant does not erase previous records. A chronological 200-row limit
+could previously hide an older active `manual/memory.capture` scope
+behind 200+ newer expired/revoked grants, leaving a misleading Web
+status while the actual PostgreSQL ingestion gate allowed capture.
+Now a restricted JWT actor-scoped FORCE RLS query ranks the effective
+manual scope before other effective scopes and history, while retaining
+a hard 200-row cap and stable timestamp/UUID sorting. Both query and
+capture gate read server-side state; they never trust browser grant
+metadata or tenant selectors. The row remains revocable by its actor
+after a long history. This is not a paginated consent-history API,
+full transparency for >200 simultaneous non-manual active scopes, nor
+a lawful-basis assessment or proof of end-to-end GDPR withdrawal.

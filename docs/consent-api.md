@@ -23,7 +23,7 @@
 
 ## List grants and revoke
 
-- `GET /api/v1/consents` → up to 200 grants for the signed-in tenant+subject, newest first, including `active` (computed with server clock).
+- `GET /api/v1/consents` → fino a **200 grant** per tenant+subject dal JWT, con `active` calcolato dal server. Ordinamento deterministico: **grant manual/memory.capture attivo prima**, altri grant attivi, poi storico più recente (`grantedAt DESC, id DESC`). Il limite resta 200: non è una pagina completa di storico e non garantisce visibilità di >200 scope attivi non-manuali; una futura API paginata è distinta.
 - `DELETE /api/v1/consents/{grant-id}` → 204 on success or when already revoked; 404 if unknown/other user/tenant. Revocation prevents **new** memory ingestion for that scope.
 
 ## Memory ingest changes
@@ -41,3 +41,20 @@ This ledger records only the first-party authenticated request; it is **not** ve
 ## Test evidence
 
 Domain tests in `tests/Omnia.Domain.Tests/ConsentTests.cs`; real pgvector PostgreSQL tests in `tests/Omnia.Integration.Tests/ConsentPersistenceTests.cs`. CI execution must be verified and linked in issue #29 before treating this slice as passing.
+
+## Consent history truncation: active manual visibility (#178 / ADR 0077)
+
+Previous chronological `LIMIT 200` could hide a still-effective
+`manual/memory.capture` grant behind 200+ newer, revoked or expired
+records. `IConsentGuard` could still authorize ingestion while the Web
+UI misleadingly said there was no grant to revoke. The restricted FORCE
+RLS PostgreSQL query now selects the current manual grant first, then
+other active grants, then the newest history, within the same 200-row cap.
+The backend still decides authorization via fresh DB checks on every
+write; a response field is not an authority or a legal consent record.
+
+Real pgvector PostgreSQL xUnit fixtures cover 260 historical grants,
+live manual/calendar scopes, cross-tenant/owner isolation and revocation.
+See issue #178 for RED/GREEN main Actions. No complete history
+pagination, no unlimited active-source listing, no provider consent
+and no GDPR legal compliance claim; #29/#41/#2 remain open.

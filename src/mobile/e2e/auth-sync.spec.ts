@@ -453,3 +453,56 @@ test('real owner can load older encrypted PostgreSQL notes beyond the first time
   await expect(page.getByTestId('memory-timeline').getByText(
     prefix + ' numero 11')).toBeVisible();
 });
+
+
+test('real signed capture idempotency rejects a different body with the same external key', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!user1 || !password) throw new Error('Missing synthetic Keycloak browser credentials');
+  await page.goto('/Omnia/');
+  await browserLogin(page, user1);
+  if (await page.getByTestId('consent-accept').count() > 0) {
+    await page.getByTestId('consent-accept').click();
+    await page.getByTestId('grant-consent').click();
+  }
+  await expect(page.getByTestId('consent-state')).toContainText('Autorizzazione attiva');
+
+  const originalNote = 'Nota canonica idempotente ' + Date.now();
+  let repeatedStatus = -1;
+  let conflictingStatus = -1;
+  let firstStatus = -1;
+  await page.route('**/api/v1/memories', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const originalPost = route.request().postDataJSON() as {
+      source: string; externalId: string; contentType: string;
+      content: string; occurredAt: string;
+    };
+    // Forward the original request with its actual OIDC bearer, exactly as
+    // captured by the user. The real API executes its PostgreSQL transaction.
+    const accepted = await route.fetch();
+    firstStatus = accepted.status();
+    // An identical network retry must be a no-op and retain the same UUID.
+    const repeated = await route.fetch();
+    repeatedStatus = repeated.status();
+    // Same tenant/owner/source/externalId, but different private content:
+    // this must never silently mutate an already accepted canonical note.
+    const collision = await route.fetch({
+      postData: JSON.stringify({ ...originalPost, content: originalPost.content + ' ALTERATO' })
+    });
+    conflictingStatus = collision.status();
+    await route.fulfill({ response: accepted });
+  });
+
+  await page.getByTestId('memo-input').fill(originalNote);
+  await page.getByTestId('save-memo').click();
+  await expect(page.getByTestId('notice')).toContainText('Nota salvata');
+  expect(firstStatus).toBe(200);
+  expect(repeatedStatus).toBe(200);
+  // RED: actual PostgreSQL ON CONFLICT DO UPDATE returned 200 and replaced
+  // original text. GREEN: generic 409 with no private content disclosure.
+  expect(conflictingStatus).toBe(409);
+
+  await page.getByTestId('sync-reload').click();
+  await expect(page.getByTestId('memory-timeline').getByText(originalNote)).toBeVisible();
+  await expect(page.getByTestId('memory-timeline').getByText(originalNote + ' ALTERATO'))
+    .toHaveCount(0);
+});

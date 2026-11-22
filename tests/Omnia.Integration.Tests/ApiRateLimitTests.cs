@@ -188,6 +188,100 @@ public sealed class ApiRateLimitTests
             Assert.Equal(HttpStatusCode.OK, health.StatusCode);
     }
 
+    [Fact]
+    public async Task ActorRateLimitMustBoundTrackedSubjectsAndRejectUnseenActorAtCapacity()
+    {
+        var migration = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
+        var runtimeDb = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
+        var retentionDb = Environment.GetEnvironmentVariable("OMNIA_TEST_RETENTION_DB");
+        var keyRing = Environment.GetEnvironmentVariable("OMNIA_TEST_KEYRING_FILE");
+        Assert.False(string.IsNullOrWhiteSpace(migration), "Real test PostgreSQL required.");
+        Assert.False(string.IsNullOrWhiteSpace(runtimeDb));
+        Assert.False(string.IsNullOrWhiteSpace(retentionDb));
+        Assert.False(string.IsNullOrWhiteSpace(keyRing));
+
+        var settings = new Dictionary<string, string?>
+        {
+            ["Database:ConnectionString"] = runtimeDb,
+            ["Database:MigrationConnectionString"] = migration,
+            ["Database:RetentionConnectionString"] = retentionDb,
+            ["Crypto:KeyRingPath"] = keyRing,
+            ["Auth:Issuer"] = "http://localhost:8081/realms/omnia",
+            ["Auth:Audience"] = "omnia-api",
+            ["Embeddings:Provider"] = "none",
+            ["RateLimit:RequestsPerMinute"] = "10",
+            ["RateLimit:MaxTrackedActors"] = "2",
+            ["RateLimit:TenantRequestsPerMinute"] = "100"
+        };
+        using var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["Database__ConnectionString"] = runtimeDb,
+            ["Database__MigrationConnectionString"] = migration,
+            ["Database__RetentionConnectionString"] = retentionDb,
+            ["Crypto__KeyRingPath"] = keyRing,
+            ["Auth__Issuer"] = "http://localhost:8081/realms/omnia",
+            ["Auth__Audience"] = "omnia-api",
+            ["RateLimit__RequestsPerMinute"] = "10",
+            ["RateLimit__MaxTrackedActors"] = "2",
+            ["RateLimit__TenantRequestsPerMinute"] = "100"
+        });
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureAppConfiguration((_, config) =>
+                config.AddInMemoryCollection(settings));
+            builder.ConfigureTestServices(services => services
+                .AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme = HeaderTestAuthHandler.SchemeName;
+                    options.DefaultChallengeScheme = HeaderTestAuthHandler.SchemeName;
+                })
+                .AddScheme<AuthenticationSchemeOptions, HeaderTestAuthHandler>(
+                    HeaderTestAuthHandler.SchemeName, _ => { }));
+        });
+        using var client = factory.CreateClient();
+        var tenant = "tenant-actor-cap-" + Guid.NewGuid().ToString("N");
+
+        async Task<HttpResponseMessage> GetAsync(string actor, bool spoof = false)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/consents");
+            request.Headers.Add("X-Test-Tenant", tenant);
+            request.Headers.Add("X-Test-Subject", actor);
+            if (spoof)
+            {
+                request.Headers.Add("X-Tenant-Id", "different-tenant");
+                request.Headers.Add("X-Forwarded-For", "203.0.113.44");
+            }
+            return await client.SendAsync(request);
+        }
+
+        using (var first = await GetAsync("actor-first"))
+            Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        using (var second = await GetAsync("actor-second"))
+            Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+
+        // Both actor partitions have unused allowance (10/min) and the
+        // signed tenant has 98 free requests (100/min). The THIRD actor
+        // MUST be denied to avoid unbounded actor partition allocation.
+        using (var blocked = await GetAsync("actor-third", spoof: true))
+        {
+            Assert.Equal(HttpStatusCode.TooManyRequests, blocked.StatusCode);
+            Assert.Equal("no-store", blocked.Headers.CacheControl?.ToString());
+            Assert.True(blocked.Headers.TryGetValues("Retry-After", out var retryValues));
+            Assert.InRange(int.Parse(Assert.Single(retryValues!)), 1, 60);
+            var error = await blocked.Content.ReadAsStringAsync();
+            Assert.Contains("rate_limited", error);
+            Assert.DoesNotContain(tenant, error);
+            Assert.DoesNotContain("actor-third", error);
+        }
+
+        // Do not evict still-active users to admit a new partition.
+        using (var knownActor = await GetAsync("actor-first"))
+            Assert.Equal(HttpStatusCode.OK, knownActor.StatusCode);
+        using (var health = await client.GetAsync("/health"))
+            Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+    }
+
     private sealed class TestEnvironment : IDisposable
     {
         private readonly Dictionary<string, string?> _previous = new();

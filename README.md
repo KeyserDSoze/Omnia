@@ -293,3 +293,17 @@ on request-driven lazy cleanup. This does not reserve one capacity slot
 per tenant, distribute quotas across nodes, refund earlier budget steps,
 or replace ingress/WAF/DoS controls. #37 and #2 remain open; synthetic
 test evidence and limitations are recorded in #168.
+
+
+## Atomic actor + tenant request-rate admission (#169 / ADR 0068)
+
+The authenticated /api/v1 middleware now checks both signed OIDC actor
+and aggregate tenant **60-second** fixed-window budgets as one process-local
+admission. A 429 from either check does not increment the other budget
+or create an actor/tenant partition. One short coordinator lock prevents
+concurrent admissions from exceeding either limit, without reading bodies,
+waiting or queuing. Existing actor 120/min, tenant 600/min and
+MaxTrackedActors/MaxTrackedActorsPerTenant/MaxTrackedTenants remain
+unchanged; 429 is generic and no-store, Retry-After is advisory.
+This is NOT distributed between API replicas, an ingress/WAF defence,
+capacity reservation or real-data GDPR release. Parent #37/#2 remain open.

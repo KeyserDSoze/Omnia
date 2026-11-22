@@ -44,9 +44,9 @@ Leggere `docs/backlog.md` e `docs/product-requirements.md` prima di nuove funzio
 
 All new memory writes MUST pass an active source-scoped `memory.capture` grant. Never bypass `IConsentGuard` or the transactional PostgreSQL check inside `PostgresMemoryRepository.UpsertAsync`. Never initiate external embeddings before consent + domain payload validation. Tests must include revoked/expired grants and cross-tenant denial. The consent endpoint only records first-party acknowledgement; it does **not** legalize third-party recordings or replace GDPR review.
 
-## Rate limit invariants (#37 slice)
+## Rate limit invariants (#37 / ADR 0068)
 
-Keep `app.UseRateLimiter()` **after** authentication so the key derives from a signed identity; apply the per-user policy to all new `/api/v1` routes. Never use user-supplied headers as quota identity in production. Anonymous fallback uses peer IP only. The in-memory fixed window is **not** a distributed SaaS budget; do not claim full anti-abuse protections without WAF, media quotas and multi-replica tests.
+The live `/api/v1` request-rate middleware MUST run AFTER authentication and authorization and use `ApiAtomicRequestRateBudget` to admit actor+tenant windows together. The former `UseRateLimiter` / named policy and standalone `ApiActorRequestRateBudget` plus `ApiTenantRequestRateBudget` are NOT the live middleware; they are retained only for isolated legacy tests. Derive both signed partition keys from validated OIDC claims, never client headers. A 429 must neither spend the other minute budget nor allocate a fresh partition; no body/DB work on denial. Keep strict global/tenant/actor bounded cardinality and fail-fast config. The process-local fixed windows are NOT distributed SaaS quota, WAF, media limit or GDPR readiness.
 
 ## OIDC Web authorization source of truth
 

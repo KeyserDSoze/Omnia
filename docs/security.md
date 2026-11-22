@@ -1232,3 +1232,19 @@ actor slots and another signed tenant can proceed. JWT `tenant_id` and
 `sub` define both keys; client headers are ignored. This is per-process
 fairness, NOT distributed rate limiting, a tenant reservation, DDoS
 protection or GDPR/legal readiness. #37/#2 remain OPEN.
+
+
+## Atomic actor+tenant request quota (#169 / ADR 0068)
+
+Production OIDC-authenticated /api/v1 admission probes actor AND tenant
+fixed-minute windows before committing either counter. Both checks and
+commits occur under one short process-local coordination lock; a 429
+from an exhausted tenant must not fill a fresh actor partition, and an
+actor 429 must not burn unused tenant quota. An unsuccessful probe may
+remove expired dictionary keys but cannot allocate new keys or tokens.
+The caller uses framed validated tenant_id+sub claims, never request
+headers; reject with no-store/Retry-After before JSON/read/handler/SQL.
+Legacy single-budget HTTP helper classes exist for isolated tests only
+and must never run as independent live middleware alongside the new
+joint admission. Same fixed-window/cardinality limitations still apply;
+this is neither distributed quota nor DDoS/real-data GDPR signoff.

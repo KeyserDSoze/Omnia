@@ -39,6 +39,9 @@ public sealed class ApiTenantRequestWindowLimiter
     }
 
     /// <summary>Key only from ApiRateLimitPolicy.TenantPartitionKey.</summary>
+    internal bool CanAcquire(string tenantPartitionKey, out int retryAfterSeconds) =>
+        _limiter.CanAcquire(tenantPartitionKey, out retryAfterSeconds);
+
     public bool TryAcquire(string tenantPartitionKey, out int retryAfterSeconds) =>
         _limiter.TryAcquire(tenantPartitionKey, out retryAfterSeconds);
 }

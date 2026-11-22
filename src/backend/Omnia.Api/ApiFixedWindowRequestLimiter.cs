@@ -45,8 +45,19 @@ internal sealed class ApiFixedWindowRequestLimiter
     /// Actor calls MUST supply the signed tenant partition as groupKey.
     /// Expired windows and their group counts are removed in the same lock.
     /// </summary>
+    // Read-only quota/cardinality probe used only by the synchronized joint
+    // actor+tenant admission path. Expired-key cleanup is still permitted.
+    public bool CanAcquire(
+        string partitionKey, out int retryAfterSeconds, string? groupKey = null) =>
+        Evaluate(partitionKey, out retryAfterSeconds, groupKey, commit: false);
+
     public bool TryAcquire(
-        string partitionKey, out int retryAfterSeconds, string? groupKey = null)
+        string partitionKey, out int retryAfterSeconds, string? groupKey = null) =>
+        Evaluate(partitionKey, out retryAfterSeconds, groupKey, commit: true);
+
+    private bool Evaluate(
+        string partitionKey, out int retryAfterSeconds,
+        string? groupKey, bool commit)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(partitionKey);
         if (partitionKey.Length > _maximumKeyLength)
@@ -77,7 +88,8 @@ internal sealed class ApiFixedWindowRequestLimiter
 
                 if (current.EndsAt <= now)
                 {
-                    _windows[partitionKey] = new Window(now + WindowDuration, 1, groupKey);
+                    if (commit)
+                        _windows[partitionKey] = new Window(now + WindowDuration, 1, groupKey);
                     return true;
                 }
 
@@ -87,10 +99,11 @@ internal sealed class ApiFixedWindowRequestLimiter
                     return false;
                 }
 
-                _windows[partitionKey] = current with
-                {
-                    Accepted = current.Accepted + 1
-                };
+                if (commit)
+                    _windows[partitionKey] = current with
+                    {
+                        Accepted = current.Accepted + 1
+                    };
                 return true;
             }
 
@@ -111,9 +124,12 @@ internal sealed class ApiFixedWindowRequestLimiter
                 return false;
             }
 
-            _windows.Add(partitionKey, new Window(now + WindowDuration, 1, groupKey));
-            if (groupKey is not null)
-                _groupCounts[groupKey] = _groupCounts.GetValueOrDefault(groupKey) + 1;
+            if (commit)
+            {
+                _windows.Add(partitionKey, new Window(now + WindowDuration, 1, groupKey));
+                if (groupKey is not null)
+                    _groupCounts[groupKey] = _groupCounts.GetValueOrDefault(groupKey) + 1;
+            }
             return true;
         }
     }

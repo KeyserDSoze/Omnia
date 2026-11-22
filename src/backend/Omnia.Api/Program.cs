@@ -74,6 +74,10 @@ var tenantRequestLimiter = new ApiTenantRequestWindowLimiter(
     ApiTenantRequestWindowLimiter.DefaultTenantRequestsPerMinute,
     builder.Configuration.GetValue<int?>("RateLimit:MaxTrackedTenants") ??
     ApiTenantRequestWindowLimiter.DefaultMaxTrackedTenants);
+// Only the joint limiter is wired to live requests. Never consume one
+// fixed-window budget before checking the other (non-refundable permits).
+var atomicRequestLimiter = new ApiAtomicRequestWindowLimiter(
+    actorRequestLimiter, tenantRequestLimiter);
 // The Kestrel body-size limit is NOT sufficient for TestServer and
 // alternate hosts. Bound JSON mutations in the application as well.
 var maxJsonBytes = ApiJsonBodyBudget.ValidateLimit(
@@ -203,14 +207,11 @@ app.UseRouting();
 app.UseCors("browser");
 app.UseAuthentication();
 app.UseAuthorization();
-// All quota keys come from OIDC-validated claims AFTER auth+authorization.
-// Per-actor minute admission is tenant-partition bounded and precedes
-// tenant minute admission; both
-// return fail-fast 429 without touching JSON bytes or endpoint/DB handlers.
+// All keys come from OIDC-validated claims AFTER auth+authorization.
+// Probe both request windows, then commit BOTH under one coordination lock.
+// No quota/partition is allocated when either quota rejects with 429.
 app.Use((context, next) =>
-    ApiActorRequestRateBudget.InvokeAsync(context, next, actorRequestLimiter));
-app.Use((context, next) =>
-    ApiTenantRequestRateBudget.InvokeAsync(context, next, tenantRequestLimiter));
+    ApiAtomicRequestRateBudget.InvokeAsync(context, next, atomicRequestLimiter));
 // Authentication and rate limiting happen BEFORE buffering any user bytes.
 // No credentials or request content are logged by the bounded guard.
 app.Use((context, next) =>

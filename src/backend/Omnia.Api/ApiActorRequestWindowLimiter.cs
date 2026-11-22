@@ -51,6 +51,11 @@ public sealed class ApiActorRequestWindowLimiter
     /// Both keys MUST be derived from the same authenticated OIDC identity
     /// via ApiRateLimitPolicy; no client-supplied tenancy selector.
     /// </summary>
+    internal bool CanAcquire(
+        string actorPartitionKey, string tenantPartitionKey,
+        out int retryAfterSeconds) =>
+        _limiter.CanAcquire(actorPartitionKey, out retryAfterSeconds, tenantPartitionKey);
+
     public bool TryAcquire(
         string actorPartitionKey, string tenantPartitionKey,
         out int retryAfterSeconds) =>

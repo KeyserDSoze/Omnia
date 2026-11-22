@@ -377,7 +377,8 @@ public sealed class ApiRateLimitTests
     [Fact]
     public async Task Tenant429MustNotAllocateActorPartitionBeforeAnotherTenantArrives()
     {
-        // RED #169: tenant 429 must not allocate any actor partition.\n        // Previous two-stage path fills both globally available actor slots.
+        // RED #169: tenant 429 must not allocate an actor partition.
+        // Previous two-stage path fills both globally available actor slots.
         var migration = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
         var runtimeDb = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
         var retentionDb = Environment.GetEnvironmentVariable("OMNIA_TEST_RETENTION_DB");
@@ -459,8 +460,8 @@ public sealed class ApiRateLimitTests
             Assert.DoesNotContain(tenantA, error);
         }
 
-        // Before this feature A's rejected actor-2/3 fill the 3 global
-        // actor partitions; B is incorrectly rejected with a fourth key.
+        // The rejected A actor-2 must NOT use the second global actor slot:
+        // B must still be admitted. Header spoofing cannot change signed quota.
         using (var independentTenant = await RequestAsync(tenantB, "actor-b-1"))
             Assert.Equal(HttpStatusCode.OK, independentTenant.StatusCode);
     }

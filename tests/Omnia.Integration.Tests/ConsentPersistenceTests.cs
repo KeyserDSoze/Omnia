@@ -178,4 +178,76 @@ public sealed class ConsentPersistenceTests
         Assert.NotEqual(otherTenant.Id, renewed.Id);
     }
 
+
+    [Fact]
+    public async Task ActiveManualGrantSurvivesBoundedLedgerAfterManyNewerRevokedOrExpiredGrants()
+    {
+        // #178 RED: the old chronological LIMIT 200 hides an older effective
+        // manual grant, although the actual PostgreSQL consent gate allows it.
+        // All fixtures run inside the restricted RLS actor transaction.
+        await using var db = await OpenAsync();
+        var repo = new PostgresConsentRepository(db);
+        var tenant = "consent-list-" + Guid.NewGuid().ToString("N");
+        const string owner = "list-owner";
+        var now = DateTimeOffset.UtcNow;
+
+        var manual = await repo.GrantAsync(ConsentGrant.Issue(
+            tenant, owner, "manual", ConsentGrant.MemoryCapture,
+            "privacy-v1", now.AddDays(-3), now.AddDays(3)), default);
+        var calendar = await repo.GrantAsync(ConsentGrant.Issue(
+            tenant, owner, "calendar", ConsentGrant.MemoryCapture,
+            "privacy-v1", now.AddDays(-2), now.AddDays(3)), default);
+
+        // 260 newer historical records, mixed expired-not-revoked and
+        // revoked-not-expired, must not obscure either older active scope.
+        await using (var scope = await PostgresActorScope.OpenAsync(db, tenant, owner, default))
+        {
+            await using var fixture = new NpgsqlCommand("""
+                INSERT INTO consent_grants
+                    (id, tenant_id, owner_sub, source, purpose, policy_version,
+                     granted_at, expires_at, revoked_at)
+                SELECT gen_random_uuid(), @tenant, @owner, 'archive-' || n::text,
+                       'memory.capture', 'privacy-v1',
+                       now() - interval '1 minute',
+                       CASE WHEN n % 2 = 0 THEN now() - interval '30 seconds'
+                            ELSE now() + interval '1 day' END,
+                       CASE WHEN n % 2 = 1 THEN now() - interval '30 seconds'
+                            ELSE NULL END
+                FROM generate_series(1, 260) AS n
+                """, scope.Connection, scope.Transaction);
+            fixture.Parameters.AddWithValue("tenant", tenant);
+            fixture.Parameters.AddWithValue("owner", owner);
+            Assert.Equal(260, await fixture.ExecuteNonQueryAsync());
+            await scope.CommitAsync(default);
+        }
+
+        // The real server still considers both scopes authorized.
+        await repo.EnsureActiveAsync(tenant, owner, "manual",
+            ConsentGrant.MemoryCapture, default);
+        await repo.EnsureActiveAsync(tenant, owner, "calendar",
+            ConsentGrant.MemoryCapture, default);
+
+        var listed = await repo.ListAsync(tenant, owner, default);
+        Assert.Equal(200, listed.Count); // bounded response is preserved
+        Assert.Equal(manual.Id, listed[0].Id); // manual UI priority
+        Assert.Contains(listed, g => g.Id == calendar.Id && g.IsActiveAt(now));
+        Assert.DoesNotContain(listed, g => g.Source.StartsWith("archive-") &&
+            g.IsActiveAt(DateTimeOffset.UtcNow));
+
+        // No cross-owner or cross-tenant leakage despite oversized history.
+        Assert.Empty(await repo.ListAsync(tenant, "another-owner", default));
+        Assert.Empty(await repo.ListAsync(tenant + "-else", owner, default));
+        Assert.False(await repo.RevokeAsync(tenant, "another-owner",
+            manual.Id, DateTimeOffset.UtcNow, default));
+
+        // A grant exposed to the Web user remains individually revocable.
+        Assert.True(await repo.RevokeAsync(tenant, owner, manual.Id,
+            DateTimeOffset.UtcNow, default));
+        await Assert.ThrowsAsync<ConsentRequiredException>(() =>
+            repo.EnsureActiveAsync(tenant, owner, "manual",
+                ConsentGrant.MemoryCapture, default));
+        await repo.EnsureActiveAsync(tenant, owner, "calendar",
+            ConsentGrant.MemoryCapture, default);
+    }
+
 }

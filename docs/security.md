@@ -1169,3 +1169,47 @@ limiter's separate partition lifetime is not addressed.
 No distributed quota, edge WAF/TLS/HTTP connection control,
 media/storage/provider/AI quota, real load/SLO, production
 hardening or GDPR attestation; #37/#2 OPEN.
+
+## Bounded signed actor rate partition memory (#167 / ADR 0066)
+
+The old ASP.NET Core RequireRateLimiting named actor policy
+created one fixed-window partition for each tenant+sub
+identity without a project-configured bound on retained
+actor partitions. A tenant may rotate or create many
+signed identities while staying within the #166 aggregate
+tenant rate budget. Actor partition memory must not grow
+without a configured ceiling.
+
+Omnia now uses ApiActorRequestWindowLimiter, default
+RateLimit:RequestsPerMinute=120 requests per 60s per
+validated signed tenant+sub (unchanged quota), plus new
+RateLimit:MaxTrackedActors=8192 per API instance (1..32768).
+Explicit values outside those ranges fail before serving.
+Actor partitions are length-framed by the existing
+ApiRateLimitPolicy.PartitionKey and limited to 512 chars,
+never user header, X-Forwarded-For, query or JSON claims.
+The separate tenant limiter (#166 / ADR 0065) retains
+its default 600/min and max 4096 active window keys.
+Both now share one bounded fixed-window engine and one
+response format but own separate state/locks.
+
+After OIDC authentication AND authorization, the
+per-actor limiter runs before the per-tenant limiter
+and before any JSON body buffering, binder, DB or
+endpoint work. On exhaustion return HTTP 429
+rate_limited, Cache-Control:no-store and Retry-After
+1..60, no queue or PII/actor/tenant/body echo. Health,
+ready, CORS preflight and 401/403 remain unaffected.
+Existing known actors may spend unused request tokens
+when at actor partition capacity; unseen actors fail
+closed 429 without evicting in-use accounts.
+
+Expired actor and tenant entries are removed lazily at
+most every 15 seconds of request traffic, so keys can
+linger in STRICTLY BOUNDED process RAM when idle.
+A fixed-window boundary can allow brief bursts, and
+a full actor partition map can deny new valid actors.
+No distributed quota, capacity reservation, anonymous
+socket/WAF, media/storage/connector/AI provider cost
+limits, load/SLO signoff or GDPR compliance evidence.
+P0 parent #37 and privacy epic #2 OPEN.

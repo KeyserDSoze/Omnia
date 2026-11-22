@@ -532,3 +532,22 @@ tenant windows, with lazy traffic-triggered expiry sweep
 every 15s and 429 fail-closed for unknown tenants at full
 partition capacity. Does not coordinate replicas or
 guarantee reserved tenant capacity.
+
+## Bounded per-actor request-rate windows (ADR 0066)
+
+The REST rate admission pipeline for authenticated
+/api/v1 is OIDC authentication → authorization →
+actor fixed-window rate budget → aggregate tenant
+fixed-window budget → JSON receive/buffer resource
+budgets → Minimal API handlers. The previous ASP.NET
+per-actor RequireRateLimiting policy was removed to
+bound retained per-account partitions; no change to
+120/min default actor limit, with NEW maximum
+8192 tracked actor windows per process. The existing
+tenant 600/min and 4096-partition bound are unchanged.
+Both facades use ApiFixedWindowRequestLimiter, 60s
+fixed windows, a short atomic lock, 15s lazy cleanup
+on request traffic and fail-closed 429 for new keys
+at capacity. Existing known actors may still consume
+unused request tokens. They do not coordinate quotas
+across Azure/Compose API replicas or reserve capacity.

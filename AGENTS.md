@@ -1287,3 +1287,39 @@ Fixed-window edge bursts and denial to new tenants under
 cardinality pressure are explicit residual risks; not
 distributed, WAF, media/connector, GDPR or production-proof.
 Keep #37 and #2 OPEN.
+
+## Bounded per-account minute rate limiter (#167 / ADR 0066)
+
+The older ASP.NET Core per-actor RateLimiter partition factory
+(no configured actor-cardinality ceiling) is REMOVED. Replace
+it with ApiActorRequestWindowLimiter, a process-local per-signed
+tenant+subject fixed 60-second window, with default actor rate
+RateLimit:RequestsPerMinute=120 (valid 1..1000) and
+RateLimit:MaxTrackedActors=8192 (valid 1..32768); invalid
+explicit settings fail startup. The per-tenant quota from #166
+is preserved: default 600/min and at most 4096 tenant keys.
+Both use ONE reusable ApiFixedWindowRequestLimiter engine
+with different max key sizes (actor <=512, tenant <=256),
+an atomic short lock and lazy expiration on request traffic
+every 15 seconds. Do not use AddRateLimiter/RequireRateLimiting
+for per-actor partitions without a bounded eviction policy.
+
+Pipeline MUST be UseAuthentication → UseAuthorization →
+ApiActorRequestRateBudget → ApiTenantRequestRateBudget →
+ApiJsonBodyBudget → endpoint for authenticated /api/v1 routes.
+Health, readiness, CORS preflight and 401/403 challenges remain
+outside these request windows. Only signed OIDC tenant+sub
+partition via ApiRateLimitPolicy.PartitionKey and
+TenantPartitionKey, NEVER X-Forwarded-For/X-Tenant-Id/JSON.
+Fail-fast 429 rate_limited, no-store, Retry-After 1..60 before
+request body reads/handler/DB. At active partition cardinality
+capacity, deny UNKNOWN actors/tenants; keep known actors able
+to use their unused request allowance, no eviction of active
+keys. Do not scan every active key on every 429; never log,
+persist or leak actor/tenant keys. Expired identities may
+remain in strictly bounded RAM until more request traffic.
+Fixed-window boundary bursts and possible temporary 429
+for legitimate new accounts are explicit limitations.
+The per-process cap does not solve cross-replica/WAF/media/
+connector/AI quotas, production load or GDPR. Parent #37/#2
+remain OPEN.

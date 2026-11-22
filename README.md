@@ -257,3 +257,22 @@ are reclaimed on request traffic. Authentication,
 health, existing JSON limits and tenant isolation are
 unchanged. This is NOT a distributed multi-instance
 quota, WAF, guaranteed fairness or GDPR/production go-live.
+
+## Bounded per-account rate partitions (#167 / ADR 0066)
+
+The 120/min authenticated actor quota now also bounds
+retained actor-rate state to **8192 actor windows per
+API instance**, configurable as RateLimit:MaxTrackedActors
+(1..32768). It replaces the former ASP.NET named
+per-actor partition policy but preserves the per-user
+minute rate and signed tenant+subject keys. A common
+60-second window engine also powers the existing
+tenant-wide 600/min, 4096-partition quota. Unknown
+actors receive fail-closed HTTP 429/no-store/Retry-After
+when all tracked actor partitions are occupied, while
+existing active actors can use their remaining quota.
+Expired partitions are lazily reclaimed on traffic;
+there is no unbounded key retention, but no guarantee
+of capacity for newly arriving users either. Neither
+quota is distributed across replicas or sufficient
+for full SaaS ingress/WAF/load/GDPR release.

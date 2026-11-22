@@ -216,3 +216,22 @@ for new tenants when the map is full. Not a distributed
 quota, ingress/WAF, media/connector/provider/storage
 budget, fair-share promise or GDPR release. Original
 backlog issue totals remain historical. #37/#2 OPEN.
+
+## P0 bounded actor rate partition cardinality (#167 / ADR 0066)
+
+Child [#167](https://github.com/KeyserDSoze/Omnia/issues/167)
+under [#37](https://github.com/KeyserDSoze/Omnia/issues/37)
+removes the unbounded per-account ASP.NET partition
+store, replacing it with shared-engine process-local
+signed tenant+subject fixed 60s windows capped at
+**8192 actors**, valid configurable 1..32768. Existing
+per actor 120/min, per tenant 600/min and tenant
+cardinality 4096 remain. At full actor cardinality,
+new actors get 429/no-store before any body reads
+or handler; already tracked actors can use remaining
+budget until expiry. Lazy 15s traffic-triggered
+cleanup and no O(N) per-denial scans. This is not a
+distributed quota or reserved-fair ingress, WAF,
+media/storage/connector/AI budget, load-test result
+or GDPR go-live; parent #37 and #2 OPEN. Historical
+issue counts above are not current totals.

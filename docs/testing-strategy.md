@@ -533,3 +533,38 @@ existing rate, body 408/413/415/503, real PostgreSQL/RLS,
 S3/Azure, physical PITR, Docker/mobile, OIDC and Pages
 evidence, verified on exact final main SHA before closing.
 No provider/production load or GDPR release is implied.
+
+## TDD bounded actor rate partition memory (#167 / ADR 0066)
+
+Behavioral RED on test-only
+[commit b564d5a6](https://github.com/KeyserDSoze/Omnia/commit/b564d5a676e80712ef4e0811c3e6219cfbde05aa)
+and [CI 44966863089](https://github.com/KeyserDSoze/Omnia/actions/runs/44966863089):
+real PostgreSQL integration suite **142 pass, 1 fail /
+143 total**. In xUnit WebApplicationFactory with test-only
+auth, actor rate=10/min, aggregate tenant=100/min and
+MaxTrackedActors=2, a THIRD distinct OIDC-signed subject
+wrongly received 200 instead of required 429 while the
+two existing subjects had spare capacity. This failure
+was behavioral, NOT a missing class or compiler artifact;
+the mobile job passed.
+
+The implementation shares the deterministic TimeProvider
+fixed-window core between actor and tenant quotas,
+with independently tracked dictionaries and key sizes.
+New ApiActorRequestWindowTests cover 60s renewal,
+Retry-After 60→1, actor cardinality 2 and active actor
+reuse, 1000 sequential expiring subjects, 128 concurrent
+admissions (exact count), invalid configuration/key
+lengths, 429 POST before body read/handler and no
+PII/header spoofing, same-tenant distinct subjects
+and same-subject distinct tenants, health bypass.
+Existing ApiRateLimitTests and ApiTenantRequestWindowTests
+remain mandatory to catch per-actor/tenant regressions.
+Full xUnit Domain, real PostgreSQL/RLS integration,
+S3/Azure provider contracts, physical PITR/witness/
+restore negatives, Docker, mobile TypeScript/Vitest/
+Playwright, OIDC real-browser and Pages must all pass
+on EXACT final main SHA before closing child #167.
+No synthetic auth tests prove production JWKS/OIDC by
+themselves, and no realistic distributed load or GDPR
+release is claimed.

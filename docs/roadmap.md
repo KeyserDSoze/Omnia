@@ -844,3 +844,25 @@ evidence and both are already CLOSED. They are NOT open work.
 - [ ] Parent #37 and epic #2 remain OPEN for
   cross-instance rates, ingress WAF, anonymous sockets,
   media/provider budgets, load/SLO and GDPR release.
+
+## P0 #167 — bounded actor rate partition memory (ADR 0066)
+
+- [x] Behavior-first RED: test-only b564d5a6,
+  CI 44966863089, 142 PASS / 1 FAIL real Integration
+  (third actor wrongly admitted with MaxTrackedActors=2).
+- [x] Preserve 120/min actor and 600/min tenant default
+  request budgets. Limit actor partition count to
+  8192 (1..32768) with shared bounded 60s fixed-window
+  engine, 15s lazy expiry and fail-closed 429 unknown
+  accounts, independent tenant partition map 4096.
+- [ ] Final main SHA must have SUCCESS CI, real PostgreSQL,
+  physical PITR, Docker, mobile, OIDC real-browser and
+  GitHub Pages; exact evidence documented in issue #167.
+- [ ] Keep parent #37 and epic #2 OPEN: remaining WAF,
+  distributed quotas, per-connector/media/provider
+  budgets, realism/load/SLO and production GDPR signoff.
+
+Historical issue checkboxes above may predate the finished
+CI SHA; refer to the CLOSED child issue comments for
+verified exact-SHA evidence rather than assuming pending
+work when the corresponding child is already closed.

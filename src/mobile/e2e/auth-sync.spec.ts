@@ -174,3 +174,56 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
     await after.close();
   }
 });
+
+
+test('logout does not re-display a real PostgreSQL note from an in-flight refresh', async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  if (!user1 || !password) throw new Error('Missing ephemeral OIDC test account');
+
+  await page.goto('/Omnia/');
+  await browserLogin(page, user1);
+  await page.getByTestId('consent-accept').click();
+  await page.getByTestId('grant-consent').click();
+  await expect(page.getByTestId('consent-state')).toContainText('Autorizzazione attiva');
+
+  const privateNote = 'Nota privata logout race ' + Date.now();
+  await page.getByTestId('memo-input').fill(privateNote);
+  await page.getByTestId('save-memo').click();
+  await expect(page.getByTestId('memory-timeline').getByText(privateNote)).toBeVisible();
+
+  // RED: this is a real API response, from genuine Keycloak-signed bearer and
+  // PostgreSQL. The test only delays delivery of its authentic bytes; no
+  // synthetic JWT, fake response or mocked route result is created.
+  let deliver!: () => void;
+  let received!: () => void;
+  const hold = new Promise<void>(resolve => { deliver = resolve; });
+  const upstreamReceived = new Promise<void>(resolve => { received = resolve; });
+  await page.route('**/api/v1/memories?*', async route => {
+    const upstream = await route.fetch();
+    if (upstream.status() !== 200) throw new Error('Real API failed during race test');
+    received();
+    await hold;
+    await route.fulfill({ response: upstream });
+  });
+
+  const lateResponse = page.waitForResponse(response =>
+    response.url().includes('/api/v1/memories?') && response.status() === 200);
+  await page.getByTestId('sync-reload').click();
+  await upstreamReceived;
+  await page.getByTestId('auth-logout').click();
+  await expect(page.getByTestId('auth-login')).toBeVisible();
+  await expect(page.getByTestId('memory-timeline').getByText(privateNote)).toHaveCount(0);
+
+  deliver();
+  await lateResponse;
+  // The pre-fix refresh unconditionally restores the old session's content.
+  await expect(page.getByTestId('memory-timeline').getByText(privateNote)).toHaveCount(0);
+  await expect(page.getByTestId('consent-state')).toHaveCount(0);
+  const browserStores = await page.evaluate(() => ({
+    local: Object.keys(localStorage), session: Object.keys(sessionStorage)
+  }));
+  expect(browserStores.local.join(' ')).not.toContain('oidc.user');
+  expect(browserStores.session.join(' ')).not.toContain('oidc.user');
+});

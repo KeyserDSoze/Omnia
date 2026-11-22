@@ -40,3 +40,28 @@ Native OIDC+secure storage (#40), real Azure deployment, offline encrypted queue
 ## Tests
 
 Vitest `tests/mobile-unit/web-cloud.test.ts` verifies public configuration and API error/no secret handling. Playwright browser E2E for static /Omnia/ remains in `src/mobile/e2e`; a separate real Keycloak/API/Postgres job is required to claim end-to-end OAuth verification (#17). Never claim E2E real auth solely from demo page tests.
+
+## Independent manual capture IDs and retry identity (#177 / ADR 0076)
+
+The browser Web cloud source key is now `local-<random UUID v4>`,
+generated using secure-context `globalThis.crypto.randomUUID()` for
+**each independent capture**; it is no longer derived solely from
+`occurredAt`. Two notes in the same millisecond do not reuse a source
+key. This ID is a *deduplication identifier*, not an authentication
+credential or a tenant selector. The authenticated API remains responsible
+for tenant/subject, consent, RLS and immutable-key conflict handling (#175).
+
+An uncertain POST/network retry MUST reuse the previously normalized
+entry from the Web `retryRef`, including exact `externalId`,
+`content` and `occurredAt`. A newly initiated capture receives a new
+UUID. If browser Web Crypto UUIDs are unavailable, cloud capture fails
+closed with a visible message; **no timestamp-only or `Math.random`
+fallback may be uploaded**. The sequenced `demo-` ID is limited to
+in-memory native/demo notes and has no multi-device uniqueness promise.
+Native encrypted offline sync needs a secure native generator (e.g.
+Expo Crypto) and device testing before release.
+
+RED/GREEN verification: Vitest fixed-timestamp key tests, real Chromium →
+Keycloak PKCE → JWT/API → PostgreSQL two-note same-instant E2E and GitHub
+Actions linked from #177. This does not implement offline queue, eventual
+sync, editing, full provenance dedup or GDPR completeness.

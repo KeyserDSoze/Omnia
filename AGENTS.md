@@ -1385,3 +1385,16 @@ API capture gate, not merely clear browser UI. Regrant accepted AFTER
 withdrawal is a distinct explicit decision; no permanent source ban.
 Past notes, offline devices, provider grants, IdP sessions, external
 copies and GDPR legal review are still OPEN (#29/#41/#31/#2).
+
+## Web manual capture source keys (#177 / ADR 0076)
+
+`normalizeMemo(..., requireSecureId=true)` is mandatory for authenticated
+Web cloud capture. Each NEW click must obtain a fresh
+`globalThis.crypto.randomUUID()`; never use the clock, memo text or
+`Math.random()` as the sole cloud source key. If secure randomness is
+absent/throws, fail closed BEFORE API fetch. A retry after uncertain HTTP
+response must retain the exact previously normalized object, key, content
+and occurrence time via `retryRef`. Only local non-synchronizing
+native/demo mode may use a session-serial `demo-` fallback. This ID is
+not an auth token, tenant selector, cross-source dedupe or offline sync.
+#41/#125/#8/#2 still OPEN despite #177's narrow resolution.

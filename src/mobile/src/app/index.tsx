@@ -283,7 +283,7 @@ export default function Home() {
   async function captureText() {
     if (busy) return;
     try {
-      const normalized = normalizeMemo(draft, new Date().toISOString());
+      const normalized = normalizeMemo(draft, new Date().toISOString(), webMode.kind === 'cloud');
       if (webMode.kind !== 'cloud') {
         setMemos(current => [{
           id: normalized.externalId, content: normalized.content, tags: normalized.tags,

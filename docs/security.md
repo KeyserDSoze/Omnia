@@ -1385,3 +1385,16 @@ La cattura successiva è realmente negata dall'API/PG, non solo
 nascosta in UI. Nessuna cancellazione di note già conservate,
 revoca universale del token Keycloak o propagazione su backup /
 provider/device offline è inclusa; #29/#31/#41 restano OPEN.
+
+## Web manual capture key collisions (#177 / ADR 0076)
+
+The former `externalId='local-'+occurredAt` could alias two distinct
+clicks in one millisecond and trigger #175's correct HTTP 409 immutability
+guard. A fresh authenticated browser cloud capture now requires
+`crypto.randomUUID()` and sends a new `local-UUID` source key, not a
+timestamp-derived key. Missing/throwing Web Crypto fails closed **before
+fetch/embedding/DB**. A retry of an uncertain original request keeps the
+entry and its UUID unchanged; never regenerate it on retry. IDs confer no
+authorization: the backend still uses signed OIDC claims, consent, FORCE
+RLS and immutable source-key collision rules. The local demo fallback
+serial is session-only; no claim of native/offline cloud identity parity.

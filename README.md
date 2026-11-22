@@ -401,3 +401,13 @@ device originario non aveva ancora visto G2. La revoca non
 cancella dati precedenti, né disabilita una scelta di consenso
 esplicita fatta dopo la revoca; non sostituisce la revoca
 di accessi provider/IdP o le procedure GDPR sui sistemi esterni.
+
+## Source IDs univoci per tentativo di cattura Web (#177 / ADR 0076)
+
+Due nuove note manuali create nello stesso millisecondo non condividono più
+l'`externalId`: ogni nuova cattura Web usa un UUID v4 Web Crypto sotto
+HTTPS/loopback. Un retry dopo risposta incerta conserva invece la chiave
+originale in memoria, per rispettare la semantica idempotente #175.
+Browser senza generatore sicuro: salvataggio cloud negato, non
+fallback al timestamp. Le chiavi del solo demo locale non sono identità
+multi-device e nessuna sincronizzazione native/offline è dichiarata.

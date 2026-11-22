@@ -1,7 +1,5 @@
 using System.Security.Claims;
 using System.Text.Json;
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
 using Omnia.Api;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -59,12 +57,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
-// Per-tenant/user limits are enforced *after* OIDC authentication so a valid
-// signed identity cannot escape a quota by changing IP or forged headers.
-// Anonymous requests are partitioned by their network peer, not X-Forwarded-For.
-var requestsPerMinute = builder.Configuration.GetValue<int?>("RateLimit:RequestsPerMinute") ?? 120;
-if (requestsPerMinute is < 1 or > 1000)
-    throw new InvalidOperationException("RateLimit:RequestsPerMinute must be between 1 and 1000.");
+// The previous unbounded ASP.NET per-actor policy is replaced with a
+// process-local fixed window whose tracked identities have an explicit cap.
+// Both actor and tenant partitions use only verified OIDC claims upstream.
+var actorRequestLimiter = new ApiActorRequestWindowLimiter(
+    builder.Configuration.GetValue<int?>("RateLimit:RequestsPerMinute") ??
+    ApiActorRequestWindowLimiter.DefaultRequestsPerMinute,
+    builder.Configuration.GetValue<int?>("RateLimit:MaxTrackedActors") ??
+    ApiActorRequestWindowLimiter.DefaultMaxTrackedActors);
  // Tenant-wide request/minute budget is separate from existing actor policy.
  // Bounded windows are stored only on this process, never across replicas.
 var tenantRequestLimiter = new ApiTenantRequestWindowLimiter(
@@ -108,26 +108,6 @@ var maxRequestHeaderCount = builder.Configuration.GetValue<int?>(
     ApiKestrelTransportLimits.DefaultMaxRequestHeaderCount;
 ApiKestrelTransportLimits.Validate(
     requestHeadersTimeoutMs, maxRequestHeadersTotalBytes, maxRequestHeaderCount);
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy("omnia-api", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            ApiRateLimitPolicy.PartitionKey(context), _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = requestsPerMinute,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                AutoReplenishment = true
-            }));
-    options.OnRejected = async (context, ct) =>
-    {
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        context.HttpContext.Response.Headers["Retry-After"] = "60";
-        await context.HttpContext.Response.WriteAsJsonAsync(
-            new { error = "rate_limited" }, cancellationToken: ct);
-    };
-});
 var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [];
 builder.Services.AddCors(options => options.AddPolicy("browser", policy =>
 {
@@ -220,10 +200,12 @@ app.Use(async (context, next) =>
 app.UseRouting();
 app.UseCors("browser");
 app.UseAuthentication();
-app.UseRateLimiter();
 app.UseAuthorization();
-// Additional aggregate tenant quota for authenticated GET/POST/PUT/PATCH/DELETE
-// API requests. It never overrides the existing per-account minute policy.
+// All quota keys come from OIDC-validated claims AFTER auth+authorization.
+// Per-actor minute admission must precede tenant minute admission; both
+// return fail-fast 429 without touching JSON bytes or endpoint/DB handlers.
+app.Use((context, next) =>
+    ApiActorRequestRateBudget.InvokeAsync(context, next, actorRequestLimiter));
 app.Use((context, next) =>
     ApiTenantRequestRateBudget.InvokeAsync(context, next, tenantRequestLimiter));
 // Authentication and rate limiting happen BEFORE buffering any user bytes.
@@ -241,7 +223,7 @@ app.MapGet("/ready", async (NpgsqlDataSource db, CancellationToken ct) =>
 
 // First-party user consent: scoped by signed JWT sub + tenant_id; the client never
 // submits its own tenant/owner. This does NOT prove consent from third parties.
-var consents = app.MapGroup("/api/v1/consents").RequireAuthorization().RequireRateLimiting("omnia-api");
+var consents = app.MapGroup("/api/v1/consents").RequireAuthorization();
 consents.MapPost("", async (GrantConsentCommand input, IConsentService service,
     ClaimsPrincipal user, CancellationToken ct) =>
 {
@@ -282,7 +264,7 @@ consents.MapDelete("/{id:guid}", async (Guid id, IConsentService service,
         ? Results.NoContent() : Results.NotFound();
 });
 
-var memories = app.MapGroup("/api/v1/memories").RequireAuthorization().RequireRateLimiting("omnia-api");
+var memories = app.MapGroup("/api/v1/memories").RequireAuthorization();
 memories.MapPost("", async (CaptureMemoryCommand input, IMemoryCatalog catalog,
     ClaimsPrincipal user, CancellationToken ct) =>
 {
@@ -310,7 +292,7 @@ memories.MapGet("", async (IMemoryCatalog catalog, ClaimsPrincipal user, int? li
 });
 
 var privacy = app.MapGroup("/api/v1/privacy")
-    .RequireAuthorization().RequireRateLimiting("omnia-api");
+    .RequireAuthorization();
 privacy.MapGet("/export", (IPersonalDataService service, ClaimsPrincipal user,
     HttpContext context) =>
 {

@@ -280,13 +280,13 @@ for full SaaS ingress/WAF/load/GDPR release.
 
 ## Tenant-bounded actor request windows (#168 / ADR 0067)
 
-Authenticated \`/api/v1\` requests retain a process-local 60-second
+Authenticated `/api/v1` requests retain a process-local 60-second
 actor budget (120/min default) and independent tenant-wide budget
 (600/min default). The actor partition dictionary remains bounded globally
 (default 8192) and now also **per validated OIDC tenant** via optional
-\`RateLimit:MaxTrackedActorsPerTenant\` (default min(256, global actor
+`RateLimit:MaxTrackedActorsPerTenant` (default min(256, global actor
 limit), valid 1..global actor limit). Additional fresh actor IDs within one
-tenant receive 429 \`rate_limited\`, no-store and Retry-After before
+tenant receive 429 `rate_limited`, no-store and Retry-After before
 JSON read or DB access. Previously admitted actors keep their remaining
 quota. Expired actor windows and tenant counters are reclaimed together
 on request-driven lazy cleanup. This does not reserve one capacity slot

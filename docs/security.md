@@ -1222,13 +1222,13 @@ is insufficient for fairness: an authenticated tenant whose aggregate
 rate quota is already exhausted can still allocate fresh actor partitions
 upstream and starve other tenants. The bounded actor window engine now
 has an independent per-signed-tenant active actor cap:
-\`RateLimit:MaxTrackedActorsPerTenant\` defaults to min(256,
-\`RateLimit:MaxTrackedActors\`), valid 1..the global cap and checked
+`RateLimit:MaxTrackedActorsPerTenant` defaults to min(256,
+`RateLimit:MaxTrackedActors`), valid 1..the global cap and checked
 at API startup. A count per validated tenant is held in a bounded map
 only while actor windows exist and is removed atomically on expiration.
 Unknown actor partitions are rejected, never evicted. Synthetic HTTP
 tests must prove that a tenant's 429 flood does not consume all global
-actor slots and another signed tenant can proceed. JWT \`tenant_id\` and
-\`sub\` define both keys; client headers are ignored. This is per-process
+actor slots and another signed tenant can proceed. JWT `tenant_id` and
+`sub` define both keys; client headers are ignored. This is per-process
 fairness, NOT distributed rate limiting, a tenant reservation, DDoS
 protection or GDPR/legal readiness. #37/#2 remain OPEN.

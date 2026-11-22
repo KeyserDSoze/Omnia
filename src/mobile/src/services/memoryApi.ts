@@ -112,6 +112,8 @@ export class MemoryApi {
         throw new CloudApiError('Sessione non valida. Accedi di nuovo.', 401);
       }
       if (response.status === 403) throw new CloudApiError('Consenso o permesso mancante.', 403);
+      if (response.status === 409) throw new CloudApiError(
+        'ID nota già usato per contenuto differente. Nota originale non sovrascritta.', 409);
       if (response.status === 429) throw new CloudApiError('Troppe richieste. Attendi e riprova.', 429);
       throw new CloudApiError('Errore del server (' + response.status + '). Nessuna conferma di salvataggio.', response.status);
     }

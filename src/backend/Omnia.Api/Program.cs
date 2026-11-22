@@ -293,6 +293,12 @@ memories.MapPost("", async (CaptureMemoryCommand input, IMemoryCatalog catalog,
     {
         return Results.Json(new { error = "consent_required" }, statusCode: StatusCodes.Status403Forbidden);
     }
+    catch (MemoryIdempotencyConflictException)
+    {
+        // No raw content, actor key or existing row metadata in response/log.
+        return Results.Json(new { error = "memory_idempotency_conflict" },
+            statusCode: StatusCodes.Status409Conflict);
+    }
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
     catch (JsonException) { return Results.BadRequest(new { error = "Invalid JSON content." }); }
 });

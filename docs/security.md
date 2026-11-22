@@ -1342,3 +1342,24 @@ persists payloads, cursor or tokens to web storage. Offline failure
 preserves the previous timeline and permits an explicit retry. This is
 not immutable snapshot isolation across concurrent writes, encrypted
 offline/native cross-device parity or a GDPR completion.
+
+
+## Canonical note replay does not mutate live private provenance (#175 / ADR 0074)
+
+A live PostgreSQL memory key \`tenant_id + owner_sub + source + external_id\`
+is immutable. Every capture still needs a valid scoped grant and acquires
+\`PostgresActorLock\` in \`PostgresActorScope\` under FORCE RLS. After
+\`SELECT ... FOR UPDATE\`, an exact source payload/timestamp retry
+returns the original canonical UUID **without generating new sealed
+ciphertext or any SQL UPDATE**. A different input for the same still-live
+key is rejected with generic HTTP 409 \`memory_idempotency_conflict\`;
+the original ciphertext, provenance, embedding and TTL remain intact,
+and the error contains no private note, token or actor ID. A new
+externalId creates a different note. Explicit reacquisition of an
+already-expired key remains allowed after rechecking consent (only the
+expired SQL conflict branch updates/renews TTL). Browser 409 is a clear
+actionable error, **not** forced logout, silent overwrite or offline
+success. The replay comparison decrypts sealed data with tenant/subject
+AAD and existing canonical UUID; tamper/unknown KEK errors fail closed.
+This does not implement versions/edits, provider-level dedup, native
+encrypted offline sync, external backups/erasure or GDPR compliance.

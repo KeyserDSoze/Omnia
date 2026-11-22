@@ -43,13 +43,15 @@ describe('cloud bearer 401 session boundary', () => {
     expect(gate.clear).toHaveBeenCalledOnce();
   });
 
-  it('does not log out on 403, 429, 503 or a temporary network failure', async () => {
+  it('does not log out on 403, 409, 429, 503 or a temporary network failure', async () => {
     const gate = boundary();
     const api = new MemoryApi(cfg, async () => 'signed-actor', gate.session);
-    for (const status of [403, 429, 503]) {
+    for (const status of [403, 409, 429, 503]) {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status }));
       await expect(api.recent()).rejects.toMatchObject({ status });
     }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 409 }));
+    await expect(api.recent()).rejects.toThrow('Nota originale non sovrascritta.');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     await expect(api.recent()).rejects.toMatchObject({ status: 0 });
     expect(gate.clear).not.toHaveBeenCalled();

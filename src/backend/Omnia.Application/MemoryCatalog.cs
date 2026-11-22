@@ -8,6 +8,16 @@ public sealed record CaptureMemoryCommand(string Source, string ExternalId, stri
 public sealed record MemorySummary(Guid Id, string Source, string Summary, IReadOnlyList<string> Tags,
     DateTimeOffset OccurredAt, bool HasEmbedding);
 
+/// <summary>
+/// A live canonical capture key was reused with different source content.
+/// No personal text, source key or tenant identifier may enter this message.
+/// </summary>
+public sealed class MemoryIdempotencyConflictException : Exception
+{
+    public MemoryIdempotencyConflictException()
+        : base("A live memory capture key already exists with different content.") { }
+}
+
 public interface IMemoryRepository
 {
     Task<MemoryEntry> UpsertAsync(MemoryEntry entry, CancellationToken cancellationToken);

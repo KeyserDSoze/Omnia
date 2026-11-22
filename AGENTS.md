@@ -1344,3 +1344,25 @@ for legitimate new accounts are explicit limitations.
 The per-process cap does not solve cross-replica/WAF/media/
 connector/AI quotas, production load or GDPR. Parent #37/#2
 remain OPEN.
+
+
+## Immutable live memory capture retries (#175 / ADR 0074)
+
+For every authenticated actor, source and externalId, an unexpired
+\`memory_entries\` row is WRITE-ONCE. Keep \`PostgresActorLock\`, active
+scoped consent, restricted runtime FORCE RLS and \`FOR UPDATE\` in the
+same transaction. Compare original sealed content using AEAD tenant,
+owner, canonical UUID plus stored occurredAt at PostgreSQL microsecond
+precision. Same source event must return the existing UUID without
+another Encrypt, SQL UPDATE, changed DEK, expiry extension or
+provenance mutation. Reusing a live key for a DIFFERENT event MUST
+return generic HTTP 409 \`memory_idempotency_conflict\`, without
+personal data, key, actor or tenant echo; Web should show conflict,
+not logout or silent success. Only a truly EXPIRED row may be
+explicitly reacquired, with fresh consent, subject to existing TTL
+policy. Different actor/tenant scopes with the same externalId remain
+isolated. A source event without stable occurredAt cannot be replayed
+as exact content after the server assigns a new time; use canonical
+stable source keys/time on the client. This does not imply offline
+queue, immutable multi-source versions or zero embedding-provider
+work. Keep #125/#41/#8/#2 OPEN.

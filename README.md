@@ -372,3 +372,17 @@ e refresh. Il vecchio \`GET /api/v1/memories\` array resta compatibile.
 Il cursore non è una credenziale; pagine successive non sono uno snapshot
 immutabile in presenza di nuove note retrodatate o scadenze. Native,
 sincronizzazione offline cifrata e rilascio per dati reali restano aperti.
+
+
+## Retry sicuri e identificatori canonici (#175 / ADR 0074)
+
+Una nota con lo stesso \`source + externalId\` nello stesso account/tenant
+non viene più riscritta silenziosamente durante il periodo di validità:
+un retry identico restituisce l'UUID iniziale **senza aggiornare il
+ciphertext AES-GCM**, la provenienza o la scadenza; contenuti differenti
+con identica chiave ricevono HTTP \`409 memory_idempotency_conflict\`,
+senza dati personali nella risposta. Il browser mantiene il testo nel
+campo di modifica e mostra un conflitto esplicito, non un logout.
+Una cattura *esplicita* dopo la scadenza, con consenso valido, può ancora
+riacquisire la chiave secondo la policy attuale. Questo non è editing,
+versionamento né sincronizzazione offline; #125/#41 restano aperte.

@@ -183,3 +183,20 @@ non-owner recovered runtime role must enforce scoped access to both
 personal tables. Existing memory encryption and historical KEK are
 verified end-to-end after recovery. This still does NOT prove
 production backup encryption, archived copies, Azure/PITR or cutover.
+
+
+## Immutabilità retry su note vive (#175 / ADR 0074)
+
+Quando una riga sealed non è ancora scaduta, \`UpsertAsync\` verifica
+con \`PostgresActorLock\`, \`FOR UPDATE\`, AEAD AAD canonica e consenso
+che una seconda cattura con stesso source/externalId abbia identico
+raw, normalizzato, summary, tags, type ed evento (precisione PostgreSQL
+di un microsecondo). In tal caso restituisce l'UUID senza \`Seal\`,
+UPDATE, rewrap/DEK né nuovi byte di ciphertext. Una collisione di
+provenienza/contenuto ritorna 409 generico **senza** riscrivere la nota.
+L'upsert aggiornabile è ristretto alle righe davvero scadute; una
+nuova cattura richiede comunque grant attivo. I legacy plaintext
+esistenti rimangono solo leggibili in compatibilità fino alla bonifica
+#140, con confronto conservativo e senza fallback da ciphertext
+corrotto. Non equiparare questo controllo alla cifratura di embedding,
+backup/WAL o all'idempotenza degli agenti/erasure.

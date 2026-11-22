@@ -30,20 +30,77 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db, IEnvelopeEncry
                 throw new ConsentRequiredException();
         }
 
-        // Canonical ID must remain stable across retries, otherwise the AAD
-        // would bind a new envelope to a transient client-generated UUID.
-        await using var existing = new NpgsqlCommand("""
-            SELECT id FROM memory_entries
+        // Canonical identity is (tenant, owner, source, externalId). For a
+        // still-live key, an identical request is a read-only retry, NEVER an
+        // UPDATE with a new AES-GCM DEK, timestamp or embedding.
+        // A changed body is an explicit conflict rather than a silent rewrite.
+        // Actor lock + FOR UPDATE are held in the SAME scoped RLS transaction.
+        var canonicalId = entry.Id;
+        var unchangedLiveRetry = false;
+        await using (var existing = new NpgsqlCommand("""
+            SELECT id, expires_at, content_type, occurred_at, sealed_payload,
+                   raw_content, normalized_json::text, summary, tags
+            FROM memory_entries
             WHERE tenant_id = @tenant AND owner_sub = @subject
               AND source = @source AND external_id = @external
             FOR UPDATE
-            """, conn, tx);
-        existing.Parameters.AddWithValue("tenant", entry.TenantId);
-        existing.Parameters.AddWithValue("subject", entry.OwnerSubject);
-        existing.Parameters.AddWithValue("source", entry.Source);
-        existing.Parameters.AddWithValue("external", entry.ExternalId);
-        var previous = await existing.ExecuteScalarAsync(ct);
-        var canonicalId = previous is Guid storedId ? storedId : entry.Id;
+            """, conn, tx))
+        {
+            existing.Parameters.AddWithValue("tenant", entry.TenantId);
+            existing.Parameters.AddWithValue("subject", entry.OwnerSubject);
+            existing.Parameters.AddWithValue("source", entry.Source);
+            existing.Parameters.AddWithValue("external", entry.ExternalId);
+            await using var reader = await existing.ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct))
+            {
+                canonicalId = reader.GetGuid(0);
+                var expiresAt = reader.GetFieldValue<DateTimeOffset>(1);
+                if (expiresAt > DateTimeOffset.UtcNow)
+                {
+                    // Compare the original protected fields, NOT the random
+                    // ciphertext (random DEKs differ even for equal plaintext).
+                    // Old plaintext rows are read only for compatibility with
+                    // the incomplete, operator-controlled legacy backfill.
+                    var previous = reader.IsDBNull(4)
+                        ? new SealedMemoryPayload.Content(
+                            reader.GetString(5), reader.GetString(6),
+                            reader.GetString(7), reader.GetFieldValue<string[]>(8))
+                        : SealedMemoryPayload.Decrypt(crypto,
+                            reader.GetFieldValue<byte[]>(4),
+                            entry.TenantId, entry.OwnerSubject, canonicalId);
+
+                    // PostgreSQL timestamptz has microsecond precision;
+                    // Npgsql/DateTimeOffset may carry 100ns ticks before insert.
+                    // Distinguish a genuine changed event time, not its lost
+                    // sub-microsecond precision on normal retries.
+                    var sameTime = reader.GetFieldValue<DateTimeOffset>(3)
+                        .ToUniversalTime().Ticks / 10 ==
+                        entry.OccurredAt.ToUniversalTime().Ticks / 10;
+                    if (!sameTime ||
+                        !string.Equals(reader.GetString(2), entry.ContentType,
+                            StringComparison.Ordinal) ||
+                        !string.Equals(previous.RawContent, entry.RawContent,
+                            StringComparison.Ordinal) ||
+                        !string.Equals(previous.NormalizedJson, entry.NormalizedJson,
+                            StringComparison.Ordinal) ||
+                        !string.Equals(previous.Summary, entry.Summary,
+                            StringComparison.Ordinal) ||
+                        !previous.Tags.SequenceEqual(entry.Tags, StringComparer.Ordinal))
+                        throw new MemoryIdempotencyConflictException();
+
+                    unchangedLiveRetry = true;
+                }
+                // An already-expired key can be explicitly recaptured, but
+                // only after the same active-consent check above.
+            }
+        }
+
+        if (unchangedLiveRetry)
+        {
+            await scope.CommitAsync(ct);
+            return entry.WithPersistedId(canonicalId);
+        }
+
         var sealedPayload = SealedMemoryPayload.Encrypt(crypto, entry, canonicalId);
 
         // Both the active-grant row lock and the memory write live in ONE transaction.
@@ -63,11 +120,10 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db, IEnvelopeEncry
               summary = EXCLUDED.summary,
               tags = EXCLUDED.tags, occurred_at = EXCLUDED.occurred_at,
               embedding = EXCLUDED.embedding, embedding_model = EXCLUDED.embedding_model,
-              -- A retry of a live key MUST NOT extend retention.
-              -- A new explicit capture of an already expired key starts a fresh TTL.
-              expires_at = CASE
-                  WHEN memory_entries.expires_at <= now() THEN now() + interval '30 days'
-                  ELSE memory_entries.expires_at END
+              -- Only expired rows may be reacquired. Live duplicates are
+              -- handled read-only above; conflicting input fails closed.
+              expires_at = now() + interval '30 days'
+            WHERE memory_entries.expires_at <= now()
             RETURNING id
             """, conn, tx);
         command.Parameters.AddWithValue("id", canonicalId);
@@ -82,8 +138,10 @@ public sealed class PostgresMemoryRepository(NpgsqlDataSource db, IEnvelopeEncry
             ? DBNull.Value : "[" + string.Join(",", entry.Embedding.Select(
                 n => n.ToString("R", System.Globalization.CultureInfo.InvariantCulture))) + "]"));
         command.Parameters.AddWithValue("model", (object?)entry.EmbeddingModel ?? DBNull.Value);
-        var id = (Guid)(await command.ExecuteScalarAsync(ct)
-            ?? throw new InvalidOperationException("Insert did not return a record ID."));
+        // If a different concurrent writer inserted/renewed this key,
+        // never overwrite its live row or expose its contents.
+        var id = await command.ExecuteScalarAsync(ct) is Guid persistedId
+            ? persistedId : throw new MemoryIdempotencyConflictException();
         await scope.CommitAsync(ct);
         return entry.WithPersistedId(id);
     }

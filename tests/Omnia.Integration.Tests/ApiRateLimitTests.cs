@@ -282,6 +282,98 @@ public sealed class ApiRateLimitTests
             Assert.Equal(HttpStatusCode.OK, health.StatusCode);
     }
 
+    [Fact]
+    public async Task TenantExhaustionCannotFillOtherTenantsActorPartitions()
+    {
+        // RED behavioral regression against the real HTTP pipeline and real
+        // PostgreSQL: the tenant's own 429 must not monopolize actor slots.
+        var migration = Environment.GetEnvironmentVariable("OMNIA_TEST_DB");
+        var runtimeDb = Environment.GetEnvironmentVariable("OMNIA_TEST_APP_DB");
+        var retentionDb = Environment.GetEnvironmentVariable("OMNIA_TEST_RETENTION_DB");
+        var keyRing = Environment.GetEnvironmentVariable("OMNIA_TEST_KEYRING_FILE");
+        Assert.False(string.IsNullOrWhiteSpace(migration));
+        Assert.False(string.IsNullOrWhiteSpace(runtimeDb));
+        Assert.False(string.IsNullOrWhiteSpace(retentionDb));
+        Assert.False(string.IsNullOrWhiteSpace(keyRing));
+
+        var settings = new Dictionary<string, string?>
+        {
+            ["Database:ConnectionString"] = runtimeDb,
+            ["Database:MigrationConnectionString"] = migration,
+            ["Database:RetentionConnectionString"] = retentionDb,
+            ["Crypto:KeyRingPath"] = keyRing,
+            ["Auth:Issuer"] = "http://localhost:8081/realms/omnia",
+            ["Auth:Audience"] = "omnia-api",
+            ["Embeddings:Provider"] = "none",
+            ["RateLimit:RequestsPerMinute"] = "10",
+            ["RateLimit:MaxTrackedActors"] = "3",
+            ["RateLimit:MaxTrackedActorsPerTenant"] = "1",
+            ["RateLimit:TenantRequestsPerMinute"] = "1"
+        };
+        using var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["Database__ConnectionString"] = runtimeDb,
+            ["Database__MigrationConnectionString"] = migration,
+            ["Database__RetentionConnectionString"] = retentionDb,
+            ["Crypto__KeyRingPath"] = keyRing,
+            ["Auth__Issuer"] = "http://localhost:8081/realms/omnia",
+            ["Auth__Audience"] = "omnia-api",
+            ["RateLimit__RequestsPerMinute"] = "10",
+            ["RateLimit__MaxTrackedActors"] = "3",
+            ["RateLimit__MaxTrackedActorsPerTenant"] = "1",
+            ["RateLimit__TenantRequestsPerMinute"] = "1"
+        });
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
+            builder.ConfigureTestServices(services => services
+                .AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme = HeaderTestAuthHandler.SchemeName;
+                    options.DefaultChallengeScheme = HeaderTestAuthHandler.SchemeName;
+                })
+                .AddScheme<AuthenticationSchemeOptions, HeaderTestAuthHandler>(
+                    HeaderTestAuthHandler.SchemeName, _ => { }));
+        });
+        using var client = factory.CreateClient();
+        var tenantA = "tenant-cap-a-" + Guid.NewGuid().ToString("N");
+        var tenantB = "tenant-cap-b-" + Guid.NewGuid().ToString("N");
+
+        async Task<HttpResponseMessage> RequestAsync(string tenant, string subject, bool spoof = false)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/consents");
+            request.Headers.Add("X-Test-Tenant", tenant);
+            request.Headers.Add("X-Test-Subject", subject);
+            if (spoof)
+            {
+                request.Headers.Add("X-Tenant-Id", tenantB);
+                request.Headers.Add("X-Forwarded-For", "198.51.100.42");
+            }
+            return await client.SendAsync(request);
+        }
+
+        using (var admitted = await RequestAsync(tenantA, "actor-a-1"))
+            Assert.Equal(HttpStatusCode.OK, admitted.StatusCode);
+
+        for (var n = 2; n <= 3; n++)
+        {
+            using var rejected = await RequestAsync(tenantA, "actor-a-" + n, spoof: true);
+            Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+            Assert.Equal("no-store", rejected.Headers.CacheControl?.ToString());
+            Assert.True(rejected.Headers.TryGetValues("Retry-After", out var hints));
+            Assert.InRange(int.Parse(Assert.Single(hints!)), 1, 60);
+            var error = await rejected.Content.ReadAsStringAsync();
+            Assert.Contains("rate_limited", error);
+            Assert.DoesNotContain(tenantA, error);
+        }
+
+        // Before this feature A's rejected actor-2/3 fill the 3 global
+        // actor partitions; B is incorrectly rejected with a fourth key.
+        using (var independentTenant = await RequestAsync(tenantB, "actor-b-1"))
+            Assert.Equal(HttpStatusCode.OK, independentTenant.StatusCode);
+    }
+
     private sealed class TestEnvironment : IDisposable
     {
         private readonly Dictionary<string, string?> _previous = new();

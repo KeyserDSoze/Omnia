@@ -273,3 +273,104 @@ test('real API 401 clears the signed-in browser timeline and consent', async ({ 
   expect(stores.local.join(' ')).not.toContain('oidc.user');
   expect(stores.session.join(' ')).not.toContain('oidc.user');
 });
+
+
+test('logout while real PostgreSQL capture POST is awaiting its response', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!user1 || !password) throw new Error('Missing ephemeral OIDC test account');
+  await page.goto('/Omnia/');
+  await browserLogin(page, user1);
+  // The real synthetic account can retain consent across preceding E2E cases.
+  if (await page.getByTestId('consent-accept').count() > 0) {
+    await page.getByTestId('consent-accept').click();
+    await page.getByTestId('grant-consent').click();
+  }
+  await expect(page.getByTestId('consent-state')).toContainText('Autorizzazione attiva');
+
+  const memo = 'Nota POST pendente al logout ' + Date.now();
+  let release!: () => void;
+  let received!: () => void;
+  const hold = new Promise<void>(resolve => { release = resolve; });
+  const accepted = new Promise<void>(resolve => { received = resolve; });
+  let startedAfterLogout = 0;
+  let loggedOut = false;
+  await page.route('**/api/v1/memories?*', async route => {
+    if (loggedOut) startedAfterLogout++;
+    await route.continue();
+  });
+  await page.route('**/api/v1/memories', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    // Real signed OIDC bearer, real endpoint and PostgreSQL commit. Only
+    // delivery of the genuine accepted response is deferred, never faked.
+    const server = await route.fetch();
+    expect(server.status()).toBe(201);
+    received();
+    await hold;
+    await route.fulfill({ response: server });
+  });
+
+  try {
+    await page.getByTestId('memo-input').fill(memo);
+    await page.getByTestId('save-memo').click();
+    await accepted;
+    // RED: pre-fix logout() returns early when busy=true.
+    await page.getByTestId('auth-logout').click();
+    await expect(page.getByTestId('auth-login')).toBeVisible();
+    loggedOut = true;
+    await expect(page.getByTestId('consent-state')).toHaveCount(0);
+    await expect(page.getByTestId('memo-input')).toHaveValue('');
+    await expect(page.getByTestId('memory-timeline').getByText(memo)).toHaveCount(0);
+    await expect(page.getByTestId('notice')).toContainText('potrebbe essere');
+
+    release();
+    await expect(page.getByTestId('auth-login')).toBeVisible();
+    await expect(page.getByTestId('memory-timeline').getByText(memo)).toHaveCount(0);
+    await expect(page.getByTestId('notice')).not.toContainText('Nota salvata nel cloud');
+    expect(startedAfterLogout).toBe(0);
+
+    // The server already accepted the POST: logout must not pretend it was
+    // rolled back. On fresh OIDC login, the PostgreSQL row must be visible.
+    await page.unroute('**/api/v1/memories');
+    await browserLogin(page, user1);
+    await expect(page.getByTestId('memory-timeline').getByText(memo)).toBeVisible();
+  } finally {
+    release();
+  }
+});
+
+test('logout while genuine private export is in flight prevents later download', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!user1 || !password) throw new Error('Missing ephemeral OIDC test account');
+  await page.goto('/Omnia/');
+  await browserLogin(page, user1);
+
+  let release!: () => void;
+  let received!: () => void;
+  const hold = new Promise<void>(resolve => { release = resolve; });
+  const accepted = new Promise<void>(resolve => { received = resolve; });
+  const downloads: string[] = [];
+  page.on('download', download => downloads.push(download.suggestedFilename()));
+  await page.route('**/api/v1/privacy/export', async route => {
+    const server = await route.fetch();
+    expect(server.status()).toBe(200);
+    received();
+    await hold;
+    await route.fulfill({ response: server });
+  });
+
+  try {
+    await page.getByTestId('export-data').click();
+    await accepted;
+    // RED: export sets busy, which previously made Logout a silent no-op.
+    await page.getByTestId('auth-logout').click();
+    await expect(page.getByTestId('auth-login')).toBeVisible();
+    release();
+    await expect(page.getByTestId('auth-login')).toBeVisible();
+    // Flush pending UI work without exposing any content from another session.
+    await page.waitForTimeout(350);
+    expect(downloads).toEqual([]);
+    await expect(page.getByTestId('notice')).not.toContainText('Esportazione JSON avviata');
+  } finally {
+    release();
+  }
+});

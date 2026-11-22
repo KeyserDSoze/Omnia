@@ -5,6 +5,7 @@ import { normalizeMemo } from '../domain/tags';
 import { configuredWebMode, type WebMode } from '../services/config';
 import { createBrowserAuth, type BrowserAuth } from '../services/webAuth';
 import { MemoryApi, type ConsentDto, type RemoteMemory } from '../services/memoryApi';
+import { CloudViewEpoch } from '../services/cloudViewEpoch';
 
 type LocalMemo = { id: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
@@ -36,6 +37,7 @@ export default function Home() {
   const [eraseAcknowledged, setEraseAcknowledged] = useState(false);
   const authRef = useRef<BrowserAuth | null>(null);
   const apiRef = useRef<MemoryApi | null>(null);
+  const cloudViewRef = useRef(new CloudViewEpoch());
   const retryRef = useRef<{ raw: string; entry: ReturnType<typeof normalizeMemo> } | null>(null);
   const [recording, setRecording] = useState(false);
   const [audioUri, setAudioUri] = useState<string | null>(null);
@@ -45,9 +47,12 @@ export default function Home() {
   async function refreshCloud() {
     const api = apiRef.current;
     if (!api) throw new Error('Connessione API non disponibile.');
-    const [consents, recent] = await Promise.all([api.listConsents(), api.recent()]);
-    setGrant(activeManualGrant(consents));
-    setMemos(recent.map(timelineMemo));
+    // Only the newest response from the CURRENT signed-in session may
+    // repopulate the timeline; a pending request outlives logout otherwise.
+    await cloudViewRef.current.refresh(api, (consents, recent) => {
+      setGrant(activeManualGrant(consents));
+      setMemos(recent.map(timelineMemo));
+    });
   }
 
   useEffect(() => {
@@ -63,8 +68,10 @@ export default function Home() {
           if (live) setAuthState('signed-out');
           return;
         }
-        if (live) setAuthState('signed-in');
-        await refreshCloud();
+        if (live) {
+          setAuthState('signed-in');
+          await refreshCloud();
+        }
       } catch (error) {
         if (live) {
           setAuthState('error');
@@ -72,29 +79,36 @@ export default function Home() {
         }
       }
     })();
-    return () => { live = false; };
+    return () => {
+      live = false;
+      cloudViewRef.current.invalidate();
+    };
   }, []);
 
   async function login() {
+    if (busy) return;
     try { await authRef.current?.login(); }
     catch { setNotice('Impossibile avviare il login OIDC. Verifica il provider.'); }
   }
 
   async function logout() {
     if (busy) return;
+    // Invalidate before any await: a pending authenticated GET may complete
+    // while OIDC token revocation is in flight. Clear personal UI immediately.
+    cloudViewRef.current.invalidate();
+    setAuthState('signed-out');
+    setMemos([]);
+    setGrant(null);
+    setAccepted(false);
+    setErasePhrase('');
+    setEraseAcknowledged(false);
+    setDraft('');
+    retryRef.current = null;
     setBusy(true);
     let revoked = true;
     try { await authRef.current?.logout(); }
     catch { revoked = false; }
     finally {
-      setAuthState('signed-out');
-      setMemos([]);
-      setGrant(null);
-      setAccepted(false);
-      setErasePhrase('');
-      setEraseAcknowledged(false);
-      setDraft('');
-      retryRef.current = null;
       setBusy(false);
       setNotice(revoked ? 'Sessione locale chiusa e revoca token richiesta.' :
         'Sessione locale chiusa; revoca remota non confermata. Chiudi anche la sessione del provider.');
@@ -103,6 +117,7 @@ export default function Home() {
 
   async function grantConsent() {
     if (!accepted || !apiRef.current || busy || authState !== 'signed-in') return;
+    cloudViewRef.current.invalidate();
     setBusy(true);
     try {
       await apiRef.current.grantManualCapture();
@@ -116,6 +131,7 @@ export default function Home() {
 
   async function revokeConsent() {
     if (!grant || !apiRef.current || busy) return;
+    cloudViewRef.current.invalidate();
     setBusy(true);
     try {
       await apiRef.current.revokeConsent(grant.id);
@@ -154,6 +170,7 @@ export default function Home() {
   async function erasePersonalData() {
     if (webMode.kind !== 'cloud' || authState !== 'signed-in' || !apiRef.current ||
         busy || erasePhrase !== 'ELIMINA' || !eraseAcknowledged) return;
+    cloudViewRef.current.invalidate();
     setBusy(true);
     try {
       const receipt = await apiRef.current.erasePersonalData('ERASE_MY_DATA');
@@ -263,7 +280,7 @@ export default function Home() {
           <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             {authState !== 'signed-in' ? (
               <Pressable testID="auth-login" onPress={() => { void login(); }}
-                accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16 }]}>
+                disabled={busy} accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16 }]}>
                 <Text style={[styles.buttonText, heading]}>Accedi con OIDC</Text>
               </Pressable>
             ) : (

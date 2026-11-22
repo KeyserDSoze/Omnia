@@ -307,3 +307,14 @@ MaxTrackedActors/MaxTrackedActorsPerTenant/MaxTrackedTenants remain
 unchanged; 429 is generic and no-store, Retry-After is advisory.
 This is NOT distributed between API replicas, an ingress/WAF defence,
 capacity reservation or real-data GDPR release. Parent #37/#2 remain open.
+
+
+## Cloud browser session isolation (#170 / ADR 0069)
+
+An in-memory request generation now protects the web timeline/consent UI:
+late responses cannot repopulate an earlier signed-in account after logout
+or erasure, and older refreshes cannot override a newer one. Logout clears
+the personal timeline immediately before attempting remote token revocation.
+A real Keycloak + JWT + PostgreSQL Playwright regression and deferred-promise
+Vitest tests guard this behavior. No client-side token or private-note storage
+is added; this does **not** assert native parity or global token revocation.

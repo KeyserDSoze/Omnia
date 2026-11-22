@@ -1248,3 +1248,20 @@ Legacy single-budget HTTP helper classes exist for isolated tests only
 and must never run as independent live middleware alongside the new
 joint admission. Same fixed-window/cardinality limitations still apply;
 this is neither distributed quota nor DDoS/real-data GDPR signoff.
+
+
+## Signed Web session refresh fencing (#170 / ADR 0069)
+
+In the Expo Web cloud mode, concurrent GET requests for consents and notes
+must never restore old account data after a logout, another refresh, manual
+consent revoke/grant, explicit database erasure or Home unmount. Home uses an
+in-RAM per-component request generation; only the current generation can
+apply timeline and active-consent state, and stale errors cannot show after
+logout. Logout invalidates pending reads and clears visible personal data
+BEFORE awaiting best-effort OIDC token revocation. Session tokens remain
+in JS memory only, while transient PKCE redirects use sessionStorage.
+The test uses a live Keycloak/JWT/PostgreSQL response delayed in delivery
+by Playwright, not a fake endpoint or mocked JWT. This is UI-only defense:
+OIDC server revocation, RLS, 30-day retention, backend erasure and native
+devices remain separate security gates. Child #170 closes only after real
+RED/GREEN CI; #41 and privacy #2 stay OPEN.

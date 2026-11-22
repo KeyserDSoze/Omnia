@@ -375,3 +375,27 @@ test('logout while genuine private export is in flight prevents later download',
     release();
   }
 });
+
+
+test('real OIDC private API responses are never HTTP cacheable', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!user1 || !password) throw new Error('Missing ephemeral Keycloak E2E account');
+
+  await page.goto('/Omnia/');
+  await browserLogin(page, user1);
+  const privateRead = page.waitForResponse(response =>
+    response.url().includes('/api/v1/memories?') && response.status() === 200);
+  await page.getByTestId('sync-reload').click();
+  const actual = await privateRead;
+  // RED #173: real ASP.NET + JWT + PostgreSQL response currently omits
+  // Cache-Control on successful private reads, unlike the export endpoint.
+  expect(actual.headers()['cache-control']).toBe('no-store');
+  expect(actual.headers()['x-content-type-options']).toBe('nosniff');
+  expect(actual.headers()['referrer-policy']).toBe('no-referrer');
+
+  // The server must apply the SAME policy to genuine bearer challenges.
+  const challenge = await page.request.get('http://127.0.0.1:8080/api/v1/consents');
+  expect(challenge.status()).toBe(401);
+  expect(challenge.headers()['cache-control']).toBe('no-store');
+  expect(challenge.headers()['x-content-type-options']).toBe('nosniff');
+});

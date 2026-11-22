@@ -120,12 +120,13 @@ public sealed class ApiMemoryPaginationTests
 
         var observed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? cursor = null;
+        string? borrowedCursor = null;
         for (var pageIndex = 0; pageIndex < 3; pageIndex++)
         {
             var url = "/api/v1/memories/page?limit=5" +
                 (cursor is null ? "" : "&before=" + Uri.EscapeDataString(cursor));
             using var response = await SendAsync(HttpMethod.Get, url);
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode); // RED: 404
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode); // RED was 404
             Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
             using var parsed = JsonDocument.Parse(await response.Content.ReadAsStreamAsync());
             var root = parsed.RootElement;
@@ -141,20 +142,25 @@ public sealed class ApiMemoryPaginationTests
             cursor = root.GetProperty("nextCursor").ValueKind == JsonValueKind.Null
                 ? null : root.GetProperty("nextCursor").GetString();
             Assert.Equal(pageIndex < 2, cursor is not null);
+            if (pageIndex == 0) borrowedCursor = cursor;
         }
         Assert.True(saved.SetEquals(observed));
+        Assert.NotNull(borrowedCursor);
+        var borrowedPosition = "&before=" + Uri.EscapeDataString(borrowedCursor!);
 
         // A cursor is not a permission. JWT sub+tenant + FORCE RLS still own
         // every SELECT regardless of the requested cursor.
         using (var foreignOwner = await SendAsync(
-            HttpMethod.Get, "/api/v1/memories/page?limit=5", subject: otherOwner))
+            HttpMethod.Get, "/api/v1/memories/page?limit=5" + borrowedPosition,
+            subject: otherOwner))
         {
             Assert.Equal(HttpStatusCode.OK, foreignOwner.StatusCode);
             using var json = JsonDocument.Parse(await foreignOwner.Content.ReadAsStreamAsync());
             Assert.Empty(json.RootElement.GetProperty("items").EnumerateArray());
         }
         using (var foreignTenant = await SendAsync(
-            HttpMethod.Get, "/api/v1/memories/page?limit=5", tenantId: otherTenant))
+            HttpMethod.Get, "/api/v1/memories/page?limit=5" + borrowedPosition,
+            tenantId: otherTenant))
         {
             Assert.Equal(HttpStatusCode.OK, foreignTenant.StatusCode);
             using var json = JsonDocument.Parse(await foreignTenant.Content.ReadAsStreamAsync());

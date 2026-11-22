@@ -44,6 +44,10 @@ Leggere `docs/backlog.md` e `docs/product-requirements.md` prima di nuove funzio
 
 All new memory writes MUST pass an active source-scoped `memory.capture` grant. Never bypass `IConsentGuard` or the transactional PostgreSQL check inside `PostgresMemoryRepository.UpsertAsync`. Never initiate external embeddings before consent + domain payload validation. Tests must include revoked/expired grants and cross-tenant denial. The consent endpoint only records first-party acknowledgement; it does **not** legalize third-party recordings or replace GDPR review.
 
+## Private REST response cache invariant (#173 / ADR 0072)
+
+Every `/api/v1` response MUST set server-origin `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`, including success, streamed export, auth 401/403, 429 and recovery 503. Use the single `ApiPrivateResponseCachePolicy` BEFORE recovery quarantine and auth; `OnStarting` owns the final headers to prevent endpoint regression. Do not accidentally apply it to `/health`, `/ready` or a lookalike path segment. Browser fetch cache flags do not replace origin response policy. No-store does NOT clear JavaScript Cache API, local files or noncompliant CDN caches; retain full GDPR/consent/retention controls.
+
 ## Rate limit invariants (#37 / ADR 0068)
 
 The live `/api/v1` request-rate middleware MUST run AFTER authentication and authorization and use `ApiAtomicRequestRateBudget` to admit actor+tenant windows together. The former `UseRateLimiter` / named policy and standalone `ApiActorRequestRateBudget` plus `ApiTenantRequestRateBudget` are NOT the live middleware; they are retained only for isolated legacy tests. Derive both signed partition keys from validated OIDC claims, never client headers. A 429 must neither spend the other minute budget nor allocate a fresh partition; no body/DB work on denial. Keep strict global/tenant/actor bounded cardinality and fail-fast config. The process-local fixed windows are NOT distributed SaaS quota, WAF, media limit or GDPR readiness.

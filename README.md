@@ -345,3 +345,16 @@ that a request may have been processed and must be checked at the
 next login. Real Keycloak/JWT/PostgreSQL browser scenarios and
 deferred-promise Vitest tests exercise the behavior; native/device
 and production privacy gates remain outstanding.
+
+
+## Private API response cache safety (#173 / ADR 0072)
+
+The .NET API now sets \`Cache-Control: no-store\`,
+\`X-Content-Type-Options: nosniff\` and \`Referrer-Policy: no-referrer\`
+for **every** \`/api/v1\` response including success, consent denial,
+OIDC 401, actor/tenant throttling, errors and streamed personal export,
+even if an endpoint short-circuits. The /health and /ready probes are
+not affected. Tests exercise real PostgreSQL via xUnit and JWT/OIDC
+through Playwright Keycloak. This only governs HTTP caches honoring
+origin headers, not service-worker Cache API, downloads, backups or
+rogue CDN rules; wider privacy/security gates remain open.

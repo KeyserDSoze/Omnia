@@ -188,6 +188,10 @@ builder.WebHost.ConfigureKestrel(options =>
         options.Limits, requestHeadersTimeoutMs,
         maxRequestHeadersTotalBytes, maxRequestHeaderCount));
 var app = builder.Build();
+// Every /api/v1 response (including authentication/limit/errors and streaming)
+// is personal or security-relevant. Apply no-store BEFORE even recovery
+// quarantine; OnStarting overrides downstream header changes.
+app.Use(ApiPrivateResponseCachePolicy.InvokeAsync);
 // Recheck on each request: an operator can quarantine a running API by
 // withdrawing the ready marker. This is not a signed recovery release.
 app.Use(async (context, next) =>

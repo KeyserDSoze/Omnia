@@ -1302,3 +1302,23 @@ was cancelled. E2E uses real signed Keycloak requests and real server
 This is NOT a universal logout, token revocation across devices,
 offline media cancellation or complete GDPR erasure. RLS and source
 consent remain enforced by the server. #41/#39/#1/#2 stay open.
+
+
+## Private REST responses: server HTTP no-store (#173 / ADR 0072)
+
+All responses under the exact \`/api/v1\` path segment now receive
+\`Cache-Control: no-store\`, \`X-Content-Type-Options: nosniff\` and
+\`Referrer-Policy: no-referrer\` from middleware installed before
+recovery quarantine, auth, quota, JSON body admission and endpoint routing.
+\`OnStarting\` enforces the final header even for signed private GET
+consents/memories, private streamed export, erasure, 401/403, rate
+429, 413/415 and recovery 503. Public health/readiness and paths that
+merely begin with similar text are unchanged. The browser's own
+\`cache: no-store\` preference is defense in depth, not a replacement
+for server-origin cache headers. The real PostgreSQL/JWT E2E gates
+exercise caching headers; no PII, tenant IDs or bearer tokens appear
+in these headers. **Limit:** compliant HTTP caches only. This does NOT
+clear existing caches, JS Cache API, service-worker storage, local
+downloads, provider/backup copies or CDN rules that override origin.
+Do not declare GDPR or data release gate complete; #2/#31/#41 remain
+OPEN.

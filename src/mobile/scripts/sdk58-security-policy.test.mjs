@@ -20,7 +20,10 @@ const healthy = () => ({
       'node_modules/expo-router': { version: '58.0.32', dependencies: {} },
       'node_modules/react-native': { version: '0.88.1' },
       'node_modules/react': { version: '19.3.0' },
-      'node_modules/vitest': { version: '5.1.1' }
+      'node_modules/vitest': { version: '5.1.1' },
+      'node_modules/react-native-reanimated': { version: '4.7.1' },
+      'node_modules/react-native-worklets': { version: '0.13.0' },
+      'node_modules/react-native-gesture-handler': { version: '3.3.0' }
     }
   },
   app: { expo: { web: { output: 'static' }, experiments: { baseUrl: '/Omnia' } } }

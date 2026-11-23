@@ -106,6 +106,26 @@ index digest, SDK checks and docs together. A digest is immutable but
 it does **not** attest image trust/signing, patch currency, SBOM or
 native/multiarch execution. #15/#10 remain OPEN for those gates.
 
+## Lock-derived deterministic CycloneDX SBOMs (#192 / ADR 0089)
+
+Do not treat an SBOM as SCA, license clearance, binary/runtime provenance,
+an attestation or evidence of release security. The scope in #192 is the
+**locked package inventory** of Expo npm v3 `src/mobile/package-lock.json`
+and ALL 20 independent .NET `packages.lock.json` files in backend/tests.
+CI MUST run `python3 -m unittest discover -s tests/quality
+-p 'test_locked_sbom.py'`, generate both deterministic CycloneDX 1.6
+inventories via `python3 tests/quality/generate_locked_sbom.py
+--output "$RUNNER_TEMP/omnia-locked-sbom"`, compare using `--verify`
+and upload both JSON files as a short-lived read-only GitHub Actions
+artifact. Fail closed on missing lock/project, unsupported package type,
+SHA-512 changes, conflicting package IDs, missing root direct dependencies
+or output drift. No timestamps, UUIDs, package upload or private data
+are generated. Review dependency diffs and new projects against these
+inventories, retaining locked npm ci/dotnet restore gates. Missing edge
+graph, official CycloneDX JSON Schema validation, external SCA/SBOM
+signature, CVE and license evaluation are separate open objectives in
+#22/#15/#10. The bundle is not a release attestation.
+
 ## Backlog e feature management
 
 Leggere `docs/backlog.md` e `docs/product-requirements.md` prima di nuove funzionalità. Non duplicare issue: cercare per area/titolo. Ogni nuova feature usa `.github/ISSUE_TEMPLATE/feature.yml`, include epic parent, phase label, priorità, RED → GREEN → REFACTOR, evidenza commit SHA e URL di Actions. Le 14 epic e 116 issue child non indicano funzionalità completate. Le milestone sono label logiche; GitHub Projects/Milestones non configurati. Prima del lavoro su dati veri completare #29, #30, #31, #32, #33, #34, #36, #39, #41, #43 e test #17.

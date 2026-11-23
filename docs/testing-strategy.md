@@ -62,6 +62,23 @@ runs the same offline source policy. This does NOT test ARM64
 execution or prove signature/provenance/SBOM, vulnerability freshness
 or the rest of the platform's base-image security.
 
+## Lock-derived CycloneDX inventory gates (#192 / ADR 0089)
+
+Offline Python stdlib generator produces stable CycloneDX JSON 1.6
+inventory for the full npm v3 lock and all NuGet lockfiles under
+`src/backend`/`tests`. Five negative/positive unit tests cover
+scoped+nested npm packages, NuGet transitive/ProjectReference handling,
+missing locks/direct refs, mismatched TFM, corrupt hashes, conflicting
+identities and output ordering. In CI, generate then verify byte
+identity and publish two files as a 14-day GitHub Actions artifact
+(`omnia-locked-dependency-sbom`). Hashes are decoded/canonicalized
+SHA-512, PURLs identify package versions, source ownership is recorded
+as CycloneDX properties. This gate makes **no claim** of independent
+official JSON Schema validation, complete dependency edges, external
+vulnerability intelligence, licenses, signed provenance, installed
+binary/image SBOM or security-release readiness. Those are open under
+#22/#15/#10.
+
 ## Pyramid
 
 | Layer | Test runner | Esempio | Frequenza |

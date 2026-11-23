@@ -96,6 +96,21 @@ arm64 reale**. Istruzioni per aggiornamenti di sicurezza nel
 Il digest è un vincolo di contenuto, non una firma del produttore né
 uno scan malware/CVE o una certificazione supply chain.
 
+## SBOM da lockfile — CycloneDX 1.6
+
+Ogni CI produce **due inventari deterministici** per le dipendenze
+bloccate di Expo/npm e dei 20 progetti .NET/NuGet:
+`omnia-npm.cdx.json` e `omnia-nuget.cdx.json`. I documenti includono
+package URL (PURL), versioni risolte, SHA-512 e riferimenti ai lock
+di origine; non contengono dati utente. Sono generati in un percorso
+temporaneo, verificati a byte identici e caricati nell'artefatto
+GitHub Actions `omnia-locked-dependency-sbom` con conservazione 14
+giorni. Vedi [ADR 0089](adr/0089-deterministic-locked-package-cyclonedx-sbom.md),
+[runbook SBOM](docs/locked-dependency-sbom.md) e [#192](https://github.com/KeyserDSoze/Omnia/issues/192).
+**Un SBOM di lockfile non è una scansione CVE**, non prova
+licenze, attestation, runtime/binary/container coverage o compliance:
+#22/#15/#10 restano aperte.
+
 ## Avvio API locale (servizi open source)
 
 ```sh

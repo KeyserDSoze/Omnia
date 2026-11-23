@@ -1,0 +1,61 @@
+name: Omnia one-time npm lockfile bootstrap (#188)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/npm-lock-bootstrap.yml
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Only the job that produces the reviewed root lockfile gets contents write.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate npm lockfile with published metadata (no scripts)
+        working-directory: src/mobile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org/
+      - name: Prove integrity and fresh npm ci installation
+        working-directory: src/mobile
+        run: |
+          set -euo pipefail
+          node --test scripts/mobile-lock-policy.test.mjs
+          node scripts/verify-mobile-lockfile.mjs
+          npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/
+          npm run typecheck
+          npm test
+          npm run build:web
+      - name: Commit ONLY verified lockfile on main with non-force fast-forward
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [ "$current" != "$GITHUB_SHA" ]; then
+            echo "Main moved; refusing stale lockfile commit." >&2
+            exit 1
+          fi
+          test -f src/mobile/package-lock.json
+          git add -- src/mobile/package-lock.json
+          if git diff --cached --quiet; then
+            echo "No generated lockfile change; refusing bootstrap without evidence." >&2
+            exit 1
+          fi
+          changed="$(git diff --cached --name-only)"
+          test "$changed" = "src/mobile/package-lock.json"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build(deps): commit tested npm 10 lock graph #188'
+          # Token available only for this final push step, not npm scripts.
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer $GH_TOKEN" \
+            push origin HEAD:refs/heads/main

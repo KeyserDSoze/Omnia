@@ -22,3 +22,7 @@ The signed Web timeline offers source/tag selectors and local-day headings from 
 - TDD RED: pure unit and real Keycloak Chromium fail for missing new day selector; previously existing tests remain green. GREEN verifies browser-authorized synthetic grants/captures, page 10+3, source/tag/day intersection, explicit paging, local-day button and logout wipe. All three final Actions must succeed on one SHA before closing #185.
 - Day labels can differ on two devices in different timezones and around midnight/DST, without modifying canonical `occurredAt`. `Intl.DateTimeFormat.formatToParts` behavior is documented at https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/formatToParts.
 - Not implemented: original source timezone, thread inference or explicit thread persistence, person filters, full-account day search, native cloud/OIDC/offline sync, generalized backups/provider erasure or GDPR legal validation. Keep #79/#7/#41/#17/#2 OPEN.
+
+## Real OIDC test actor budget (follow-up #185)
+
+The 16th browser scenario is provisioned a third **genuine** disposable Keycloak subject using the same tested S256 PKCE, signed JWT and PostgreSQL actor RLS. Earlier tests legitimately consumed the second subject's request budget and returned HTTP 429. No API rate limit, signed identity validation or data-authorization policy is changed or disabled. Synthetic records remain confined to temporary CI infrastructure.

@@ -568,3 +568,11 @@ on EXACT final main SHA before closing child #167.
 No synthetic auth tests prove production JWKS/OIDC by
 themselves, and no realistic distributed load or GDPR
 release is claimed.
+
+## #185/#186 — Regressioni E2E quota reale e fixture Azure WORM a scadenza
+
+L'aggiunta del test browser sulle giornate caricate (#185) è stata introdotta in RED con Vitest nuova suite mancante, **52 test esistenti PASS** [CI 45169968892](https://github.com/KeyserDSoze/Omnia/actions/runs/45169968892). Il primo run browser RED [45169968906](https://github.com/KeyserDSoze/Omnia/actions/runs/45169968906) ha invece ottenuto **429** durante il caricamento di note sintetiche usando l'account #2 già utilizzato da altre prove; non è una prova del selettore mancante. Non disabilitare la quota. Il workflow provisiona ora un **terzo utente Keycloak effimero** con password generata casualmente, token OIDC reale e budget per-attore autentico, dedicato al nuovo scenario.
+
+La stessa CI GREEN preliminare [45170398192](https://github.com/KeyserDSoze/Omnia/actions/runs/45170398192) ha rilevato un test di protocollo Azure Blob WORM con `now` fisso al 21 novembre 2026: la retention sintetica al 23 novembre si era avvicinata alla scadenza, e la verifica di produzione `retention > DateTimeOffset.UtcNow.AddHours(1)` ha **correttamente** rifiutato l'input. La #186 corregge **solo il clock della fixture** usando UTC reale e retention futura di 2/3 giorni, preservando i controlli fail-closed. Il test negativo verifica anche che una data del chiamante retrodatata non aggiri la verifica sull'orologio attuale.
+
+La #185/#186 si chiudono solo quando CI (Azure 31/31, PG, PITR, Docker, Vitest, Playwright), E2E vero Keycloak e Pages siano tutte `SUCCESS` sul medesimo ultimo commit. I test Azure sono di protocollo **scriptato**, non attestazione di account Azure WORM reale, né della conformità normativa.

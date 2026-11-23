@@ -906,3 +906,7 @@ privacy/compliance gates.
 ## #185 — filtro giorno locale sulle sole note Web già caricate (ADR 0083)
 
 Child di #79 che segue #182 (fonte), #183 (giornate) e #184 (tag). Scelte giornaliere esplicite, nel timezone del device, derivate dalle sole pagine già caricate. I tre filtri AND precedono il grouping; nessuna query globale, nessuna scansione automatica, paging esplicito ed epoch sessioni invariati. Dettagli e test real OIDC in issue #185. Non completano thread/persona, native sync né privacy: #79/#7/#41/#17/#2 OPEN.
+
+## #186 — CI clock-valid Azure WORM scripted retention fixture
+
+A passing synthetic Azure SDK protocol test must retain its one-hour fail-closed real-clock retention boundary. Historical fixed `now` inputs in two positive tests expired and triggered `AZURE_WORM_RETENTION_UNTRUSTED` in CI. #186 shifts only synthetic test reference times to real UTC and preserves negative near-expiry tests, without touching production publisher logic or claiming real Azure WORM custody. Evidence and closure state tracked in GitHub #186; #144/#10 remain OPEN.

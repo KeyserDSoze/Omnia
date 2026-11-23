@@ -42,6 +42,7 @@ jobs:
             echo "OMNIA_E2E_PASSWORD=$userpass"
             echo "OMNIA_E2E_USER1=omnia-ci-one"
             echo "OMNIA_E2E_USER2=omnia-ci-two"
+            echo "OMNIA_E2E_USER3=omnia-ci-three"
           } >> "$GITHUB_ENV"
           ring_key="$(openssl rand -base64 32)"
           jq -nc --arg secret "$ring_key" \
@@ -98,7 +99,9 @@ jobs:
           test "${#admin_token}" -gt 40
           echo "::add-mask::$admin_token"
 
-          for username in "$OMNIA_E2E_USER1" "$OMNIA_E2E_USER2"; do
+          # Each actor signs in via genuine PKCE/JWT. The third disposable
+          # subject isolates late paging E2E from prior actors' real 429 quota.
+          for username in "$OMNIA_E2E_USER1" "$OMNIA_E2E_USER2" "$OMNIA_E2E_USER3"; do
             body="$(jq -nc --arg username "$username" --arg password "$OMNIA_E2E_PASSWORD" \
               '{username: $username, firstName: "Omnia", lastName: "Synthetic", email: ($username + "@example.test"), emailVerified: true, requiredActions: [], enabled: true, credentials: [{type:"password", value:$password, temporary:false}]}')"
             curl -fsS -X POST http://localhost:8081/admin/realms/omnia/users \

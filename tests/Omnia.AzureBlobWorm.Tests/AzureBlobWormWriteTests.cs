@@ -27,7 +27,10 @@ public sealed class AzureBlobWormWriteTests
         var signing = RandomNumberGenerator.GetBytes(32);
         var content = ImmutableAttemptEvidence.CreateSynthetic(
             id, "ci-tenant", "ci-owner", scope, signing);
-        var now = new DateTimeOffset(2026, 11, 21, 13, 0, 0, TimeSpan.Zero);
+        // Keep the synthetic policy in the future relative to ACTUAL UTC time.
+        // A historical fixed 2026-11-21 date expired in CI and correctly
+        // triggered the production fail-closed retention validation.
+        var now = DateTimeOffset.UtcNow;
         var retention = now.AddDays(3);
         using var handler = new AzureWormScript(Version, content, retention);
         var options = MakeOptions(handler);
@@ -74,7 +77,10 @@ public sealed class AzureBlobWormWriteTests
         var signing = RandomNumberGenerator.GetBytes(32);
         var content = ImmutableAttemptEvidence.CreateSynthetic(
             id, "ci-tenant", "ci-owner", scope, signing);
-        var now = new DateTimeOffset(2026, 11, 21, 13, 0, 0, TimeSpan.Zero);
+        // Keep the synthetic policy in the future relative to ACTUAL UTC time.
+        // A historical fixed 2026-11-21 date expired in CI and correctly
+        // triggered the production fail-closed retention validation.
+        var now = DateTimeOffset.UtcNow;
         foreach (var failure in new[] { "lost-upload-ack", "deny-lock", "missing-version", "unlocked-readback", "short-retention", "different-version" })
         {
             using var handler = new AzureWormScript(
@@ -120,6 +126,13 @@ public sealed class AzureBlobWormWriteTests
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             publisher.SubmitOnceAsync(id, "ci-tenant", "ci-owner",
                 scope, signing, content, now.AddMinutes(15), now, default));
+        // A forged stale caller clock cannot bypass the real-clock
+        // >1-hour retention gate and MUST NOT reach the writer.
+        var forgedPast = now.AddDays(-4);
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            publisher.SubmitOnceAsync(id, "ci-tenant", "ci-owner",
+                scope, signing, content, forgedPast.AddDays(2),
+                forgedPast, default));
         var altered = content.ToArray();
         altered[^2] ^= 1;
         await Assert.ThrowsAsync<InvalidDataException>(() =>

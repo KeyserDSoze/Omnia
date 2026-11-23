@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 test.skip(process.env.OMNIA_REAL_OIDC_E2E !== '1', 'Run via the real OIDC CI job.');
 const user1 = process.env.OMNIA_E2E_USER1 ?? '';
 const user2 = process.env.OMNIA_E2E_USER2 ?? '';
+const user3 = process.env.OMNIA_E2E_USER3 ?? '';
 const password = process.env.OMNIA_E2E_PASSWORD ?? '';
 
 async function browserLogin(page: import('@playwright/test').Page, username: string) {
@@ -1023,14 +1024,17 @@ test('real Keycloak combines tag + source over loaded pages and local day groups
 
 test('real Keycloak picks loaded calendar days with source/tag AND and explicit older pages (#185)', async ({ page }) => {
   test.setTimeout(150_000);
-  if (!user2 || !password) throw new Error('Missing ephemeral Keycloak OIDC account');
+  // Distinct genuine third OIDC subject: prior scenarios legitimately
+  // exhaust the second account's 120/minute request budget (HTTP 429).
+  // Do not bypass server quotas or forge/seed JWTs.
+  if (!user3 || !password) throw new Error('Missing ephemeral third Keycloak account');
   let bearer = '';
   page.on('request', req => {
     if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
       bearer = req.headers()['authorization'] ?? '';
   });
   await page.goto('/Omnia/');
-  await browserLogin(page, user2);
+  await browserLogin(page, user3);
   await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
 
   const stamp = Date.now();

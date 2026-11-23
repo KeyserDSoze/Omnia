@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/npm-lock-bootstrap.yml
+      - src/mobile/package.json
 permissions:
   contents: read
 
@@ -34,6 +35,9 @@ jobs:
           npm run typecheck
           npm test
           npm run build:web
+      - name: Check exact native peer versions after install
+        working-directory: src/mobile
+        run: npm ls react-native-reanimated react-native-worklets react-native-gesture-handler
       - name: Commit ONLY verified lockfile on main with non-force fast-forward
         shell: bash
         env:

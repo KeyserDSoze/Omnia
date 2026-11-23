@@ -611,6 +611,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Test and validate frozen npm lockfile
+        run: |
+          node --test scripts/mobile-lock-policy.test.mjs
+          node scripts/verify-mobile-lockfile.mjs
       - name: Install Expo dependencies
         run: npm install --no-audit --no-fund
       - name: Typecheck React Native

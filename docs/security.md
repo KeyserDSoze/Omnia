@@ -1414,3 +1414,19 @@ metadata or tenant selectors. The row remains revocable by its actor
 after a long history. This is not a paginated consent-history API,
 full transparency for >200 simultaneous non-manual active scopes, nor
 a lawful-basis assessment or proof of end-to-end GDPR withdrawal.
+
+
+## First-party consent chronological cursor API (#180 / ADR 0078)
+
+The new actor-scoped \`GET /api/v1/consents/page\` is read-only and
+returns a bounded chronological page (1..50), with immutable
+\`(granted_at DESC, id DESC)\` keyset and an opaque canonical \`c1.\`
+position. The query uses **parameterized SQL** under the same
+restricted \`PostgresActorScope\` FORCE RLS role. A cursor does not
+carry session authentication and **must never** replace the server's
+signed OIDC tenant and subject. A stolen or forged cursor cannot
+select another actor: all SELECTs include JWT actor constraints.
+Invalid token/limit fails generically without echo, and private
+no-store headers cover success, 401/403 and 400. Other scopes,
+third-party OAuth, page snapshot consistency, legal consent notices
+and revoke UI of all non-manual scopes remain open in #179/#29/#2.

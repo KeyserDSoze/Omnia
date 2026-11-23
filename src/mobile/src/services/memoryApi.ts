@@ -12,6 +12,12 @@ export type ConsentDto = {
   active: boolean;
 };
 
+/** Chronological first-party ledger page (not a credential or auth grant). */
+export type ConsentPageDto = {
+  items: ConsentDto[];
+  nextCursor: string | null;
+};
+
 export type RemoteMemory = {
   id: string;
   source: string;
@@ -125,6 +131,10 @@ export class MemoryApi {
 
   listConsents(): Promise<ConsentDto[]> {
     return this.request('GET', '/api/v1/consents');
+  }
+  consentPage(before?: string): Promise<ConsentPageDto> {
+    return this.request('GET', '/api/v1/consents/page?limit=25' +
+      (before === undefined ? '' : '&before=' + encodeURIComponent(before)));
   }
   grantManualCapture(): Promise<ConsentDto> {
     return this.request('POST', '/api/v1/consents', {

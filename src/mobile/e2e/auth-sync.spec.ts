@@ -628,3 +628,59 @@ test('real Keycloak captures at the same clock instant must not collide (#177)',
   expect(sent.map(s => s.occurredAt)).toEqual([fixedInstant, fixedInstant]);
   expect(sent[0].externalId).not.toBe(sent[1].externalId);
 });
+
+
+test('real Keycloak JWT can read bounded consent history and rejects invalid cursors (#180)', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!user1 || !password) throw new Error('Missing ephemeral OIDC account');
+  await page.goto('/Omnia/');
+  await browserLogin(page, user1);
+
+  // Observe the real browser's authenticated request without mocking the
+  // provider, token exchange, ASP.NET route or PostgreSQL response.
+  // The bearer is never printed, persisted or exposed to the UI.
+  let bearer = '';
+  await page.route('**/api/v1/consents', async route => {
+    if (route.request().method() === 'GET')
+      bearer = route.request().headers()['authorization'] ?? '';
+    await route.continue();
+  });
+  const refreshed = page.waitForResponse(response =>
+    response.url().endsWith('/api/v1/consents') &&
+    response.request().method() === 'GET' && response.status() === 200);
+  await page.getByTestId('sync-reload').click();
+  await refreshed;
+  expect(bearer).toMatch(/^Bearer .{20,}$/);
+
+  const endpoint = 'http://127.0.0.1:8080/api/v1/consents/page';
+  const first = await page.request.get(endpoint + '?limit=2', {
+    headers: { Authorization: bearer }
+  });
+  expect(first.status()).toBe(200);
+  expect(first.headers()['cache-control']).toContain('no-store');
+  const history = await first.json() as {
+    items: Array<{ id: string; source: string; purpose: string; active: boolean }>;
+    nextCursor: string | null;
+  };
+  expect(history.items.length).toBeLessThanOrEqual(2);
+  for (const item of history.items) {
+    expect(item.id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(item.purpose).toBe('memory.capture');
+  }
+  if (history.nextCursor) {
+    const second = await page.request.get(endpoint +
+      '?limit=2&before=' + encodeURIComponent(history.nextCursor), {
+      headers: { Authorization: bearer }
+    });
+    expect(second.status()).toBe(200);
+    const newerIds = new Set(history.items.map(item => item.id));
+    const next = await second.json() as { items: Array<{ id: string }> };
+    for (const item of next.items) expect(newerIds.has(item.id)).toBe(false);
+  }
+  const invalid = await page.request.get(endpoint + '?before=invalid', {
+    headers: { Authorization: bearer }
+  });
+  expect(invalid.status()).toBe(400);
+  expect((await invalid.json()).error).toBe('invalid_consent_page');
+  expect((await page.request.get(endpoint)).status()).toBe(401);
+});

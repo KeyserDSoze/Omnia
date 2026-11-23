@@ -58,3 +58,28 @@ live manual/calendar scopes, cross-tenant/owner isolation and revocation.
 See issue #178 for RED/GREEN main Actions. No complete history
 pagination, no unlimited active-source listing, no provider consent
 and no GDPR legal compliance claim; #29/#41/#2 remain open.
+
+
+## Complete first-party history by keyset (#180 / ADR 0078)
+
+The additive \`GET /api/v1/consents/page?limit=25&before=<cursor>\`
+provides **chronological** grant history for the authenticated JWT
+actor, including active, expired, revoked and superseded grants.
+Defaults to 25, maximum 50; response is
+\`{"items":[...],"nextCursor":"c1.<opaque>" | null}\`. Follow
+\`nextCursor\` until null to read the history at the time of the
+requests. Invalid/oversized/malformed cursor or size returns
+\`400 {"error":"invalid_consent_page"}\`; no bearer → 401.
+Cursor is an opaque versioned keyset position, **not** an authorization,
+snapshot or tenant/subject selector. All queries enforce restricted
+PostgreSQL FORCE RLS and signed identity; no-store applies to every
+private API response. Record ordering \`grantedAt DESC, id DESC\`
+uses UUID tie-breaks when timestamps are equal.
+
+The original bounded \`GET /api/v1/consents\` array remains unchanged,
+including its first active manual grant priority. The Web typed client
+exposes \`consentPage\`, but navigation/selection/revoke of arbitrary
+active sources is **not yet implemented in the UI**, tracked in #179.
+Do not claim that UI displays all active grants or that the paginated
+API itself grants consent. Concurrent changes are not snapshot-isolated
+across pages; GDPR/third-party consents require separate review.

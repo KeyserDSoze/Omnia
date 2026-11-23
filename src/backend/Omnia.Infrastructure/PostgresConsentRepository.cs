@@ -9,7 +9,7 @@ namespace Omnia.Infrastructure;
 /// integration-provider OAuth grant store or a GDPR consent/legal assessment.
 /// </summary>
 public sealed class PostgresConsentRepository(NpgsqlDataSource db)
-    : IConsentRepository, IConsentGuard
+    : IConsentRepository, IConsentGuard, IConsentPageRepository
 {
     public async Task<ConsentGrant> GrantAsync(ConsentGrant grant, CancellationToken ct)
     {
@@ -150,6 +150,60 @@ public sealed class PostgresConsentRepository(NpgsqlDataSource db)
                 reader.GetFieldValue<DateTimeOffset>(7),
                 reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8)));
         return grants;
+    }
+
+    public async Task<ConsentPage> PageAsync(string tenantId, string ownerSubject,
+        int limit, ConsentPageCursor? before, CancellationToken ct)
+    {
+        // Even callers bypassing application validation cannot request a huge
+        // page. Keep all reads in the restricted actor-scoped FORCE RLS role.
+        if (limit is < 1 or > 50)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        await using var scope = await PostgresActorScope.OpenAsync(
+            db, tenantId, ownerSubject, ct);
+        // Row ordering is independent of mutable active/revoked state, so a
+        // normal revoke does not reorder remaining pages. A keyset is only a
+        // position; it is NOT a cross-request snapshot under concurrency.
+        var sql = before is null ? """
+            SELECT id, tenant_id, owner_sub, source, purpose,
+                policy_version, granted_at, expires_at, revoked_at
+            FROM consent_grants
+            WHERE tenant_id = @tenant AND owner_sub = @owner
+            ORDER BY granted_at DESC, id DESC LIMIT @limit
+            """ : """
+            SELECT id, tenant_id, owner_sub, source, purpose,
+                policy_version, granted_at, expires_at, revoked_at
+            FROM consent_grants
+            WHERE tenant_id = @tenant AND owner_sub = @owner
+                AND (granted_at, id) < (@beforeAt, @beforeId)
+            ORDER BY granted_at DESC, id DESC LIMIT @limit
+            """;
+        await using var command = new NpgsqlCommand(
+            sql, scope.Connection, scope.Transaction);
+        command.Parameters.AddWithValue("tenant", tenantId);
+        command.Parameters.AddWithValue("owner", ownerSubject);
+        command.Parameters.AddWithValue("limit", limit + 1);
+        if (before is not null)
+        {
+            command.Parameters.AddWithValue("beforeAt", before.GrantedAt);
+            command.Parameters.AddWithValue("beforeId", before.Id);
+        }
+
+        var grants = new List<ConsentGrant>(limit + 1);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            grants.Add(ConsentGrant.Restore(reader.GetGuid(0), reader.GetString(1),
+                reader.GetString(2), reader.GetString(3), reader.GetString(4),
+                reader.GetString(5), reader.GetFieldValue<DateTimeOffset>(6),
+                reader.GetFieldValue<DateTimeOffset>(7),
+                reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8)));
+
+        var hasMore = grants.Count > limit;
+        if (hasMore) grants.RemoveAt(grants.Count - 1);
+        var last = grants.Count == 0 ? null : grants[^1];
+        return new ConsentPage(grants, hasMore && last is not null
+            ? new ConsentPageCursor(last.GrantedAt, last.Id).Encode() : null);
     }
 
     public async Task EnsureActiveAsync(string tenantId, string ownerSubject,

@@ -71,6 +71,19 @@ describe('cloud API', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer synthetic-access-token' }) }));
     expect(JSON.stringify(fetcher.mock.calls)).not.toContain('tenant_id');
   });
+  it('requests bounded consent history with opaque encoded cursor and signed actor only', async () => {
+    const reply = { items: [], nextCursor: null };
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => reply });
+    vi.stubGlobal('fetch', fetcher);
+    const api = new MemoryApi(cloud, async () => 'synthetic-access-token');
+    expect(await api.consentPage('c1.abc+/=')).toEqual(reply);
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://localhost:8080/api/v1/consents/page?limit=25&before=c1.abc%2B%2F%3D',
+      expect.objectContaining({ method: 'GET', credentials: 'omit',
+        cache: 'no-store', redirect: 'error',
+        headers: expect.objectContaining({ Authorization: 'Bearer synthetic-access-token' }) }));
+    expect(JSON.stringify(fetcher.mock.calls)).not.toContain('tenant_id');
+  });
   it('does not fake success when network is unavailable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     const api = new MemoryApi(cloud, async () => 'synthetic-token');

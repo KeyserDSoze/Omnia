@@ -148,6 +148,8 @@ builder.Services.AddScoped<IMemoryPageRepository>(sp =>
 builder.Services.AddScoped<IMemoryPageCatalog, MemoryPageCatalog>();
 builder.Services.AddScoped<PostgresConsentRepository>();
 builder.Services.AddScoped<IConsentRepository>(sp => sp.GetRequiredService<PostgresConsentRepository>());
+builder.Services.AddScoped<IConsentPageRepository>(sp => sp.GetRequiredService<PostgresConsentRepository>());
+builder.Services.AddScoped<IConsentPageService, ConsentPageService>();
 builder.Services.AddScoped<IConsentGuard>(sp => sp.GetRequiredService<PostgresConsentRepository>());
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddScoped<IConsentService, ConsentService>();
@@ -267,6 +269,34 @@ consents.MapGet("", async (IConsentService service, TimeProvider time,
         grant.GrantedAt, grant.ExpiresAt, grant.RevokedAt,
         active = grant.IsActiveAt(now)
     }));
+});
+// Additive, chronological keyset ledger API. A cursor is only an opaque
+// position; the signed JWT and FORCE RLS always select the actor.
+consents.MapGet("/page", async (IConsentPageService service, TimeProvider time,
+    ClaimsPrincipal user, int? limit, string? before, CancellationToken ct) =>
+{
+    var identity = Identity(user);
+    if (identity is null) return Results.Forbid();
+    try
+    {
+        var page = await service.PageAsync(
+            identity.Value.Tenant, identity.Value.Subject, limit, before, ct);
+        var now = time.GetUtcNow();
+        return Results.Ok(new
+        {
+            Items = page.Items.Select(grant => new
+            {
+                grant.Id, grant.Source, grant.Purpose, grant.PolicyVersion,
+                grant.GrantedAt, grant.ExpiresAt, grant.RevokedAt,
+                active = grant.IsActiveAt(now)
+            }).ToArray(),
+            page.NextCursor
+        });
+    }
+    catch (ArgumentException)
+    {
+        return Results.BadRequest(new { error = "invalid_consent_page" });
+    }
 });
 consents.MapDelete("/{id:guid}", async (Guid id, IConsentService service,
     ClaimsPrincipal user, CancellationToken ct) =>

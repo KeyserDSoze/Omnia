@@ -943,3 +943,79 @@ test('real Keycloak timeline groups local calendar days across pagination and so
   await expect(timeline.getByTestId('memory-day-group')).toHaveCount(0);
   await expect(timeline.getByText(note(1), { exact: true })).toHaveCount(0);
 });
+
+
+test('real Keycloak combines tag + source over loaded pages and local day groups (#184)', async ({ page }) => {
+  test.setTimeout(150_000);
+  if (!user2 || !password) throw new Error('Missing disposable Keycloak account');
+  let bearer = '';
+  page.on('request', req => {
+    if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
+      bearer = req.headers()['authorization'] ?? '';
+  });
+  await page.goto('/Omnia/');
+  await browserLogin(page, user2);
+  await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
+  const stamp = Date.now();
+  const workSource = 'tag-work-' + stamp;
+  const friendSource = 'tag-friend-' + stamp;
+  const api = 'http://127.0.0.1:8080/api/v1/';
+  for (const source of [workSource, friendSource]) {
+    const grant = await page.request.post(api + 'consents', {
+      headers: { Authorization: bearer },
+      data: { source, purpose: 'memory.capture', policyVersion: 'privacy-v1',
+        expiresAt: new Date(stamp + 3 * 86_400_000).toISOString(), accepted: true }
+    });
+    expect(grant.status()).toBe(201);
+  }
+  const note = (n: number) => (n <= 11 ? 'cliente progetto #184 ' : 'amico fidato #184 ') +
+    stamp + '-' + n;
+  for (let n = 1; n <= 13; n++) {
+    const source = n <= 11 ? workSource : friendSource;
+    const day = n <= 11 ? '2033-06-21T' : '2033-06-20T';
+    const hour = String(n <= 11 ? 23 - n : 22 - n).padStart(2, '0');
+    const saved = await page.request.post(api + 'memories', {
+      headers: { Authorization: bearer },
+      data: { source, externalId: 'tag-184-' + stamp + '-' + n,
+        contentType: 'text/plain', content: note(n), occurredAt: day + hour + ':30:00Z' }
+    });
+    expect(saved.status()).toBe(200);
+  }
+  await page.getByTestId('sync-reload').click();
+  const timeline = page.getByTestId('memory-timeline');
+  await expect(timeline.getByText(note(1), { exact: true })).toBeVisible();
+  // RED: current UI has source filter and local-day headers but no tag picker.
+  await expect(page.getByTestId('memory-tag-filter')).toBeVisible();
+  await expect(page.getByTestId('memory-tag-option').filter({ hasText: 'lavoro' }))
+    .toBeVisible();
+  await expect(page.getByTestId('memory-tag-option').filter({ hasText: 'relazioni' }))
+    .toHaveCount(0);
+  await page.getByTestId('memory-source-option').filter({ hasText: workSource }).click();
+  await page.getByTestId('memory-tag-option').filter({ hasText: 'lavoro' }).click();
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(1);
+  await expect(timeline.getByTestId('memory-day-item')).toHaveCount(10);
+  await expect(page.getByTestId('load-older')).toBeVisible();
+  await page.getByTestId('load-older').click();
+  await expect(page.getByTestId('memory-tag-option').filter({ hasText: 'relazioni' }))
+    .toBeVisible();
+  await expect(timeline.getByTestId('memory-day-item')).toHaveCount(11);
+  // Both pickers remain independent: choose a tag that only matches a
+  // DIFFERENT source, resulting in an honest empty state with no day headings.
+  await page.getByTestId('memory-tag-option').filter({ hasText: 'relazioni' }).click();
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(0);
+  await expect(page.getByTestId('memory-source-empty')).toContainText('filtri');
+  await page.getByTestId('memory-source-option').filter({ hasText: friendSource }).click();
+  await expect(timeline.getByText(note(12), { exact: true })).toBeVisible();
+  await expect(timeline.getByText(note(13), { exact: true })).toBeVisible();
+  await expect(timeline.getByText(note(1), { exact: true })).toHaveCount(0);
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(1);
+  await expect(timeline.getByTestId('memory-day-item')).toHaveCount(2);
+  await page.getByTestId('memory-tag-all').click();
+  await page.getByTestId('memory-source-all').click();
+  await expect(timeline.getByText(note(1), { exact: true })).toBeVisible();
+  await expect(timeline.getByText(note(13), { exact: true })).toBeVisible();
+  await page.getByTestId('auth-logout').click();
+  await expect(page.getByTestId('memory-tag-filter')).toHaveCount(0);
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(0);
+  await expect(timeline.getByText(note(12), { exact: true })).toHaveCount(0);
+});

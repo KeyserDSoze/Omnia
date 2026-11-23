@@ -80,8 +80,14 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
 
   // Browser refresh does not persist bearer or refresh tokens: re-login via IdP
   // SSO session, then retrieve the already stored PostgreSQL entry.
+  let firstBearer = '';
+  page.on('request', req => {
+    if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
+      firstBearer = req.headers()['authorization'] ?? '';
+  });
   await page.reload();
   await browserLogin(page, user1);
+  await expect.poll(() => firstBearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
   await expect(page.getByText(memoText, { exact: true })).toBeVisible();
 
   // Separate Keycloak user in a new browser context cannot read this user's notes
@@ -90,8 +96,14 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
   const second = await browser.newContext();
   try {
     const other = await second.newPage();
+    let otherBearer = '';
+    other.on('request', req => {
+      if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
+        otherBearer = req.headers()['authorization'] ?? '';
+    });
     await other.goto('http://127.0.0.1:19006/Omnia/');
     await browserLogin(other, user2);
+    await expect.poll(() => otherBearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
     await expect(other.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
     await expect(other.getByText(memoText, { exact: true })).toHaveCount(0);
     await other.getByTestId('consent-accept').click();
@@ -101,6 +113,29 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
     await other.getByTestId('save-memo').click();
     await expect(other.getByTestId('notice')).toContainText('Nota salvata');
     await expect(other.getByTestId('memory-timeline').getByText(otherMemo)).toBeVisible();
+
+    // Same real Keycloak tenant, different OIDC subjects: a second user's
+    // consent grant UUID must never appear in the first user's ledger.
+    // No test credentials or mocked API response are used.
+    const endpoint = 'http://127.0.0.1:8080/api/v1/consents/page?limit=25';
+    const otherHistory = await other.request.get(endpoint, {
+      headers: { Authorization: otherBearer }
+    });
+    expect(otherHistory.status()).toBe(200);
+    const foreign = await otherHistory.json() as {
+      items: Array<{ id: string; source: string; active: boolean }>
+    };
+    const foreignManual = foreign.items.find(item =>
+      item.source === 'manual' && item.active);
+    expect(foreignManual?.id).toMatch(/^[0-9a-f-]{36}$/i);
+    const mine = await page.request.get(endpoint, {
+      headers: { Authorization: firstBearer }
+    });
+    expect(mine.status()).toBe(200);
+    const firstLedger = await mine.json() as {
+      items: Array<{ id: string }>
+    };
+    expect(firstLedger.items.some(item => item.id === foreignManual?.id)).toBe(false);
   } finally {
     await second.close();
   }
@@ -725,6 +760,18 @@ test('real signed Web user can page all first-party grants and revoke an older s
   const other = page.getByTestId('consent-ledger-row')
     .filter({ hasText: sources[26] + ' · memory.capture' });
   await expect(other).toContainText('Attivo');
+
+  // A hard reload discards in-memory access/refresh tokens; after a new
+  // genuine OIDC login the saved ledger must still come from PostgreSQL.
+  await page.reload();
+  await browserLogin(page, user2);
+  await page.getByTestId('consent-ledger-open').click();
+  await expect(page.getByTestId('consent-ledger-row')).toHaveCount(25);
+  await expect(page.getByTestId('consent-ledger-row')
+    .filter({ hasText: sources[26] + ' · memory.capture' })).toContainText('Attivo');
+  await page.getByTestId('consent-ledger-more').click();
+  await expect(target).toContainText('Attivo');
+
   await target.getByTestId('consent-ledger-revoke').click();
   await expect(page.getByTestId('notice')).toContainText('Consenso revocato per ' + sources[0]);
   // Signed API enforces withdrawal for exact source, not merely a UI status.

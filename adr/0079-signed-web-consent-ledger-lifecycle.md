@@ -54,6 +54,11 @@ For authenticated Web cloud mode only:
   Playwright scenario with 27 synthetic first-party grants, keyset
   continuation, authenticated source withdrawal, post-revoke
   `consent_required` 403, status reread and sign-out clearing.
+- An additional real Chromium/Keycloak regression demonstrates a
+  second account's first-party grant UUID does not leak across OIDC
+  subjects, while the dedicated PostgreSQL RLS suite covers distinct
+  tenant claims. The Web ledger also reloads after losing in-memory
+  tokens, requiring a fresh real IdP login and signed database read.
 - Tests and actions must be verified on final **same main SHA**.
 
 ## Trust boundaries / limitations

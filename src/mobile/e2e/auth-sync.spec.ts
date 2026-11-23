@@ -645,7 +645,8 @@ test('real Keycloak JWT can read bounded consent history and rejects invalid cur
   });
   await page.goto('/Omnia/');
   await browserLogin(page, user1);
-  expect(bearer).toMatch(/^Bearer .{20,}$/);
+  // The UI becomes signed-in before refreshCloud's GET necessarily fires.
+  await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
 
   const endpoint = 'http://127.0.0.1:8080/api/v1/consents/page';
   const first = await page.request.get(endpoint + '?limit=2', {

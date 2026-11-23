@@ -683,3 +683,13 @@ test('real Keycloak JWT can read bounded consent history and rejects invalid cur
   expect((await invalid.json()).error).toBe('invalid_consent_page');
   expect((await page.request.get(endpoint)).status()).toBe(401);
 });
+
+
+test('real signed Web user can open source-scoped consent history and revoke CRM (#181)', async ({ page }) => {
+  test.setTimeout(150_000);
+  if (!user2 || !password) throw new Error('Missing disposable Keycloak account');
+  await page.goto('/Omnia/');
+  await browserLogin(page, user2);
+  // RED: #180 provides the real paginated API but no authenticated UI to use it.
+  await expect(page.getByTestId('consent-ledger-open')).toBeVisible({ timeout: 12_000 });
+});

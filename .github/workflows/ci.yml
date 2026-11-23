@@ -700,6 +700,8 @@ jobs:
           node scripts/verify-mobile-lockfile.mjs
       - name: Install Expo dependencies
         run: npm ci --no-audit --no-fund
+      - name: Verify Expo Router query-string runtime compatibility
+        run: node --test scripts/query-string-compatibility.test.mjs
       - name: Typecheck React Native
         run: npm run typecheck
       - name: Vitest domain

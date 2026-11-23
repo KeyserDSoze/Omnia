@@ -1019,3 +1019,85 @@ test('real Keycloak combines tag + source over loaded pages and local day groups
   await expect(timeline.getByTestId('memory-day-group')).toHaveCount(0);
   await expect(timeline.getByText(note(12), { exact: true })).toHaveCount(0);
 });
+
+
+test('real Keycloak picks loaded calendar days with source/tag AND and explicit older pages (#185)', async ({ page }) => {
+  test.setTimeout(150_000);
+  if (!user2 || !password) throw new Error('Missing ephemeral Keycloak OIDC account');
+  let bearer = '';
+  page.on('request', req => {
+    if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
+      bearer = req.headers()['authorization'] ?? '';
+  });
+  await page.goto('/Omnia/');
+  await browserLogin(page, user2);
+  await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
+
+  const stamp = Date.now();
+  const firstSource = 'dayfilter-work-' + stamp;
+  const secondSource = 'dayfilter-friend-' + stamp;
+  const api = 'http://127.0.0.1:8080/api/v1/';
+  for (const source of [firstSource, secondSource]) {
+    const granted = await page.request.post(api + 'consents', {
+      headers: { Authorization: bearer },
+      data: { source, purpose: 'memory.capture', policyVersion: 'privacy-v1',
+        expiresAt: new Date(stamp + 3 * 86_400_000).toISOString(), accepted: true }
+    });
+    expect(granted.status()).toBe(201);
+  }
+  const memo = (n: number) =>
+    (n <= 11 ? 'cliente progetto giorno filtro ' : 'amico famiglia giorno filtro ') + stamp + '-' + n;
+  for (let n = 1; n <= 13; n++) {
+    const early = n > 11;
+    // Midday UTC avoids any calendar-boundary ambiguity in actual CI Chromium.
+    const occurredAt = (early ? '2035-06-20T' : '2035-06-21T') +
+      String(early ? 25 - n : 18 - n).padStart(2, '0') + ':30:00Z';
+    const captured = await page.request.post(api + 'memories', {
+      headers: { Authorization: bearer },
+      data: { source: early ? secondSource : firstSource,
+        externalId: 'dayfilter-' + stamp + '-' + n,
+        contentType: 'text/plain', content: memo(n), occurredAt }
+    });
+    expect(captured.status()).toBe(200);
+  }
+  await page.getByTestId('sync-reload').click();
+  const timeline = page.getByTestId('memory-timeline');
+  await expect(timeline.getByText(memo(1), { exact: true })).toBeVisible();
+  // RED: the timeline has source/tag filters + day headings, but NOT a day selector.
+  await expect(page.getByTestId('memory-day-filter')).toBeVisible();
+  const choice = (label: string) =>
+    page.getByTestId('memory-day-option').filter({ hasText: label });
+  await expect(choice('21 giugno 2035')).toBeVisible();
+  await expect(choice('20 giugno 2035')).toHaveCount(0);
+  await page.getByTestId('memory-source-option')
+    .filter({ hasText: firstSource }).click();
+  await page.getByTestId('memory-tag-option').filter({ hasText: 'lavoro' }).click();
+  await choice('21 giugno 2035').click();
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(1);
+  await expect(timeline.getByTestId('memory-day-item')).toHaveCount(10);
+  await expect(page.getByTestId('load-older')).toBeVisible();
+
+  await page.getByTestId('load-older').click();
+  await expect(choice('20 giugno 2035')).toBeVisible();
+  await expect(timeline.getByTestId('memory-day-item')).toHaveCount(11);
+  await choice('20 giugno 2035').click();
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(0);
+  await expect(page.getByTestId('memory-source-empty')).toContainText('filtri');
+  await page.getByTestId('memory-source-option')
+    .filter({ hasText: secondSource }).click();
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(0);
+  await page.getByTestId('memory-tag-option').filter({ hasText: 'relazioni' }).click();
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(1);
+  await expect(timeline.getByTestId('memory-day-item')).toHaveCount(2);
+  await expect(timeline.getByText(memo(12), { exact: true })).toBeVisible();
+  await expect(timeline.getByText(memo(13), { exact: true })).toBeVisible();
+  await expect(timeline.getByText(memo(1), { exact: true })).toHaveCount(0);
+  await page.getByTestId('memory-day-all').click();
+  await page.getByTestId('memory-tag-all').click();
+  await page.getByTestId('memory-source-all').click();
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(2);
+  await expect(timeline.getByTestId('memory-day-item')).toHaveCount(13);
+  await page.getByTestId('auth-logout').click();
+  await expect(page.getByTestId('memory-day-filter')).toHaveCount(0);
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(0);
+});

@@ -43,7 +43,7 @@ Every Expo Web/CI/OIDC/native workflow MUST validate
 `node src/mobile/scripts/verify-mobile-lockfile.mjs` and use `npm ci`,
 never unconstrained `npm install` in a release gate. The npm v3 lock is
 checked into main with exact root manifest, SHA-512 integrity and registry
-provenance. The current SDK 57 compatible Reanimated/Worklets/Gesture
+provenance. The reviewed SDK 58 / React Native 0.88 Reanimated/Worklets/Gesture
 Handler peer versions are declared explicitly; do not bypass resolution
 with --force or --legacy-peer-deps. Dependency upgrades require a reviewed
 lock diff, fresh npm ci, typecheck, Vitest, web export, OIDC real Chromium
@@ -144,17 +144,35 @@ silent lockfile rewrites or generic waivers. The report artifact is uploaded
 even if CI is red; this does not mean the gate passed. A registry outage
 is INCOMPLETE (failure), never a false PASS.
 
-As of 2026-11-23, read-only npm audit initially reported 2 CRITICAL,
-3 HIGH and 4 MODERATE. A validated Vitest 5.1.1 graph upgrade on main
-removed both critical and one moderate; **3 HIGH and 3 MODERATE remain**.
-HIGH findings include `expo-router` -> `query-string 7` ->
-`decode-uri-component 0.2.2`, present in production. An attempted ESM
-`decode-uri-component 0.5.1` override broke CommonJS
-(`TypeError: decodeComponent is not a function`) and MUST NOT be
-reintroduced. Preserve `src/mobile/scripts/query-string-compatibility.test.mjs`
-as a live CI gate. #195 coordinates the official Expo SDK/Router upgrade.
-**Do not claim CI green, release-ready, zero CVEs, GDPR or GDPR readiness
-while SCA is red.** #193/#194/#195, #22/#15/#10 remain OPEN.
+The initial 2026-11-23 npm audit found 2 CRITICAL, 3 HIGH, 4 MODERATE.
+Vitest 5.1.1 removed vulnerable tinypool; the coordinated official
+Expo SDK58 / Router58 / RN 0.88 upgrade removed the HIGH
+`query-string 7 -> decode-uri-component 0.2.2` chain without overrides.
+[CI #45220400873](https://github.com/KeyserDSoze/Omnia/actions/runs/45220400873)
+has **SUCCESS** in its independent live SCA job (npm all + production,
+20/20 NuGet projects). The isolated SDK58 trial found **0 HIGH,
+0 CRITICAL, 3 MODERATE**; this is not zero vulnerabilities or future
+advisory coverage. The old ESM-only `decode-uri-component 0.5.1`
+override caused a real CommonJS failure and MUST NOT return.
+Native EAS/device smoke and complete supply-chain attestations remain
+open (#195, #22/#15/#10); do NOT claim production/GDPR readiness.
+
+## Expo SDK58 static Pages / native ABI regression contract (#195 / ADR 0091)
+
+Use `node src/mobile/scripts/verify-sdk58-security.mjs` **before**
+`npm ci` in CI, real OIDC E2E, Pages and optional native workflow.
+Source-policy tests under `src/mobile/scripts/sdk58-security-policy.test.mjs`
+reject SDK57/Router57, vulnerable nested `query-string`,
+`decode-uri-component` and `tinypool`, npm overrides, RN 0.88
+native module ABI drift and changes to `web.output=static` or
+`experiments.baseUrl=/Omnia`. This is a regression contract,
+not an advisory feed: the independent live npm/NuGet SCA job is still
+required. CI now exercises Metro Android and iOS exports on Ubuntu;
+these are **not** signed EAS builds, simulator or real-device tests.
+The bounded Expo migration is accepted, but #195 remains OPEN
+for native build/device verification and security-review gaps.
+Upgrade versions/lock/policy/docs together and never disable npm ci,
+the actual OIDC Chromium/Keycloak/Postgres gate or fail-closed SCA.
 
 ## Backlog e feature management
 

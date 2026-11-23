@@ -1,7 +1,7 @@
 # ADR 0090 — Fail-closed npm/NuGet advisory audit, no silent suppressions
 
 - Date: 2026-11-23
-- Status: accepted (security gate implemented, **currently blocking** due to HIGH findings)
+- Status: accepted (implemented fail-closed; SDK58 graph live SCA SUCCESS on CI #45220400873, but future advisories may block again)
 - Scope: live dependency SCA for pinned npm v3 + twenty .NET 10 NuGet graphs
 - Issues: #193 audit gate; #194 critical/high npm remediation; #195 Expo SDK/Router upgrade
 - Parents remain OPEN: #22 supply chain, #15 toolchain, #10 quality

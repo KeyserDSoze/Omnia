@@ -113,6 +113,24 @@ The full SCA job is intentionally red until #195 addresses these
 HIGH findings. Other OSS/image/license/SAST/runtime scans remain
 separate incomplete supply-chain controls.
 
+## SDK58 routing, CVE and native-module regressions (#195 / ADR 0091)
+
+RED [CI 45219863627](https://github.com/KeyserDSoze/Omnia/actions/runs/45219863627)
+showed five behavior assertions fail against an empty policy: SDK57
+downgrade, nested HIGH query chain, CRITICAL tinypool, RN ABI drift,
+unsafe npm overrides and server rendering for Pages. GREEN
+`sdk58-security-policy.mjs` checks the reviewed SDK58/Router58,
+RN 0.88.1/React19.3/Vitest5/native ABI pins and `web.output=static`,
+`baseUrl=/Omnia`. CI runs six positive/negative tests before npm ci,
+and OIDC, Pages and native all invoke the CLI before npm ci.
+Independent npm full/prod audit + 20/20 NuGet advisory scans remain
+mandatory; offline policy is **not** a CVE scanner.
+CI bundles Android and iOS through Metro (both success at
+[CI 45220400873](https://github.com/KeyserDSoze/Omnia/actions/runs/45220400873)),
+but does not sign native EAS binaries or execute simulators or
+physical devices. Native release and store credentials remain a
+separate open requirement under #195.
+
 ## Pyramid
 
 | Layer | Test runner | Esempio | Frequenza |

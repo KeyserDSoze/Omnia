@@ -16,7 +16,7 @@ then verified by a successful `npm ci`, TypeScript, Vitest and web export.
 - The lock validator checks exact root package dependency ranges,
   npm registry HTTPS tarball origins, and SHA-512 integrity. No third
   party registry or local symlink is allowed in the locked graph.
-- Expo SDK 57 requires the compatible native peer trio from the official
+- Expo SDK 58 requires the compatible native peer trio from the official
   template: Reanimated 4.5.1, Worklets 0.10.1, Gesture Handler ~2.32.0;
   manual native device builds are NOT yet verified.
 

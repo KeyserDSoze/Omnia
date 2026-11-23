@@ -8,7 +8,7 @@ Una memoria personale verificabile e controllata dall'utente: fonti multiple (ap
 
 ## Implementato nello scaffold
 
-- Expo SDK 57 / React Native / web statico, tema chiaro/scuro; dashboard, note nella sessione e registrazione **del microfono locale** con permesso, senza upload.
+- Expo SDK 58 / React Native / web statico, tema chiaro/scuro; dashboard, note nella sessione e registrazione **del microfono locale** con permesso, senza upload.
 - ASP.NET Core **.NET 10** con Domain/Application/Infrastructure/API, autenticazione JWT OIDC obbligatoria, `sub` e `tenant_id` richiesti, CORS allowlist.
 - PostgreSQL 17 + pgvector (768 dimensioni): raw originale, JSON normalizzato, summary, tags, fonte, externalId, owner/tenant, embedding nullable, migrazione SQL transazionale e upsert idempotente.
 - Adapter DI per embedding: `none` (dati segnati senza embedding), `ollama` (locale), `azure` (Azure OpenAI).
@@ -51,7 +51,7 @@ Il progetto Web usa `src/mobile/package-lock.json` verificato da
 e il workflow native manuale richiedono `npm ci`. Per modificare
 dipendenze, aggiornare intenzionalmente il lockfile, revisionare il diff
 di transitive e ripetere una installazione pulita. Versioni opzionali
-native compatibili con Expo SDK 57 sono fissate nel manifest; vedi
+native compatibili con Expo SDK 58 sono fissate nel manifest; vedi
 [ADR 0085](adr/0085-locked-expo-npm-dependency-graph.md) e
 [runbook](docs/npm-dependency-lock.md). La CI verde non valida una build
 native firmata.
@@ -136,6 +136,30 @@ per una migrazione Expo compatibile. **Finché ci sono finding high
 non mitigati la CI security resta volutamente rossa.**
 Vedi [ADR 0090](adr/0090-fail-closed-npm-nuget-advisory-gate.md)
 e il [runbook](docs/dependency-advisory-scan.md).
+
+## Aggiornamento di sicurezza Expo SDK58
+
+Omnia usa ora il lock npm v3 verificato con **Expo SDK58 (58.0.26),
+Expo Router 58.0.32, React Native 0.88.1, React 19.3.0 e
+Vitest 5.1.1**. Il grafo non include più `query-string 7`,
+`decode-uri-component 0.2.2` e `tinypool`; nessun override
+transitivo è stato introdotto. [Trial isolato
+45217840306](https://github.com/KeyserDSoze/Omnia/actions/runs/45217840306):
+`npm ci`, typecheck, Vitest, Web export, Playwright, bundle Android e
+audit npm all/prod hanno superato i controlli (**0 HIGH/CRITICAL,
+3 MODERATE**). Il [gate SCA reale
+45220400873](https://github.com/KeyserDSoze/Omnia/actions/runs/45220400873)
+ha verificato npm all/prod più NuGet 20/20 con job SUCCESS.
+
+Il nuovo [validator](src/mobile/scripts/verify-sdk58-security.mjs)
+impedisce il ritorno di vulnerabilità note, incompatibilità native,
+override di dipendenze e perdita di `web.output=static` e
+`/Omnia` per GitHub Pages. CI verifica anche i **bundle Metro
+Android e iOS**; non sostituiscono EAS build, firma, distribuzione o
+test su emulatori e dispositivi, ancora pendenti nella #195.
+Vedi [ADR 0091](adr/0091-expo-sdk58-security-migration.md) e
+[runbook Expo](docs/expo-sdk58-security-upgrade.md).
+Non è una certificazione di assenza CVE o di conformità GDPR.
 
 ## Avvio API locale (servizi open source)
 

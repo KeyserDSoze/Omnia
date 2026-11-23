@@ -9,7 +9,7 @@ const entry = name => ({
   integrity: hash
 });
 const manifest = { name: '@omnia/mobile', version: '0.1.0',
-  dependencies: { expo: '~57.0.10' }, devDependencies: { vitest: '^3.2.4' } };
+  dependencies: { expo: '^58.0.0' }, devDependencies: { vitest: '5.1.1' } };
 const valid = () => ({
   name: manifest.name, version: manifest.version, lockfileVersion: 3,
   packages: {

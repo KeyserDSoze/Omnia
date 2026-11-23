@@ -1,27 +1,31 @@
 # Omnia — threat model / privacy gates (draft)
 
-## Dependency vulnerability advisory gate — not release-ready (2026-11-23)
+## Dependency vulnerability advisory gate — still not production-ready (2026-11-23)
 
-The independent GitHub Actions `security-audit` job enforces
-npm audit (all plus production subset) and NuGet audit for
-20 locked .NET project graphs, direct and transitive. It fails closed
-when registries are unavailable or reports cannot be interpreted.
-HIGH/CRITICAL vulnerabilities block the job and therefore CI,
-with an issue-linked report artifact retained 14 days even on red.
-`security/audit-exceptions.json` is empty; no broad allowlisting.
-See [ADR 0090](../adr/0090-fail-closed-npm-nuget-advisory-gate.md),
-[runbook](dependency-advisory-scan.md), issues #193–#195.
-The 2026-11-23 security audit observed 2 CRITICAL (Vitest/tinypool),
-3 HIGH (Expo Router/query-string/decode-uri-component) and 4 MODERATE.
-Vitest was updated to 5.1.1 with clean tests, removing the two
-critical findings and one moderate. **Three HIGH production findings
-remain**, and an incompatible decode-uri-component override was
-rejected by an actual runtime CJS test. Do not treat CI as fully
-green or release this image to process real personal data.
-NuGet had no reported vulnerable packages in the 20 audited projects
-at the observed point in time; that is not a permanent absence of CVEs.
-SCA does not cover runtime base images, other OSS services, all licenses,
-malicious packages, signatures, SAST, Expo device artifacts or GDPR.
+The independent read-only `security-audit` job queries live npm
+registry advisories for all+production packages and all 20 NuGet
+projects with `--locked-mode`. Registry/scanner failures are
+`incomplete` failures; HIGH/CRITICAL unwaived findings are
+`blocked` failures, with report artifact retained 14 days.
+`security/audit-exceptions.json` is **empty**.
+
+Initial audit: 2 CRITICAL (Vitest/tinypool), 3 HIGH (Expo
+Router57/query-string7/decode-uri-component0.2.2), 4 MODERATE.
+After the reviewed Vitest5 and official Expo58/Router58/RN0.88 upgrade,
+the [isolated
+trial](https://github.com/KeyserDSoze/Omnia/actions/runs/45217840306)
+reported npm all/prod **0 HIGH, 0 CRITICAL, 3 MODERATE**;
+the [live security gate on updated main](https://github.com/KeyserDSoze/Omnia/actions/runs/45220400873)
+returned **SUCCESS** after checking all 20 NuGet projects.
+The result is point-in-time, not a guarantee of no future CVEs.
+[ADR 0090](../adr/0090-fail-closed-npm-nuget-advisory-gate.md)
+and [ADR 0091](../adr/0091-expo-sdk58-security-migration.md)
+document the security policy and upgrade.
+
+Live device builds, image/runtime scans, licenses, provenance/signing,
+SAST, privacy/GDPR review and secure production operations are NOT
+covered by a green package advisory result. Do not imply real-user
+data processing is production-ready.
 
 ## Data classes
 

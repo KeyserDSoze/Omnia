@@ -68,6 +68,7 @@ jobs:
           npm run typecheck
           npm test
           npm run build:web
+          npx playwright install --with-deps chromium
           npm run test:e2e
           npx expo export --platform android
       - name: Require official npm full and production advisory zero high/critical

@@ -40,3 +40,6 @@ devono corrispondere e i tag si estraggono da tutte le
 note già caricate, indipendentemente dalla fonte scelta.
 Si mantiene il cursore e la stessa policy di sessione.
 [Guida tag](timeline-tag-filter.md) · ADR 0082.
+## Combinazione con la giornata (#185)
+
+La fonte può essere abbinata a un singolo giorno locale delle pagine già caricate; la selezione del giorno è indipendente dall'elenco delle fonti. Vedi [guida giorno](timeline-day-filter.md).

@@ -261,3 +261,6 @@ The server's `tags` are heuristic metadata, not LLM
 insights or cross-provider permissions. Exact tests/CI and
 limitations are in issue #184 and ADR 0082. #79/#41/#2
 remain OPEN; no global query, tag editing or native sync.
+## #185 — selezione giorno locale su timeline Web già caricata
+
+Child #79/#7 dopo #182/#183/#184: il giorno è una selezione locale delle sole righe JWT/RLS già caricate; source/tag/day AND, selettore accessibile, paging indipendente e cancellazione della selezione a fine sessione. Non sostituisce server-side query, thread, data originale del provider, consenso esterno o ricerca su tutti i dati. ADR 0083; documentazione della prova TDD in #185. Issue parent OPEN.

@@ -903,3 +903,6 @@ are heuristic keywords (not AI). RED→GREEN and same-SHA CI
 evidence is in #184. Parents #79/#7/#41/#17/#2 stay OPEN
 for editable tags, thread/person views, native parity and
 privacy/compliance gates.
+## #185 — filtro giorno locale sulle sole note Web già caricate (ADR 0083)
+
+Child di #79 che segue #182 (fonte), #183 (giornate) e #184 (tag). Scelte giornaliere esplicite, nel timezone del device, derivate dalle sole pagine già caricate. I tre filtri AND precedono il grouping; nessuna query globale, nessuna scansione automatica, paging esplicito ed epoch sessioni invariati. Dettagli e test real OIDC in issue #185. Non completano thread/persona, native sync né privacy: #79/#7/#41/#17/#2 OPEN.

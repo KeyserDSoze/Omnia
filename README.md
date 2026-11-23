@@ -494,3 +494,6 @@ con zero risultati. Queste etichette derivano da regole di
 parole chiave, non sono insight AI. Nessuna ricerca globale,
 consenso provider o funzione native/offline è implicita.
 [Guida](docs/timeline-tag-filter.md) · ADR 0082; #79 OPEN.
+## Selezione delle giornate già caricate nella timeline Web (#185)
+
+La UI autenticata offre **Tutti i giorni** e i giorni locali realmente presenti nelle pagine caricate, in aggiunta a sorgente e tag. Le tre scelte si combinano con AND; gli altri giorni diventano disponibili soltanto usando esplicitamente **Carica altre note**. Questa non è ricerca globale né inferenza di thread. La selezione è solo in memoria e viene azzerata con logout, 401 o cancellazione dal PostgreSQL primario. [Guida](docs/timeline-day-filter.md) · ADR 0083; le parent #79/#41/#2 restano aperte.

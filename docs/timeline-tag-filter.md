@@ -31,3 +31,6 @@ Decisione: [ADR 0082](../adr/0082-loaded-web-timeline-tag-source-intersection.md
 **Non implementati:** tag modificabili dall'utente, filtri
 persona/thread, query globali, sync nativo/offline e
 conformità GDPR end-to-end. #79 resta aperta.
+## Combinazione con il giorno locale (#185)
+
+Un tag può essere intersecato con fonte e giornata selezionata. Nessuna ricerca di date o etichette su pagine non ancora caricate è implicita. Vedi [guida al giorno](timeline-day-filter.md).

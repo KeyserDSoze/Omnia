@@ -588,3 +588,6 @@ The API's JWT/RLS, cursor, read budgets and private no-store
 responses remain unchanged. Selection is transient React
 state, cleared with private notes on session loss or erase;
 it is not a full-text search or external permission.
+## Explicit loaded-day selector (ADR 0083, #185)
+
+The Web timeline derives day options and labels from its existing signed, FORCE-RLS-scoped memory rows with `groupTimelineByLocalDay` (device timezone). The optional day key composes with source and tag via AND before visible day grouping. There is no new endpoint, scan, cursor mutation, durable data state, automatic inference or third-party access. Session epoch fences and erasure/logout clear the day choice alongside source, tag and memory rows. Day labels may change by device timezone, while source `occurredAt` stays immutable.

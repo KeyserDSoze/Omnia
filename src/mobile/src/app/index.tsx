@@ -10,6 +10,7 @@ import { ConsentLedgerEpoch, appendUniqueConsents } from '../services/consentLed
 import { filterLoadedMemories, sourceOptions } from '../services/timelineSourceFilter';
 import { filterLoadedByTag, tagOptions } from '../services/timelineTagFilter';
 import { groupTimelineByLocalDay } from '../services/timelineDayGrouping';
+import { dayOptions, filterLoadedByLocalDay } from '../services/timelineDayFilter';
 
 type LocalMemo = { id: string; source: string; occurredAt: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
@@ -37,12 +38,15 @@ export default function Home() {
   // Never store filter state in the URL, browser storage or server.
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
-  // Derive choices from ALL already-loaded signed rows, independently of
-  // either selection. The two exact matches compose with AND semantics.
+  const [dayFilter, setDayFilter] = useState<string | null>(null);
+  // Choices come from ALL actor-scoped rows already loaded, independently
+  // of current filters. Source, keyword-tag and local day compose with AND.
+  // Do not treat these choices as a global database search.
   const loadedSources = sourceOptions(memos);
   const loadedTags = tagOptions(memos);
-  const visibleMemos = filterLoadedByTag(
-    filterLoadedMemories(memos, sourceFilter), tagFilter);
+  const loadedDays = dayOptions(memos);
+  const visibleMemos = filterLoadedByLocalDay(
+    filterLoadedByTag(filterLoadedMemories(memos, sourceFilter), tagFilter), dayFilter);
   // Recompute from actor-scoped rows after each source switch, first-page
   // refresh or older-page append. No duplicate persisted day headings.
   const timelineDays = groupTimelineByLocalDay(visibleMemos);
@@ -108,6 +112,7 @@ export default function Home() {
     setMemos([]);
     setSourceFilter(null);
     setTagFilter(null);
+    setDayFilter(null);
     setGrant(null);
     setAccepted(false);
     setErasePhrase('');
@@ -399,6 +404,7 @@ export default function Home() {
       setMemos([]);
       setSourceFilter(null);
       setTagFilter(null);
+      setDayFilter(null);
       setNextCursor(null);
       setOlderError('');
       setDraft('');
@@ -791,9 +797,39 @@ export default function Home() {
                   ))}
                 </View>
               </View>
+              <View testID="memory-day-filter" style={{ marginTop: 14 }}>
+                <Text style={[styles.hint, { color: p.subtle }]}>
+                  Scegli una giornata locale fra quelle già caricate.
+                  La data dipende dal fuso di questo dispositivo; le giornate
+                  di pagine non ancora richieste non sono elencate.
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 11 }}>
+                  <Pressable testID="memory-day-all" accessibilityRole="button"
+                    accessibilityLabel="Mostra tutti i giorni caricati"
+                    accessibilityState={{ selected: dayFilter === null }}
+                    onPress={() => setDayFilter(null)}
+                    style={[styles.secondaryButton, { backgroundColor: p.card2,
+                      paddingHorizontal: 12, minHeight: 38,
+                      borderWidth: dayFilter === null ? 2 : 0, borderColor: p.accent }]}>
+                    <Text style={[styles.buttonText, heading]}>Tutti i giorni</Text>
+                  </Pressable>
+                  {loadedDays.map(day => (
+                    <Pressable key={day.key} testID="memory-day-option"
+                      accessibilityRole="button"
+                      accessibilityLabel={'Filtra giornata ' + day.label}
+                      accessibilityState={{ selected: dayFilter === day.key }}
+                      onPress={() => setDayFilter(day.key)}
+                      style={[styles.secondaryButton, { backgroundColor: p.card2,
+                        paddingHorizontal: 12, minHeight: 38,
+                        borderWidth: dayFilter === day.key ? 2 : 0, borderColor: p.accent }]}>
+                      <Text style={[styles.buttonText, heading]}>{day.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
               <Text testID="memory-source-count" style={[styles.hint, { color: p.subtle }]}>
                 {visibleMemos.length} di {memos.length} note caricate visualizzate
-                dopo i filtri sorgente e tag.
+                dopo i filtri sorgente, tag e giornata.
                 {nextCursor ? ' Altre pagine disponibili.' : ' Fine delle pagine caricate.'}
               </Text>
             </View>

@@ -41,3 +41,6 @@ La UI applica il filtro sorgente (#182) e quello tag
 senza note visibili non mostra intestazioni residue;
 una pagina successiva può aggiungere altre note o tag.
 [Guida ai filtri](timeline-tag-filter.md) · ADR 0082.
+## Selezione di un solo giorno già caricato (#185)
+
+Il pulsante **Tutti i giorni** e le date locali visibili derivano dalle stesse righe già scaricate usate dal grouping. Il giorno scelto viene combinato con i filtri sorgente/tag prima di renderizzare le intestazioni; il tasto **Carica altre note** resta indipendente. Vedi [guida al filtro giornata](timeline-day-filter.md) e ADR 0083.

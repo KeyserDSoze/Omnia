@@ -1502,3 +1502,6 @@ No localStorage/AsyncStorage/URL persistence, no extra API
 fetch, no mutation to tags, provenance or consent. Always
 wipe source, tag and notes together on logout/401/erase.
 The broader #79/#41/#2/#17 remain OPEN.
+## Signed loaded-day selection (#185 / ADR 0083)
+
+Expose device-local day options derived from **ALL already-loaded signed actor notes** through the same `groupTimelineByLocalDay` implementation as ADR 0081. No UTC slicing, guessed global day availability, extra fetching, source timezone claims, or derived thread assertions. Exact day selection ANDs with source and keyword tag before rendering grouped headings; keep manual keyset paging independent even when zero records are visible. Use accessible selected-state controls and honest visible/loaded counts. All private selection must be wiped with signed session notes on logout, 401, or erasure; never persist in URL or browser storage. Verify RED→GREEN Vitest DST and genuine Keycloak/JWT/PostgreSQL paging E2E; keep broader #79/#7/#41/#2 OPEN.

@@ -70,6 +70,16 @@ def validate_scanner_result(exit_code, report, ecosystem):
             raise ValueError("NuGet vulnerability output is not version-1 JSON")
         if "error" in report or not isinstance(report.get("projects"), list):
             raise ValueError("NuGet audit service unavailable or malformed report")
+        # NuGet 10 legitimately omits frameworks when there are NO
+        # vulnerable packages. Prove that advisory sources and query mode
+        # were present instead of inferring a clean report from [].
+        sources = report.get("sources")
+        if not isinstance(sources, list) or not sources or not all(
+                isinstance(s, str) and s.startswith("https://") for s in sources):
+            raise ValueError("NuGet vulnerability source list missing")
+        params = report.get("parameters")
+        if not isinstance(params, str) or "--vulnerable" not in params or "--include-transitive" not in params:
+            raise ValueError("NuGet report was not a transitive vulnerability scan")
     else:
         raise ValueError("unknown ecosystem")
     return None
@@ -125,8 +135,12 @@ def parse_nuget(report, expected_project, locked):
     if not reported.endswith("/" + expected_project.replace("\\", "/")) and reported != expected_project:
         raise ValueError("NuGet scan report project path mismatch")
     frameworks = project.get("frameworks")
-    if not isinstance(frameworks, list) or not frameworks:
-        raise ValueError("NuGet audit report has no framework records")
+    if frameworks is None:
+        # Official dotnet package list --vulnerable JSON output for a
+        # project with no vulnerabilities does not contain frameworks.
+        frameworks = []
+    if not isinstance(frameworks, list):
+        raise ValueError("NuGet audit report has malformed framework records")
     findings = []
     for framework in frameworks:
         if not isinstance(framework, dict) or not isinstance(framework.get("framework"), str):

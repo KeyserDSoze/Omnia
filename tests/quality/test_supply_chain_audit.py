@@ -36,6 +36,7 @@ def npm_report(severity="high"):
 def nuget_report(severity="High"):
     return {
         "version": 1, "parameters": "--vulnerable --include-transitive",
+        "sources": ["https://api.nuget.org/v3/index.json"],
         "projects": [{
             "path": "/repo/tests/Example/Example.csproj",
             "frameworks": [{
@@ -106,6 +107,17 @@ class SupplyChainSecurityContractTests(unittest.TestCase):
             assess_findings([item], [{**exemption, "package": "*"}], TODAY)
         with self.assertRaises(ValueError):
             assess_findings([], [exemption], TODAY)
+
+    def test_clean_nuget_project_without_frameworks_is_valid_only_with_audit_sources(self):
+        report = {"version": 1, "parameters": "--vulnerable --include-transitive",
+                  "sources": ["https://api.nuget.org/v3/index.json"],
+                  "projects": [{"path": "/repo/tests/Example/Example.csproj"}]}
+        self.assertEqual(parse_nuget(report, "tests/Example/Example.csproj",
+                                     {"example.package": {"1.0.0"}}), [])
+        report.pop("sources")
+        with self.assertRaisesRegex(ValueError, "source"):
+            parse_nuget(report, "tests/Example/Example.csproj",
+                        {"example.package": {"1.0.0"}})
 
     def test_npm_indirect_high_without_advisory_is_not_waivable(self):
         report = npm_report()

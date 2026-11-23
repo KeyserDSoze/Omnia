@@ -698,6 +698,7 @@ jobs:
         run: |
           node --test scripts/mobile-lock-policy.test.mjs scripts/sdk58-security-policy.test.mjs
           node scripts/verify-mobile-lockfile.mjs
+          node scripts/verify-sdk58-security.mjs
       - name: Install Expo dependencies
         run: npm ci --no-audit --no-fund
       - name: Verify Expo Router query-string runtime compatibility
@@ -708,6 +709,10 @@ jobs:
         run: npm test
       - name: Export Expo web
         run: npm run build:web
+      - name: Verify SDK58 Metro bundles Android and iOS (not native device builds)
+        run: |
+          npx expo export --platform android
+          npx expo export --platform ios
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Playwright browser E2E

@@ -16,7 +16,7 @@ jobs:
           cache-dependency-path: src/mobile/package-lock.json
       - name: Install locked dependencies
         working-directory: src/mobile
-        run: node scripts/verify-mobile-lockfile.mjs && npm ci --no-audit --no-fund
+        run: node scripts/verify-mobile-lockfile.mjs && node scripts/verify-sdk58-security.mjs && npm ci --no-audit --no-fund
       - name: Build Android and iOS with EAS (requires EXPO_TOKEN and store credentials)
         working-directory: src/mobile
         env:

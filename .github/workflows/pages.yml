@@ -24,7 +24,7 @@ jobs:
           cache-dependency-path: src/mobile/package-lock.json
       - name: Build Expo web
         working-directory: src/mobile
-        run: node scripts/verify-mobile-lockfile.mjs && npm ci --no-audit --no-fund && npm run typecheck && npm run build:web
+        run: node scripts/verify-mobile-lockfile.mjs && node scripts/verify-sdk58-security.mjs && npm ci --no-audit --no-fund && npm run typecheck && npm run build:web
       - name: Pages enabled?
         id: pages
         env:

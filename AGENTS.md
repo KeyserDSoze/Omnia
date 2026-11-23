@@ -1450,3 +1450,20 @@ real Keycloak E2E should use synthetic source grants, enforce
 429 budgets and test pagination past 25, foreign-actor isolation
 at the API, 403 on revoked source ingestion and private
 session wipe. No native offline or GDPR legal approval claimed.
+
+
+## Authenticated loaded-timeline source filter (#182 / ADR 0080)
+
+The Web source selector derives choices ONLY from signed,
+RLS-scoped \`memos\` already loaded via memory keyset pages.
+Use canonical exact source equality, render visible/loaded
+counts and explicit "loaded rows only" notice. An empty
+filtered view is not evidence of no server rows; preserve
+the \`loadOlder\` action and cursor regardless of filter.
+Do not turn the client-only filter into OAuth provider search
+or guess ungranted data. Never persist selection to URL or
+browser storage, and clear it alongside private view state
+on signout/401/erasure. Keep existing \`CloudViewEpoch\`
+session fences, note idempotency and API/RLS consent gates.
+React Native Pressable uses accessible button roles and
+selected state. #79/#41 and GDPR parent #2 remain OPEN.

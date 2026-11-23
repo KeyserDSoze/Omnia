@@ -7,13 +7,14 @@ import { createBrowserAuth, type BrowserAuth } from '../services/webAuth';
 import { MemoryApi, type ConsentDto, type RemoteMemory } from '../services/memoryApi';
 import { CloudViewEpoch, appendUniqueById } from '../services/cloudViewEpoch';
 import { ConsentLedgerEpoch, appendUniqueConsents } from '../services/consentLedgerView';
+import { filterLoadedMemories, sourceOptions } from '../services/timelineSourceFilter';
 
-type LocalMemo = { id: string; content: string; tags: string[]; time: string };
+type LocalMemo = { id: string; source: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
 const activeManualGrant = (grants: ConsentDto[]) =>
   grants.find(item => item.source === 'manual' && item.purpose === 'memory.capture' && item.active) ?? null;
 const timelineMemo = (item: RemoteMemory): LocalMemo => ({
-  id: item.id, content: item.summary, tags: item.tags,
+  id: item.id, source: item.source, content: item.summary, tags: item.tags,
   time: new Date(item.occurredAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
 });
 type Palette = { bg: string; surface: string; text: string; subtle: string; border: string; accent: string; accentText: string; card2: string };
@@ -29,6 +30,11 @@ export default function Home() {
   const p = palettes[mode];
   const [draft, setDraft] = useState('');
   const [memos, setMemos] = useState<LocalMemo[]>([]);
+  // Source filters are intentionally limited to loaded, actor-scoped rows.
+  // Never store filter state in the URL, browser storage or server.
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const loadedSources = sourceOptions(memos);
+  const visibleMemos = filterLoadedMemories(memos, sourceFilter);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [olderError, setOlderError] = useState('');
@@ -89,6 +95,7 @@ export default function Home() {
     setNextCursor(null);
     setAuthState('signed-out');
     setMemos([]);
+    setSourceFilter(null);
     setGrant(null);
     setAccepted(false);
     setErasePhrase('');
@@ -378,6 +385,7 @@ export default function Home() {
       if (!sameSession(epoch)) return;
       setGrant(null);
       setMemos([]);
+      setSourceFilter(null);
       setNextCursor(null);
       setOlderError('');
       setDraft('');
@@ -400,7 +408,8 @@ export default function Home() {
       const normalized = normalizeMemo(draft, new Date().toISOString(), webMode.kind === 'cloud');
       if (webMode.kind !== 'cloud') {
         setMemos(current => [{
-          id: normalized.externalId, content: normalized.content, tags: normalized.tags,
+          id: normalized.externalId, source: normalized.source,
+          content: normalized.content, tags: normalized.tags,
           time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
         }, ...current]);
         setDraft('');
@@ -708,13 +717,54 @@ export default function Home() {
         <View testID="memory-timeline" style={[styles.card, cardStyle, styles.sideCard]}>
           <Text style={[styles.kicker, { color: p.subtle }]}>LA TUA MEMORIA</Text>
           <Text style={[styles.cardTitle, heading]}>I tuoi momenti</Text>
+          {webMode.kind === 'cloud' && authState === 'signed-in' && memos.length > 0 && (
+            <View testID="memory-source-filter" style={{ marginBottom: 12 }}>
+              <Text style={[styles.hint, { color: p.subtle }]}>
+                Filtra per sorgente le {memos.length} note già caricate. Non è una
+                ricerca nell'intero archivio: per includere le precedenti usa
+                Carica altre note, anche se il filtro non mostra risultati.
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 11 }}>
+                <Pressable testID="memory-source-all" accessibilityRole="button"
+                  accessibilityLabel="Mostra tutte le sorgenti"
+                  accessibilityState={{ selected: sourceFilter === null }}
+                  onPress={() => setSourceFilter(null)}
+                  style={[styles.secondaryButton, { backgroundColor: p.card2,
+                    paddingHorizontal: 12, minHeight: 38,
+                    borderWidth: sourceFilter === null ? 2 : 0, borderColor: p.accent }]}>
+                  <Text style={[styles.buttonText, heading]}>Tutte</Text>
+                </Pressable>
+                {loadedSources.map(source => (
+                  <Pressable key={source} testID="memory-source-option"
+                    accessibilityRole="button"
+                    accessibilityLabel={'Filtra sorgente ' + source}
+                    accessibilityState={{ selected: sourceFilter === source }}
+                    onPress={() => setSourceFilter(source)}
+                    style={[styles.secondaryButton, { backgroundColor: p.card2,
+                      paddingHorizontal: 12, minHeight: 38,
+                      borderWidth: sourceFilter === source ? 2 : 0, borderColor: p.accent }]}>
+                    <Text style={[styles.buttonText, heading]}>{source}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text testID="memory-source-count" style={[styles.hint, { color: p.subtle }]}>
+                {visibleMemos.length} di {memos.length} note caricate visualizzate.
+                {nextCursor ? ' Altre pagine disponibili.' : ' Fine delle pagine caricate.'}
+              </Text>
+            </View>
+          )}
           {memos.length === 0 ? (
             <View style={styles.empty}>
               <Text style={{ fontSize: 35 }}>✦</Text>
               <Text style={[styles.emptyTitle, heading]}>Si comincia da qui.</Text>
               <Text style={[styles.hint, { color: p.subtle }]}>{webMode.kind === 'cloud' ? 'Le note salvate nel cloud appariranno qui dopo l’accesso.' : 'Le note di questa sessione appariranno qui. Non sono ancora sincronizzate sul cloud.'}</Text>
             </View>
-          ) : memos.map(memo => <View key={memo.id} style={[styles.memo, { borderColor: p.border }]}>
+          ) : visibleMemos.length === 0 ? (
+            <Text testID="memory-source-empty" style={[styles.hint, { color: p.subtle }]}>
+              Nessuna nota della sorgente {sourceFilter} tra quelle caricate.
+              {nextCursor ? ' Puoi caricare altre note senza rimuovere il filtro.' : ''}
+            </Text>
+          ) : visibleMemos.map(memo => <View key={memo.id} style={[styles.memo, { borderColor: p.border }]}>
             <Text style={[styles.memoTime, { color: p.subtle }]}>{memo.time} · {memo.tags.join(', ')}</Text>
             <Text style={[styles.memoText, heading]}>{memo.content}</Text>
           </View>)}

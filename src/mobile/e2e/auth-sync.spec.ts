@@ -802,11 +802,80 @@ test('real signed Web user can page all first-party grants and revoke an older s
 });
 
 
-test('real Keycloak signed Web timeline exposes accurate loaded-source filter (#182)', async ({ page }) => {
-  test.setTimeout(120_000);
+test('real Keycloak signed Web filters loaded notes without misrepresenting older pages (#182)', async ({ page }) => {
+  test.setTimeout(150_000);
   if (!user2 || !password) throw new Error('Missing disposable OIDC account');
+  let bearer = '';
+  page.on('request', request => {
+    if (request.method() === 'GET' && request.url().endsWith('/api/v1/consents'))
+      bearer = request.headers()['authorization'] ?? '';
+  });
   await page.goto('/Omnia/');
   await browserLogin(page, user2);
-  // RED: page endpoint returns source but timeline has no source filter UI.
-  await expect(page.getByTestId('memory-source-filter')).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
+
+  const base = Date.now();
+  const alpha = 'filter-alpha-' + base;
+  const beta = 'filter-beta-' + base;
+  const api = 'http://127.0.0.1:8080/api/v1/';
+  for (const source of [alpha, beta]) {
+    const consent = await page.request.post(api + 'consents', {
+      headers: { Authorization: bearer },
+      data: { source, purpose: 'memory.capture', policyVersion: 'privacy-v1',
+        expiresAt: new Date(base + 3 * 86_400_000).toISOString(), accepted: true }
+    });
+    expect(consent.status()).toBe(201);
+  }
+  const betaNote = 'Nota archivio sorgente beta ' + base;
+  const capture = async (source: string, text: string, n: number, moment: number) => {
+    const response = await page.request.post(api + 'memories', {
+      headers: { Authorization: bearer },
+      data: { source, externalId: 'source-filter-' + base + '-' + n,
+        contentType: 'text/plain', content: text,
+        occurredAt: new Date(moment).toISOString() }
+    });
+    expect(response.status()).toBe(200);
+  };
+  // The beta row is older than the first 10-note keyset page, while
+  // alpha has 11 newer rows. No fixture DB writes or forged identity.
+  await capture(beta, betaNote, 0, base - 180_000);
+  for (let i = 1; i <= 11; i++)
+    await capture(alpha, 'Nota corrente sorgente alpha ' + base + '-' + i,
+      i, base - i * 1000);
+
+  await page.getByTestId('sync-reload').click();
+  const timeline = page.getByTestId('memory-timeline');
+  const newest = 'Nota corrente sorgente alpha ' + base + '-1';
+  await expect(timeline.getByText(newest, { exact: true })).toBeVisible();
+  await expect(page.getByTestId('memory-source-filter')).toBeVisible();
+  await expect(page.getByTestId('memory-source-option').filter({ hasText: alpha }))
+    .toBeVisible();
+  await expect(page.getByTestId('memory-source-option').filter({ hasText: beta }))
+    .toHaveCount(0);
+  await expect(page.getByTestId('load-older')).toBeVisible();
+
+  await page.getByTestId('load-older').click();
+  const betaChoice = page.getByTestId('memory-source-option')
+    .filter({ hasText: beta });
+  await expect(betaChoice).toBeVisible();
+  await expect(timeline.getByText(betaNote, { exact: true })).toBeVisible();
+  await betaChoice.click();
+  await expect(timeline.getByText(betaNote, { exact: true })).toBeVisible();
+  await expect(timeline.getByText(newest, { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('memory-source-count')).toContainText(
+    /1 di \d+ note caricate/);
+
+  await page.getByTestId('memory-source-all').click();
+  await expect(timeline.getByText(newest, { exact: true })).toBeVisible();
+  await expect(timeline.getByText(betaNote, { exact: true })).toBeVisible();
+
+  // Selection is transient browser state: an actual IdP re-login returns
+  // to all loaded sources and never stores a source in the URL.
+  await betaChoice.click();
+  await page.reload();
+  await browserLogin(page, user2);
+  await expect(timeline.getByText(newest, { exact: true })).toBeVisible();
+  await expect(page.getByTestId('memory-source-count'))
+    .toContainText(/10 di 10 note caricate/);
+  await expect(page.getByTestId('memory-source-all')).toBeVisible();
 });

@@ -551,3 +551,15 @@ on request traffic and fail-closed 429 for new keys
 at capacity. Existing known actors may still consume
 unused request tokens. They do not coordinate quotas
 across Azure/Compose API replicas or reserve capacity.
+
+
+## Web loaded-source timeline selector (ADR 0080 / #182)
+
+Authenticated Expo Web projects \`source\` alongside each
+canonical note and derives an explicit exact-source filter
+from **currently loaded** keyset pages only, including later
+appended pages. No new endpoint, authorization scope or query
+is introduced. Paging remains independent and opt-in;
+visible/loaded counts and no-result state do not imply a
+full-database search. Browser selection is transient and
+cleared on session invalidation, 401 and erasure.

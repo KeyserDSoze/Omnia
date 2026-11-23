@@ -1,0 +1,23 @@
+# Web timeline: source filter over loaded pages (ADR 0080)
+
+Omnia's authenticated Web client reads only the actor-scoped
+\`GET /api/v1/memories/page?limit=10\` keyset pages. The Web timeline
+now offers **Tutte** plus each distinct source **already present in
+the loaded rows**, with an exact source filter. Counts explicitly
+describe \`visible of loaded\`. An empty filtered view does **not**
+mean no matching notes exist elsewhere in the PostgreSQL account:
+\`Carica altre note\` still fetches the next signed page; further
+source choices become available as those rows arrive.
+
+This filter never sends a new API request, changes the server's
+cursor, grants capture permission or deletes a memory. It is a
+transient selection, not a tenant/source search key: actor identity
+comes exclusively from validated OIDC JWT and FORCE RLS. Logout/401
+and erasure clear the filter; stale prior-session responses cannot
+repopulate private notes. A full browser reload requires another
+login and does not remember the previous selection.
+
+This is a #79/#41 *partial UX* slice, not daily grouping,
+semantic/person/tag search, cross-device sync or a GDPR claim.
+See [ADR 0080](../adr/0080-web-loaded-timeline-source-filter.md) and
+[#182](https://github.com/KeyserDSoze/Omnia/issues/182).

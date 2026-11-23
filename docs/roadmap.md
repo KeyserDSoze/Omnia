@@ -866,3 +866,15 @@ Historical issue checkboxes above may predate the finished
 CI SHA; refer to the CLOSED child issue comments for
 verified exact-SHA evidence rather than assuming pending
 work when the corresponding child is already closed.
+
+
+## #182 — source filter on loaded Web timeline (ADR 0080)
+
+Child of #79 / #41: tested accessible per-source choice
+and "Tutte" over the signed-in Web timeline's already
+loaded pages, with visible/loaded counts, transparent
+pagination, explicit empty states and session-bound
+selection. This is **not** server-side search, daily
+thread grouping, device parity or production GDPR scope.
+Actual RED/GREEN Actions evidence is tracked in issue #182;
+#79, #41 and #2 stay OPEN.

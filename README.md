@@ -453,3 +453,17 @@ snapshot storico e valutazione di conformità GDPR.
 
 
 **Evidenza TDD UI:** issue [#181](https://github.com/KeyserDSoze/Omnia/issues/181), ADR [0079](adr/0079-signed-web-consent-ledger-lifecycle.md), test Vitest dei fence e browser Keycloak reale. La UI non inventa permessi di provider esterni né afferma conformità GDPR completa.
+
+
+## Filtro sorgente sulla timeline Web (#182)
+
+La timeline cloud autenticata offre **Tutte** o una sorgente
+presente nelle note **già caricate**. Mostra il conteggio
+visibile/caricato, un messaggio esplicito se un filtro non trova
+risultati tra le righe attuali, e consente sempre di caricare
+le pagine precedenti senza perdere il filtro. Nessuna ricerca
+globale per fonte né scansione automatica dell'archivio:
+la sorgente visualizzata non concede privilegi su servizi
+esterni. Sessione, 401 ed erasure azzerano il filtro.
+Vedi [docs/timeline-source-filter.md](docs/timeline-source-filter.md)
+e ADR 0080. #79/#41/#2 restano aperte.

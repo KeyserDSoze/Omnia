@@ -12,7 +12,8 @@
 - [x] Expo npm v3 `src/mobile/package-lock.json` generato su runner GitHub con `npm ci`, SHA-512 e tarball npm verificati; workflow CI/Pages/OIDC/native passati a `npm ci` (#188, ADR 0085; esiti same-SHA riportati nella issue).
 - [x] NuGet `packages.lock.json` generati e verificati su runner .NET 10 per tutti i 20 progetti, `dotnet restore --locked-mode` in CI/OIDC e Docker API; fail-closed su lock mancanti/stale; ADR 0086, issue #189.
 - [x] Toolchain .NET SDK esatta 10.0.404 via root global.json + Actions CI/OIDC, immagini API Docker Ubuntu Noble SDK 10.0.404 / ASP.NET 10.0.15 per version tag e controlli reali; ADR 0087 / #190.
-- [ ] OCI image **digest** pinning e verifica supply chain, SBOM/security scanning, Node/Chromium patch, riproducibilità artifact, native device smoke e altri gate qualità prima di chiudere #15/#10.
+- [x] API Microsoft .NET Docker `FROM tag@sha256:index` verificati con registry discovery su amd64 e arm64, policy source fail-closed e reale build Docker CI amd64; ADR 0088 / #191.
+- [ ] OCI/SBOM/attestation globale e altre immagini PostgreSQL/Keycloak, CVE/security scanning, Node/Chromium patch, real ARM64 build, riproducibilità artifact, native device smoke e altri gate qualità prima di chiudere #15/#10.
 
 ## v0.2 — Functional secure personal timeline (next)
 

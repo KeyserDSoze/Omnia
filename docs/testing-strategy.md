@@ -46,6 +46,22 @@ CI Docker build is the real external check: passing source policy alone
 is not sufficient. Image patch tags can be rebuilt, and no OCI digests,
 SBOM, Node patch or native device smoke is claimed.
 
+## Microsoft OCI image INDEX digest pin — API (#191 / ADR 0088)
+
+`docker/Dockerfile.api` pins Microsoft SDK 10.0.404-noble and
+ASP.NET runtime 10.0.15-noble using each image's **multiarch INDEX**
+SHA-256 digest. A read-only GitHub Actions discovery job queried
+Microsoft Artifact Registry and validated both linux/amd64 and
+linux/arm64 descriptors. CI tests the negative policy, then checks
+the actual remote digest index for both pinned references and for
+the corresponding published tag. If Microsoft republishes that tag,
+CI blocks until a tracked security-reviewed digest update. The normal
+CI Docker build must pull and build the immutable refs on amd64,
+still with NuGet --locked-mode and runtime version checks. OIDC E2E
+runs the same offline source policy. This does NOT test ARM64
+execution or prove signature/provenance/SBOM, vulnerability freshness
+or the rest of the platform's base-image security.
+
 ## Pyramid
 
 | Layer | Test runner | Esempio | Frequenza |

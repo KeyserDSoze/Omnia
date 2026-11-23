@@ -17,6 +17,9 @@ jobs:
         run: |
           python3 -m unittest discover -s tests/quality -p 'test_dotnet_image_pins.py'
           python3 tests/quality/verify_dotnet_image_pins.py --offline
+          # Verify actual Microsoft registry indexes, amd64+arm64 descriptors,
+          # and fail if the published version tags drift from reviewed hashes.
+          python3 tests/quality/verify_dotnet_image_pins.py --remote
       - name: Test and validate pinned .NET toolchain contract
         run: |
           python3 -m unittest discover -s tests/quality -p 'test_dotnet_toolchain.py'

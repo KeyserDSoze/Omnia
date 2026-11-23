@@ -53,7 +53,7 @@ def check_toolchain(root: Path) -> list[str]:
     except OSError:
         return issues + ["docker/Dockerfile.api: Dockerfile missing"]
     images = re.findall(r"(?m)^FROM\s+(\S+)", contents)
-    if images != [SDK_IMAGE, RUNTIME_IMAGE]:
+    if [image.split("@", 1)[0] for image in images] != [SDK_IMAGE, RUNTIME_IMAGE]:
         issues.append("docker/Dockerfile.api: SDK/runtime images must be exact "
                       + SDK_IMAGE + " and " + RUNTIME_IMAGE)
     if not re.search(r"(?m)^COPY\s+global\.json\s+\./\s*$", contents):

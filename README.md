@@ -81,6 +81,21 @@ tag floating `10.0` o `dotnet-version: 10.0.x`.
 I tag patch delle immagini **non sono digest immutabili** e non
 sostituiscono SBOM, SCA o revisione CVE: #15/#10 restano aperte.
 
+## Immagini .NET API multiarch bloccate tramite digest OCI
+
+Per la build Docker, i due `FROM` Microsoft mantengono il tag di versione
+SDK/runtime e aggiungono `@sha256` del relativo **indice di manifest**
+multiarchitettura, verificato sul registro MCR per linux/amd64 e
+linux/arm64. La CI usa il [validator](tests/quality/verify_dotnet_image_pins.py)
+offline e quello remoto prima del restore: controlla che il tag ufficiale
+non sia stato ricostruito con un digest nuovo senza revisione. L'immagine
+viene poi realmente compilata su amd64; **non è ancora eseguita una build
+arm64 reale**. Istruzioni per aggiornamenti di sicurezza nel
+[runbook](docs/dotnet-oci-index-pinning.md) e
+[ADR 0088](adr/0088-dotnet-multiarch-oci-image-index-pinning.md).
+Il digest è un vincolo di contenuto, non una firma del produttore né
+uno scan malware/CVE o una certificazione supply chain.
+
 ## Avvio API locale (servizi open source)
 
 ```sh

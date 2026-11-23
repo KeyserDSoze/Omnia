@@ -1,0 +1,128 @@
+name: Omnia guarded Vitest critical-advisory remediation (#194)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/vitest-security-upgrade.yml
+permissions:
+  contents: read
+jobs:
+  fix-vitest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Upgrade ONLY test runner major in isolated checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('node:fs')
+          const p='src/mobile/package.json'
+          const data=JSON.parse(fs.readFileSync(p,'utf8'))
+          if (data.devDependencies?.vitest !== '^3.2.4' || data.overrides) {
+            throw new Error('Unexpected test tool manifest: manual review necessary')
+          }
+          data.devDependencies.vitest='5.1.1'
+          fs.writeFileSync(p,JSON.stringify(data,null,2)+'\n')
+          NODE
+          cd src/mobile
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          node scripts/verify-mobile-lockfile.mjs
+          node --test scripts/mobile-lock-policy.test.mjs
+          node - <<'NODE'
+          const lock=require('./package-lock.json')
+          if (lock.packages['node_modules/vitest']?.version !== '5.1.1') {
+            throw new Error('Intended Vitest version not resolved')
+          }
+          if (lock.packages['node_modules/tinypool']) {
+            throw new Error('Vitest 5 must not carry vulnerable tinypool into this graph')
+          }
+          if (lock.packages['node_modules/decode-uri-component']?.version !== '0.2.2') {
+            throw new Error('This fix must not silently override Expo Router CommonJS deps')
+          }
+          console.log('Vitest-only update, no vulnerable tinypool, unchanged Expo routing dependency')
+          NODE
+          npm ci --no-audit --no-fund
+          node --test scripts/query-string-compatibility.test.mjs
+          npm run typecheck
+          npm test
+          npm run build:web
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+      - name: Strict official npm all + production audit regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src/mobile
+          for scope in all production; do
+            status=0
+            if [ "$scope" = production ]; then
+              npm audit --json --omit=dev --audit-level=high > "$RUNNER_TEMP/audit-$scope.json" || status=$?
+            else
+              npm audit --json --audit-level=high > "$RUNNER_TEMP/audit-$scope.json" || status=$?
+            fi
+            python3 - "$RUNNER_TEMP/audit-$scope.json" "$scope" "$status" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1],encoding='utf-8'))
+          scope=sys.argv[2]
+          status=int(sys.argv[3])
+          counts=data.get('metadata',{}).get('vulnerabilities')
+          if (data.get('auditReportVersion')!=2 or data.get('error') or
+              not isinstance(counts,dict) or counts.get('total')!=len(data.get('vulnerabilities',{})) or
+              status not in (0,1)):
+              raise RuntimeError('npm registry advisory output missing, ambiguous or invalid')
+          high={name for name,item in data['vulnerabilities'].items()
+                if item.get('severity') in ('high','critical')}
+          allowed={'decode-uri-component','query-string','expo-router'}
+          print(scope,'npm audit severity count:',counts,'remaining-high:',sorted(high))
+          if counts.get('critical',0)!=0 or counts.get('high',0)>3 or not high.issubset(allowed):
+              raise RuntimeError('Vitest remediation failed or introduced new critical/high vulnerabilities')
+          PY
+          done
+      - name: Commit only tested Vitest manifest and lock fast-forward to main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 - <<'PY'
+          import base64,json,os,urllib.request
+          from pathlib import Path
+          root=Path.cwd()
+          base='https://api.github.com/repos/'+os.environ['GITHUB_REPOSITORY']
+          def request(method,path,payload=None):
+              data=None if payload is None else json.dumps(payload).encode('utf-8')
+              req=urllib.request.Request(base+path,data=data,method=method,headers={
+                  'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                  'Accept':'application/vnd.github+json',
+                  'X-GitHub-Api-Version':'2022-11-28',
+                  'Content-Type':'application/json'})
+              with urllib.request.urlopen(req,timeout=50) as resp: return json.load(resp)
+          old=os.environ['GITHUB_SHA']
+          current=request('GET','/git/ref/heads/main')['object']['sha']
+          assert old==current,'main moved; never publish stale graph or force'
+          parent=request('GET','/git/commits/'+old)
+          items=[]
+          for path in ('src/mobile/package.json','src/mobile/package-lock.json'):
+              b=(root/path).read_bytes()
+              assert isinstance(json.loads(b),dict)
+              blob=request('POST','/git/blobs',{'encoding':'base64',
+                  'content':base64.b64encode(b).decode('ascii')})
+              items.append({'path':path,'mode':'100644','type':'blob','sha':blob['sha']})
+          tree=request('POST','/git/trees',{'base_tree':parent['tree']['sha'],'tree':items})
+          commit=request('POST','/git/commits',{
+              'message':'fix(deps): migrate Vitest tooling to 5.1.1 and remove tinypool critical #194',
+              'tree':tree['sha'],'parents':[old]})
+          result=request('PATCH','/git/refs/heads/main',{'sha':commit['sha'],'force':False})
+          assert result['object']['sha']==commit['sha']
+          print('Published verified Vitest graph:',commit['sha'])
+          PY

@@ -1,0 +1,19 @@
+name: Omnia one-time OCI manifest index discovery (#191)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/oci-digest-discovery.yml
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect official Microsoft SDK and ASP.NET image indexes without writing repo
+        run: |
+          set -euo pipefail
+          docker buildx version
+          python3 tests/quality/verify_dotnet_image_pins.py --discover

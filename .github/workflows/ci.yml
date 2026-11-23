@@ -13,6 +13,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - name: Test and validate fail-closed .NET OCI manifest index pin
+        run: |
+          python3 -m unittest discover -s tests/quality -p 'test_dotnet_image_pins.py'
+          python3 tests/quality/verify_dotnet_image_pins.py --offline
       - name: Test and validate pinned .NET toolchain contract
         run: |
           python3 -m unittest discover -s tests/quality -p 'test_dotnet_toolchain.py'

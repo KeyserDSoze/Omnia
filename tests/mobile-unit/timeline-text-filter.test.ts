@@ -5,15 +5,15 @@ import { filterLoadedByTag } from '../../src/mobile/src/services/timelineTagFilt
 import { filterLoadedByLocalDay } from '../../src/mobile/src/services/timelineDayFilter';
 import { groupTimelineByLocalDay } from '../../src/mobile/src/services/timelineDayGrouping';
 
-type Row = { id: string; source: string; tags: string[]; occurredAt: string; summary: string };
+type Row = { id: string; source: string; tags: string[]; occurredAt: string; content: string };
 const rows: Row[] = [
-  { id: '1', source: 'manual', tags: ['lavoro'], occurredAt: '2035-06-21T12:00:00Z', summary: 'Caffè  Riunione con cliente' },
-  { id: '2', source: 'manual', tags: ['relazioni'], occurredAt: '2035-06-21T11:00:00Z', summary: 'Famiglia e amici' },
-  { id: '3', source: 'import', tags: ['lavoro'], occurredAt: '2035-06-20T10:00:00Z', summary: 'CAFFE\u0300 riunione e report' }
+  { id: '1', source: 'manual', tags: ['lavoro'], occurredAt: '2035-06-21T12:00:00Z', content: 'Caffè  Riunione con cliente' },
+  { id: '2', source: 'manual', tags: ['relazioni'], occurredAt: '2035-06-21T11:00:00Z', content: 'Famiglia e amici' },
+  { id: '3', source: 'import', tags: ['lavoro'], occurredAt: '2035-06-20T10:00:00Z', content: 'CAFFE\u0300 riunione e report' }
 ];
 
 describe('loaded-only signed timeline text filter #187', () => {
-  it('matches only visible summary with case/accents/Unicode/whitespace normalized', () => {
+  it('matches only visible content with case/accents/Unicode/whitespace normalized', () => {
     expect(filterLoadedByText(rows, '  cAfFe     rIuNiOnE  ').map(x => x.id)).toEqual(['1', '3']);
     expect(filterLoadedByText(rows, 'famiglia').map(x => x.id)).toEqual(['2']);
     expect(filterLoadedByText(rows, 'non presente')).toEqual([]);

@@ -11,6 +11,7 @@ import { filterLoadedMemories, sourceOptions } from '../services/timelineSourceF
 import { filterLoadedByTag, tagOptions } from '../services/timelineTagFilter';
 import { groupTimelineByLocalDay } from '../services/timelineDayGrouping';
 import { dayOptions, filterLoadedByLocalDay } from '../services/timelineDayFilter';
+import { filterLoadedByText } from '../services/timelineTextFilter';
 
 type LocalMemo = { id: string; source: string; occurredAt: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
@@ -39,14 +40,15 @@ export default function Home() {
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [dayFilter, setDayFilter] = useState<string | null>(null);
+  const [textFilter, setTextFilter] = useState('');
   // Choices come from ALL actor-scoped rows already loaded, independently
   // of current filters. Source, keyword-tag and local day compose with AND.
   // Do not treat these choices as a global database search.
   const loadedSources = sourceOptions(memos);
   const loadedTags = tagOptions(memos);
   const loadedDays = dayOptions(memos);
-  const visibleMemos = filterLoadedByLocalDay(
-    filterLoadedByTag(filterLoadedMemories(memos, sourceFilter), tagFilter), dayFilter);
+  const visibleMemos = filterLoadedByText(filterLoadedByLocalDay(
+    filterLoadedByTag(filterLoadedMemories(memos, sourceFilter), tagFilter), dayFilter), textFilter);
   // Recompute from actor-scoped rows after each source switch, first-page
   // refresh or older-page append. No duplicate persisted day headings.
   const timelineDays = groupTimelineByLocalDay(visibleMemos);
@@ -113,6 +115,7 @@ export default function Home() {
     setSourceFilter(null);
     setTagFilter(null);
     setDayFilter(null);
+    setTextFilter('');
     setGrant(null);
     setAccepted(false);
     setErasePhrase('');
@@ -405,6 +408,7 @@ export default function Home() {
       setSourceFilter(null);
       setTagFilter(null);
       setDayFilter(null);
+      setTextFilter('');
       setNextCursor(null);
       setOlderError('');
       setDraft('');
@@ -827,9 +831,35 @@ export default function Home() {
                   ))}
                 </View>
               </View>
+              <View testID="memory-text-filter-container" style={{ marginTop: 14 }}>
+                <Text style={[styles.hint, { color: p.subtle }]}>
+                  Cerca testo solo nelle note già caricate, insieme agli altri
+                  filtri. La ricerca non consulta l'intero archivio né carica
+                  automaticamente altre pagine.
+                </Text>
+                <TextInput testID="memory-text-filter"
+                  accessibilityLabel="Cerca testo nelle note caricate"
+                  placeholder="Cerca nelle note caricate…"
+                  placeholderTextColor={p.subtle}
+                  value={textFilter} maxLength={100} autoCapitalize="none"
+                  autoCorrect={false}
+                  onChangeText={value => setTextFilter(value.slice(0, 100))}
+                  style={[styles.input, { minHeight: 44, marginTop: 9,
+                    color: p.text, backgroundColor: p.bg, borderColor: p.border }]} />
+                {textFilter.length > 0 && (
+                  <Pressable testID="memory-text-clear" accessibilityRole="button"
+                    accessibilityLabel="Cancella ricerca testuale"
+                    onPress={() => setTextFilter('')}
+                    style={[styles.secondaryButton, { backgroundColor: p.card2,
+                      paddingHorizontal: 12, marginTop: 8,
+                      alignSelf: 'flex-start', minHeight: 38 }]}>
+                    <Text style={[styles.buttonText, heading]}>Cancella ricerca</Text>
+                  </Pressable>
+                )}
+              </View>
               <Text testID="memory-source-count" style={[styles.hint, { color: p.subtle }]}>
                 {visibleMemos.length} di {memos.length} note caricate visualizzate
-                dopo i filtri sorgente, tag e giornata.
+                dopo i filtri sorgente, tag, giornata e testo.
                 {nextCursor ? ' Altre pagine disponibili.' : ' Fine delle pagine caricate.'}
               </Text>
             </View>

@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <!-- Generate project-local packages.lock.json for each .csproj, never share
+         one lock across separate applications/test graphs. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- GitHub Actions CI is fail-closed, including implicit dotnet run/build
+         restores. During an explicit lock regeneration, use
+         -p:RestoreLockedMode=false (outside CI/release gates). -->
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+</Project>

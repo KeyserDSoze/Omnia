@@ -13,6 +13,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Test and validate fail-closed NuGet lock graphs
+        run: |
+          python3 -m unittest discover -s tests/quality -p 'test_nuget_lock.py'
+          python3 tests/quality/verify_nuget_locks.py
       - name: xUnit domain and application
         run: dotnet test tests/Omnia.Domain.Tests/Omnia.Domain.Tests.csproj -c Release
       - name: Compile .NET 10 API and offline backfill utility

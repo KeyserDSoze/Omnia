@@ -69,6 +69,24 @@ A lock does not freeze .NET SDK/container patch versions, guarantee
 NuGet feed uptime or provide software-composition analysis. Keep #15,
 #10 and production security/privacy release gates open.
 
+## Exact .NET SDK and Docker runtime patch (#190 / ADR 0087)
+
+The repository root `global.json` MUST select SDK `10.0.404` with
+`rollForward=disable`, `allowPrerelease=false`. Both CI and OIDC
+Actions must use `actions/setup-dotnet` with `global-json-file`,
+execute `dotnet --version` and reject anything other than 10.0.404.
+The Docker API builder must use the official Ubuntu Noble patch image
+`mcr.microsoft.com/dotnet/sdk:10.0.404-noble`, COPY global.json,
+assert the active SDK, and do locked NuGet restore; runtime must use
+`mcr.microsoft.com/dotnet/aspnet:10.0.15-noble` with real runtime
+framework checks. The fail-closed structural policy under
+`tests/quality/verify_dotnet_toolchain.py` is mandatory but is NOT a
+substitute for actual tool/image execution. Update all pinned versions
+together after official security patch review, not via floating tags
+or silent roll-forward. **Version tags can be rebuilt** and are NOT
+OCI digest pins. #15 and #10 stay open for digest attestation, scans
+and all other release gates; no production readiness claim.
+
 ## Backlog e feature management
 
 Leggere `docs/backlog.md` e `docs/product-requirements.md` prima di nuove funzionalità. Non duplicare issue: cercare per area/titolo. Ogni nuova feature usa `.github/ISSUE_TEMPLATE/feature.yml`, include epic parent, phase label, priorità, RED → GREEN → REFACTOR, evidenza commit SHA e URL di Actions. Le 14 epic e 116 issue child non indicano funzionalità completate. Le milestone sono label logiche; GitHub Projects/Milestones non configurati. Prima del lavoro su dati veri completare #29, #30, #31, #32, #33, #34, #36, #39, #41, #43 e test #17.

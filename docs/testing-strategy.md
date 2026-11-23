@@ -32,6 +32,20 @@ CI. No lock regeneration/--force-evaluate in a release workflow. Native
 devices, .NET SDK patch, NuGet availability, SBOM and supply-chain
 attestation are separate incomplete criteria.
 
+## Exact .NET SDK and Docker image patch gate (#190 / ADR 0087)
+
+`global.json` disables SDK patch/feature roll-forward and prerelease
+for .NET 10.0.404. Both CI and real OIDC workflows use that same
+global.json via setup-dotnet, execute the actual `dotnet --version`
+assertion and run offline negative tests against missing/mismatched
+version files, floating version inputs and Docker tags. The API Docker
+builder uses Microsoft `sdk:10.0.404-noble`, copies global.json,
+asserts its actual SDK and uses the locked NuGet graph; runtime image
+`aspnet:10.0.15-noble` is checked with `dotnet --list-runtimes`.
+CI Docker build is the real external check: passing source policy alone
+is not sufficient. Image patch tags can be rebuilt, and no OCI digests,
+SBOM, Node patch or native device smoke is claimed.
+
 ## Pyramid
 
 | Layer | Test runner | Esempio | Frequenza |

@@ -12,11 +12,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
       - name: Test and validate pinned .NET toolchain contract
         run: |
           python3 -m unittest discover -s tests/quality -p 'test_dotnet_toolchain.py'
           python3 tests/quality/verify_dotnet_toolchain.py
+          test "$(dotnet --version)" = "10.0.404"
       - name: Test and validate fail-closed NuGet lock graphs
         run: |
           python3 -m unittest discover -s tests/quality -p 'test_nuget_lock.py'

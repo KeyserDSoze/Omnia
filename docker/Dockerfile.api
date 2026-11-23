@@ -1,5 +1,8 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.404-noble AS build
 WORKDIR /workspace
+COPY global.json ./
+# Reject an unexpectedly different SDK in the actual image, not just the tag.
+RUN test "$(dotnet --version)" = "10.0.404"
 # NuGet locked graph and CI policy are repository-root MSBuild properties.
 COPY Directory.Build.props ./
 COPY src/backend/Omnia.Domain/ src/backend/Omnia.Domain/
@@ -9,7 +12,10 @@ COPY src/backend/Omnia.Api/ src/backend/Omnia.Api/
 RUN dotnet restore src/backend/Omnia.Api/Omnia.Api.csproj --locked-mode
 RUN dotnet publish src/backend/Omnia.Api/Omnia.Api.csproj --no-restore -c Release -o /output
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.15-noble
+# Real runtime image must contain the intended framework patch versions.
+RUN dotnet --list-runtimes | grep -F 'Microsoft.AspNetCore.App 10.0.15 ' \
+ && dotnet --list-runtimes | grep -F 'Microsoft.NETCore.App 10.0.15 '
 WORKDIR /app
 COPY --from=build /output .
 USER $APP_UID

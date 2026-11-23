@@ -68,6 +68,19 @@ vedere [ADR 0086](adr/0086-dotnet-nuget-locked-restore.md) e
 la riproducibilità binaria delle immagini o release .NET/Azure e non
 sostituiscono SBOM/SCA.
 
+## SDK .NET e runtime Docker (pinning v0.1)
+
+La toolchain .NET di CI/OIDC è definita da `global.json`:
+**SDK 10.0.404 esatto**, senza roll-forward o prerelease.
+Il Dockerfile API usa immagini Microsoft Ubuntu Noble con versioni
+esplicite (`sdk:10.0.404-noble`, `aspnet:10.0.15-noble`) e ne
+controlla SDK/runtime realmente eseguiti. Le modifiche sono
+coperte da [ADR 0087](adr/0087-dotnet-exact-sdk-and-container-patch.md)
+e [runbook](docs/dotnet-toolchain-pin.md); la CI non accetta
+tag floating `10.0` o `dotnet-version: 10.0.x`.
+I tag patch delle immagini **non sono digest immutabili** e non
+sostituiscono SBOM, SCA o revisione CVE: #15/#10 restano aperte.
+
 ## Avvio API locale (servizi open source)
 
 ```sh

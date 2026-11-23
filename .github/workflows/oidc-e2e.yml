@@ -14,12 +14,20 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: src/mobile/package-lock.json
+
+      - name: Verify exact .NET SDK from global.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests/quality -p 'test_dotnet_toolchain.py'
+          python3 tests/quality/verify_dotnet_toolchain.py
+          test "$(dotnet --version)" = "10.0.404"
 
       - name: Validate and restore API NuGet graph in locked mode
         shell: bash

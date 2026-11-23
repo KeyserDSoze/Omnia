@@ -4,6 +4,19 @@
 
 Per ogni feature: (1) test che fallisce per il comportamento richiesto; (2) implementazione minima; (3) refactor e regressioni; (4) esecuzione reale con SHA/URL Actions. Mai chiudere una issue solo perché il test è stato scritto o un mock passa. Ogni boundary esterno ha **test di contratto** oltre ai fake usati nello unit layer.
 
+## Dependency locking — npm (#188 / ADR 0085)
+
+Expo Node 22/npm 10 uses a committed v3 package-lock with root
+package.json version/range checks, registry.npmjs.org provenance and
+SHA-512 integrity. CI/Pages/OIDC and the manual native workflow invoke
+the fail-closed lockfile validator followed by `npm ci`.
+The cache keyed by this lock stores npm download cache, NOT node_modules;
+npm must still validate tarball integrity when restoring. A missing
+registry tarball can still fail; no unsafe --force/--legacy-peer-deps
+and no claim of hermetic offline reproducibility.
+NuGet locked restore, full security scanning and native device checks
+remain OPEN under #15/#10.
+
 ## Pyramid
 
 | Layer | Test runner | Esempio | Frequenza |

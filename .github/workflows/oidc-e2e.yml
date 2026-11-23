@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: src/mobile/package-lock.json
 
       - name: Start disposable PostgreSQL and Keycloak with random credentials
         shell: bash
@@ -156,9 +158,9 @@ jobs:
           printf 'ready\n' > "$marker"
           curl -fsS http://127.0.0.1:8080/health | jq -e '.status == "ok"' >/dev/null
 
-      - name: Install web dependencies
+      - name: Install locked web dependencies
         working-directory: src/mobile
-        run: npm install --no-audit --no-fund
+        run: node scripts/verify-mobile-lockfile.mjs && npm ci --no-audit --no-fund
 
       - name: Build static Expo for actual OIDC + API
         working-directory: src/mobile

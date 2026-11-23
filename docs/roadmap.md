@@ -9,7 +9,8 @@
 - [x] PostgreSQL versioned SQL migration, idempotent upsert; xUnit, Vitest, Playwright test sources, GitHub CI, web export and Pages workflow.
 - [ ] Verify CI green (must be checked on Actions; no claim before runs).
 - [ ] Configure GitHub Pages → Actions and verify URL live; native build credentials not yet configured.
-- [ ] Commit package-lock.json and NuGet packages.lock.json after reproducible install/restore, then switch CI to frozen restores.
+- [x] Expo npm v3 `src/mobile/package-lock.json` generato su runner GitHub con `npm ci`, SHA-512 e tarball npm verificati; workflow CI/Pages/OIDC/native passati a `npm ci` (#188, ADR 0085; esiti same-SHA riportati nella issue).
+- [ ] Aggiungere NuGet `packages.lock.json`, `dotnet restore --locked-mode`, versionamento completo SDK .NET e ulteriori controlli SBOM/scan prima di chiudere #15/#10.
 
 ## v0.2 — Functional secure personal timeline (next)
 

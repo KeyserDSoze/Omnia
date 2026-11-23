@@ -38,13 +38,23 @@ tests/                         xUnit / Vitest / Playwright
 
 ```sh
 cd src/mobile
-npm install
+npm ci
 npm run web
 npm run typecheck
 npm test
 npm run build:web
 npm run test:e2e
 ```
+
+Il progetto Web usa `src/mobile/package-lock.json` verificato da
+`node src/mobile/scripts/verify-mobile-lockfile.mjs`; CI, Pages, OIDC
+e il workflow native manuale richiedono `npm ci`. Per modificare
+dipendenze, aggiornare intenzionalmente il lockfile, revisionare il diff
+di transitive e ripetere una installazione pulita. Versioni opzionali
+native compatibili con Expo SDK 57 sono fissate nel manifest; vedi
+[ADR 0085](adr/0085-locked-expo-npm-dependency-graph.md) e
+[runbook](docs/npm-dependency-lock.md). La CI verde non valida una build
+native firmata.
 
 ## Avvio API locale (servizi open source)
 

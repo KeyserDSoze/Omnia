@@ -611,12 +611,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: src/mobile/package-lock.json
       - name: Test and validate frozen npm lockfile
         run: |
           node --test scripts/mobile-lock-policy.test.mjs
           node scripts/verify-mobile-lockfile.mjs
       - name: Install Expo dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Typecheck React Native
         run: npm run typecheck
       - name: Vitest domain

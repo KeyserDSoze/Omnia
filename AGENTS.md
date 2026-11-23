@@ -29,12 +29,27 @@ No hardcoded credentials, OAuth refresh tokens or private personal content in gi
 ## Commands
 
 ```sh
-cd src/mobile && npm install && npm run typecheck && npm test && npm run build:web
+cd src/mobile && npm ci && npm run typecheck && npm test && npm run build:web
 cd ../..
 dotnet test tests/Omnia.Domain.Tests/Omnia.Domain.Tests.csproj
 docker compose --env-file docker/.env -f docker/compose.yml up --build
 # OMNIA_TEST_DB=... dotnet test tests/Omnia.Integration.Tests/Omnia.Integration.Tests.csproj
 ```
+
+## Frozen npm dependency graph (#188 / ADR 0085)
+
+Every Expo Web/CI/OIDC/native workflow MUST validate
+`src/mobile/package-lock.json` using
+`node src/mobile/scripts/verify-mobile-lockfile.mjs` and use `npm ci`,
+never unconstrained `npm install` in a release gate. The npm v3 lock is
+checked into main with exact root manifest, SHA-512 integrity and registry
+provenance. The current SDK 57 compatible Reanimated/Worklets/Gesture
+Handler peer versions are declared explicitly; do not bypass resolution
+with --force or --legacy-peer-deps. Dependency upgrades require a reviewed
+lock diff, fresh npm ci, typecheck, Vitest, web export, OIDC real Chromium
+and native smoke where relevant. npm ci does NOT prove tarball availability,
+native parity or complete supply-chain security. #15 remains open until
+NuGet locked restore, toolchain pinning and other DoD gates are real.
 
 ## Backlog e feature management
 

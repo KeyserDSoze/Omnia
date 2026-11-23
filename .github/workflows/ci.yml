@@ -31,6 +31,15 @@ jobs:
           set -euo pipefail
           python3 -m unittest discover -s tests/quality -p 'test_locked_sbom.py'
           python3 tests/quality/generate_locked_sbom.py --output "$RUNNER_TEMP/omnia-locked-sbom"
+          python3 tests/quality/generate_locked_sbom.py --verify "$RUNNER_TEMP/omnia-locked-sbom"
+          sha256sum "$RUNNER_TEMP/omnia-locked-sbom/"*.cdx.json
+      - name: Publish locked CycloneDX inventory as short-lived CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnia-locked-dependency-sbom
+          path: ${{ runner.temp }}/omnia-locked-sbom/*.cdx.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Test and validate fail-closed NuGet lock graphs
         run: |
           python3 -m unittest discover -s tests/quality -p 'test_nuget_lock.py'

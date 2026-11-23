@@ -632,7 +632,10 @@ test('real Keycloak captures at the same clock instant must not collide (#177)',
 
 test('real Keycloak JWT can read bounded consent history and rejects invalid cursors (#180)', async ({ page }) => {
   test.setTimeout(120_000);
-  if (!user1 || !password) throw new Error('Missing ephemeral OIDC account');
+  // Other E2E scenarios have already legitimately spent the primary
+  // actor's bounded 60-second request budget. Use the independent second
+  // real Keycloak account; never bypass or disable server rate limits.
+  if (!user2 || !password) throw new Error('Missing ephemeral OIDC account');
   // Observe the initial legitimate API GET that makes consent-state
   // visible during the Keycloak sign-in itself. A later "Refresh" click
   // may be skipped while busy, so waiting for a second GET is racy.
@@ -644,7 +647,7 @@ test('real Keycloak JWT can read bounded consent history and rejects invalid cur
       bearer = request.headers()['authorization'] ?? '';
   });
   await page.goto('/Omnia/');
-  await browserLogin(page, user1);
+  await browserLogin(page, user2);
   // The UI becomes signed-in before refreshCloud's GET necessarily fires.
   await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
 

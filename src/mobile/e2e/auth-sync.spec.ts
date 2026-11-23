@@ -879,3 +879,67 @@ test('real Keycloak signed Web filters loaded notes without misrepresenting olde
     .toContainText(/10 di 10 note caricate/);
   await expect(page.getByTestId('memory-source-all')).toBeVisible();
 });
+
+
+test('real Keycloak timeline groups local calendar days across pagination and source filter (#183)', async ({ page }) => {
+  test.setTimeout(150_000);
+  if (!user2 || !password) throw new Error('Missing disposable Keycloak account');
+  let bearer = '';
+  page.on('request', req => {
+    if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
+      bearer = req.headers()['authorization'] ?? '';
+  });
+  await page.goto('/Omnia/');
+  await browserLogin(page, user2);
+  await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
+
+  const source = 'daily-183-' + Date.now();
+  const api = 'http://127.0.0.1:8080/api/v1/';
+  const consent = await page.request.post(api + 'consents', {
+    headers: { Authorization: bearer },
+    data: { source, purpose: 'memory.capture', policyVersion: 'privacy-v1',
+      expiresAt: new Date(Date.now() + 3 * 86_400_000).toISOString(), accepted: true }
+  });
+  expect(consent.status()).toBe(201);
+  // Future instants are synthetic to keep this test independent of wall clock.
+  // The current timeline sorts solely by actual occurredAt; HTTP writes and
+  // auth guards are genuine and each source has an active first-party grant.
+  const firstDay = '2030-05-20';
+  const olderDay = '2030-05-19';
+  const note = (n: number) => 'Raggruppamento 183 ' + source + ' #' + n;
+  for (let n = 1; n <= 13; n++) {
+    const time = n <= 11
+      ? firstDay + 'T' + String(12 - n).padStart(2, '0') + ':30:00Z'
+      : olderDay + 'T' + String(25 - n).padStart(2, '0') + ':30:00Z';
+    const saved = await page.request.post(api + 'memories', {
+      headers: { Authorization: bearer },
+      data: { source, externalId: source + '-' + n, contentType: 'text/plain',
+        content: note(n), occurredAt: time }
+    });
+    expect(saved.status()).toBe(200);
+  }
+  await page.getByTestId('sync-reload').click();
+  const timeline = page.getByTestId('memory-timeline');
+  await expect(timeline.getByText(note(1), { exact: true })).toBeVisible();
+  const choice = page.getByTestId('memory-source-option').filter({ hasText: source });
+  await choice.click();
+  // RED: no day headers exist in the existing flat timeline.
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(1);
+  const firstGroup = timeline.getByTestId('memory-day-group')
+    .filter({ hasText: '20 maggio 2030' });
+  await expect(firstGroup).toBeVisible();
+  await expect(firstGroup.getByTestId('memory-day-item')).toHaveCount(10);
+  await expect(page.getByTestId('load-older')).toBeVisible();
+  await page.getByTestId('load-older').click();
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(2);
+  await expect(firstGroup.getByTestId('memory-day-item')).toHaveCount(11);
+  const previousGroup = timeline.getByTestId('memory-day-group')
+    .filter({ hasText: '19 maggio 2030' });
+  await expect(previousGroup.getByTestId('memory-day-item')).toHaveCount(2);
+  await expect(previousGroup.getByText(note(13), { exact: true })).toBeVisible();
+  await expect(firstGroup.getByText(note(1), { exact: true })).toBeVisible();
+  await expect(timeline.getByTestId('memory-day-heading')).toHaveCount(2);
+  await page.getByTestId('auth-logout').click();
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(0);
+  await expect(timeline.getByText(note(1), { exact: true })).toHaveCount(0);
+});

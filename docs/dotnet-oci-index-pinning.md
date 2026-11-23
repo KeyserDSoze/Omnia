@@ -50,3 +50,18 @@ assert SDK/runtime versions, then use NuGet locked restores.
 Tags and indexes may be republished/garbage-collected. An immutable
 digest is not a malware scan, signature verification, vulnerability
 patch policy, multiarch execution test or production readiness claim.
+
+## Automatic read-only diagnostic on official tag drift (#212)
+
+When the independent remote pin check fails (for example, if an
+official Microsoft tag points to a different index), CI keeps the
+**blocking failure** and immediately invokes
+`python3 tests/quality/verify_dotnet_image_pins.py --discover` under
+`if: failure()`. The output identifies the currently published official
+top-level indexes and supported linux/amd64 and linux/arm64 platforms
+for manual review. It does not edit the Dockerfile, upload secrets,
+automatically trust an index, or turn CI green. Dedicated policy tests
+reject removing `--remote`, using `always()`, moving discovery before
+the blocking gate, or adding `continue-on-error`. A real registry
+query followed by a reviewed version/digest patch and actual Docker
+build is still required; see [#212](https://github.com/KeyserDSoze/Omnia/issues/212).

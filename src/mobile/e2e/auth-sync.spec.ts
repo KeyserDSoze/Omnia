@@ -800,3 +800,13 @@ test('real signed Web user can page all first-party grants and revoke an older s
   await expect(page.getByTestId('consent-ledger-row')).toHaveCount(0);
   await expect(page.getByTestId('consent-ledger')).toHaveCount(0);
 });
+
+
+test('real Keycloak signed Web timeline exposes accurate loaded-source filter (#182)', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!user2 || !password) throw new Error('Missing disposable OIDC account');
+  await page.goto('/Omnia/');
+  await browserLogin(page, user2);
+  // RED: page endpoint returns source but timeline has no source filter UI.
+  await expect(page.getByTestId('memory-source-filter')).toBeVisible({ timeout: 10_000 });
+});

@@ -176,7 +176,7 @@ public sealed class ApiConsentPaginationTests
             Assert.Equal(HttpStatusCode.OK, usedCursor.StatusCode);
             using var filtered = JsonDocument.Parse(await usedCursor.Content.ReadAsStreamAsync());
             foreach (var item in filtered.RootElement.GetProperty("items").EnumerateArray())
-                Assert.DoesNotContain(item.GetProperty("id").GetString(), observed);
+                Assert.DoesNotContain(item.GetProperty("id").GetString()!, observed);
         }
         using (var unauth = await Get("/api/v1/consents/page", signed: false))
             Assert.Equal(HttpStatusCode.Unauthorized, unauth.StatusCode);

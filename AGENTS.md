@@ -1417,17 +1417,17 @@ legal consent coverage; #29/#41/#2 stay OPEN.
 
 ## Consent ledger chronological keyset API (#180 / ADR 0078)
 
-Keep the legacy \`GET /api/v1/consents\` bounded array with #178's
-manual-active priority. The additive \`GET /api/v1/consents/page\`
-MUST validate default 25/max 50 and strict \`c1.\` + canonical
+Keep the legacy `GET /api/v1/consents` bounded array with #178's
+manual-active priority. The additive `GET /api/v1/consents/page`
+MUST validate default 25/max 50 and strict `c1.` + canonical
 70-character base64url ticks+UUID token. Return generic 400 on
 invalid limits/tokens, never echo cursor or grant metadata to logs.
 Always read via signed JWT tenant+subject and restricted PostgreSQL
-\`PostgresActorScope\` FORCE RLS; use only parameterized queries with
-\`(granted_at,id) < (beforeAt,beforeId)\` and DESC UUID tie-break,
-\`LIMIT limit+1\`, to avoid missing identical timestamps.
+`PostgresActorScope` FORCE RLS; use only parameterized queries with
+`(granted_at,id) < (beforeAt,beforeId)` and DESC UUID tie-break,
+`LIMIT limit+1`, to avoid missing identical timestamps.
 A cursor is a position, not authentication/snapshot/consent.
-\`IConsentGuard\`, regrant/withdrawal locks and memory write gate
+`IConsentGuard`, regrant/withdrawal locks and memory write gate
 must not be affected. The typed client method is NOT a complete
 UI: #179 remains OPEN until cross-source consent navigation and
 revocation are implemented and proven under real Keycloak E2E.

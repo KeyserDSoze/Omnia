@@ -1418,11 +1418,11 @@ a lawful-basis assessment or proof of end-to-end GDPR withdrawal.
 
 ## First-party consent chronological cursor API (#180 / ADR 0078)
 
-The new actor-scoped \`GET /api/v1/consents/page\` is read-only and
+The new actor-scoped `GET /api/v1/consents/page` is read-only and
 returns a bounded chronological page (1..50), with immutable
-\`(granted_at DESC, id DESC)\` keyset and an opaque canonical \`c1.\`
+`(granted_at DESC, id DESC)` keyset and an opaque canonical `c1.`
 position. The query uses **parameterized SQL** under the same
-restricted \`PostgresActorScope\` FORCE RLS role. A cursor does not
+restricted `PostgresActorScope` FORCE RLS role. A cursor does not
 carry session authentication and **must never** replace the server's
 signed OIDC tenant and subject. A stolen or forged cursor cannot
 select another actor: all SELECTs include JWT actor constraints.

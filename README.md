@@ -426,11 +426,11 @@ paginato; #29/#41/#2 rimangono aperte.
 
 ## First-party consent history API (#180)
 
-\`GET /api/v1/consents/page?limit=25&before=...\` now pages the
+`GET /api/v1/consents/page?limit=25&before=...` now pages the
 JWT-actor-scoped PostgreSQL consent history without the old 200-row
-cutoff. It uses canonical keyset \`granted_at DESC, id DESC\`,
+cutoff. It uses canonical keyset `granted_at DESC, id DESC`,
 max 50 rows per call, explicit continuation and signed actor/RLS on
-every SQL query. \`GET /api/v1/consents\` remains backward-compatible
+every SQL query. `GET /api/v1/consents` remains backward-compatible
 and prioritizes active manual consent. The Web API adapter has a typed
 method, but the full multi-scope **UI is still pending** (#179).
 No implication of complete GDPR/provider coverage or of production

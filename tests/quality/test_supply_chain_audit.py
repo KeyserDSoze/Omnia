@@ -23,8 +23,9 @@ def npm_report(severity="high"):
                 "fixAvailable": True
             }
         },
-        "metadata": {"vulnerabilities": {"info": 0, "low": 0,
-                                        "moderate": 0,
+        "metadata": {"vulnerabilities": {"info": int(severity == "info"),
+                                        "low": int(severity == "low"),
+                                        "moderate": int(severity == "moderate"),
                                         "high": int(severity == "high"),
                                         "critical": int(severity == "critical"),
                                         "total": 1},

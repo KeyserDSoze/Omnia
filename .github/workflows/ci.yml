@@ -644,6 +644,44 @@ jobs:
         run: docker compose --env-file docker/.env.example -f docker/compose.yml config --quiet
       - name: Build API container
         run: docker build -f docker/Dockerfile.api -t omnia-api:ci .
+  security-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: TDD high/critical policy, scanner failures and narrow exceptions
+        run: python3 -m unittest discover -s tests/quality -p 'test_supply_chain_audit.py'
+      - name: Fail-closed npm and NuGet lock policy
+        run: |
+          set -euo pipefail
+          node src/mobile/scripts/verify-mobile-lockfile.mjs
+          python3 tests/quality/verify_nuget_locks.py
+          python3 tests/quality/generate_locked_sbom.py --output "$RUNNER_TEMP/omnia-audit-sbom"
+      - name: Audit live official npm and NuGet advisories (all + production)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/quality/run_live_advisory_audit.py \
+            --output "$RUNNER_TEMP/omnia-security-audit/summary.json"
+      - name: Publish advisory evidence even if the fail-closed gate blocks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnia-security-audit
+          path: ${{ runner.temp }}/omnia-security-audit/summary.json
+          if-no-files-found: ignore
+          retention-days: 14
+
   mobile:
     runs-on: ubuntu-24.04
     defaults:

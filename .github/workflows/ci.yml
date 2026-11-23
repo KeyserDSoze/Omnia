@@ -17,6 +17,16 @@ jobs:
         run: |
           python3 -m unittest discover -s tests/quality -p 'test_nuget_lock.py'
           python3 tests/quality/verify_nuget_locks.py
+      - name: Locked NuGet restore for every .NET 10 project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' projects < <(find src/backend tests -type f -name '*.csproj' \
+            ! -path '*/bin/*' ! -path '*/obj/*' -print0 | sort -z)
+          test "${#projects[@]}" -eq 20
+          for project in "${projects[@]}"; do
+            dotnet restore "$project" --locked-mode
+          done
       - name: xUnit domain and application
         run: dotnet test tests/Omnia.Domain.Tests/Omnia.Domain.Tests.csproj -c Release
       - name: Compile .NET 10 API and offline backfill utility

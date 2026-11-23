@@ -51,6 +51,24 @@ and native smoke where relevant. npm ci does NOT prove tarball availability,
 native parity or complete supply-chain security. #15 remains open until
 NuGet locked restore, toolchain pinning and other DoD gates are real.
 
+## Frozen .NET 10 NuGet dependency graphs (#189 / ADR 0086)
+
+All 20 projects under `src/backend` and `tests` require independent
+`packages.lock.json` files, from the official NuGet restore graph.
+`Directory.Build.props` enables `RestorePackagesWithLockFile` for every
+project and sets `RestoreLockedMode=true` when `CI=true`, including
+implicit `dotnet run/build/test` restores. The CI preflight
+`python3 tests/quality/verify_nuget_locks.py` rejects missing graph
+files, unlocked direct references, mismatched target frameworks and
+missing NuGet SHA-512 content hashes; ONLY `dotnet restore --locked-mode`
+proves actual graph consistency. Every relevant CI/E2E/Docker API build
+must run locked NuGet restore; no `--force-evaluate` in release gates.
+Intentional package changes require generating lockfiles locally in a
+reviewed change, followed by all tests and real runner verification.
+A lock does not freeze .NET SDK/container patch versions, guarantee
+NuGet feed uptime or provide software-composition analysis. Keep #15,
+#10 and production security/privacy release gates open.
+
 ## Backlog e feature management
 
 Leggere `docs/backlog.md` e `docs/product-requirements.md` prima di nuove funzionalità. Non duplicare issue: cercare per area/titolo. Ogni nuova feature usa `.github/ISSUE_TEMPLATE/feature.yml`, include epic parent, phase label, priorità, RED → GREEN → REFACTOR, evidenza commit SHA e URL di Actions. Le 14 epic e 116 issue child non indicano funzionalità completate. Le milestone sono label logiche; GitHub Projects/Milestones non configurati. Prima del lavoro su dati veri completare #29, #30, #31, #32, #33, #34, #36, #39, #41, #43 e test #17.

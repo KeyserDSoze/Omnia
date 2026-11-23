@@ -21,6 +21,14 @@ jobs:
           cache: npm
           cache-dependency-path: src/mobile/package-lock.json
 
+      - name: Validate and restore API NuGet graph in locked mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests/quality -p 'test_nuget_lock.py'
+          python3 tests/quality/verify_nuget_locks.py
+          dotnet restore src/backend/Omnia.Api/Omnia.Api.csproj --locked-mode
+
       - name: Start disposable PostgreSQL and Keycloak with random credentials
         shell: bash
         run: |

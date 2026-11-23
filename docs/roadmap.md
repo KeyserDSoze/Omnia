@@ -10,7 +10,8 @@
 - [ ] Verify CI green (must be checked on Actions; no claim before runs).
 - [ ] Configure GitHub Pages → Actions and verify URL live; native build credentials not yet configured.
 - [x] Expo npm v3 `src/mobile/package-lock.json` generato su runner GitHub con `npm ci`, SHA-512 e tarball npm verificati; workflow CI/Pages/OIDC/native passati a `npm ci` (#188, ADR 0085; esiti same-SHA riportati nella issue).
-- [ ] Aggiungere NuGet `packages.lock.json`, `dotnet restore --locked-mode`, versionamento completo SDK .NET e ulteriori controlli SBOM/scan prima di chiudere #15/#10.
+- [x] NuGet `packages.lock.json` generati e verificati su runner .NET 10 per tutti i 20 progetti, `dotnet restore --locked-mode` in CI/OIDC e Docker API; fail-closed su lock mancanti/stale; ADR 0086, issue #189.
+- [ ] Pinning esatto SDK .NET/immagini, SBOM e security scanning, riproducibilità artifact, native device smoke e ulteriori gate qualità prima di chiudere #15/#10.
 
 ## v0.2 — Functional secure personal timeline (next)
 

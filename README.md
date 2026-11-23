@@ -56,6 +56,18 @@ native compatibili con Expo SDK 57 sono fissate nel manifest; vedi
 [runbook](docs/npm-dependency-lock.md). La CI verde non valida una build
 native firmata.
 
+## Riproducibilità NuGet .NET 10
+
+Ogni progetto .NET ha un proprio `packages.lock.json` verificato dal
+preflight `python3 tests/quality/verify_nuget_locks.py`; GitHub CI,
+OIDC E2E e la build Docker API eseguono `dotnet restore --locked-mode`.
+Il file root `Directory.Build.props` blocca anche gli eventuali restore
+impliciti quando `CI=true`. Per un upgrade intenzionale di dipendenze
+vedere [ADR 0086](adr/0086-dotnet-nuget-locked-restore.md) e
+[runbook](docs/nuget-dependency-lock.md). I lockfile non dimostrano
+la riproducibilità binaria delle immagini o release .NET/Azure e non
+sostituiscono SBOM/SCA.
+
 ## Avvio API locale (servizi open source)
 
 ```sh

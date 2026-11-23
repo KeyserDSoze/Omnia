@@ -14,8 +14,23 @@ The cache keyed by this lock stores npm download cache, NOT node_modules;
 npm must still validate tarball integrity when restoring. A missing
 registry tarball can still fail; no unsafe --force/--legacy-peer-deps
 and no claim of hermetic offline reproducibility.
-NuGet locked restore, full security scanning and native device checks
+NuGet per-project restore in locked mode is covered by ADR 0086/#189.
+Full SDK/image pinning, security scanning and native device checks
 remain OPEN under #15/#10.
+
+## NuGet locked package graph — .NET 10 (#189 / ADR 0086)
+
+All 20 `.csproj` have their own NuGet lock generated with the NuGet
+SDK and checked-in `packages.lock.json` files. The structural preflight
+requires every graph, declared direct package, expected target framework
+and SHA-512 package `contentHash`. The actual authority is
+`dotnet restore --locked-mode`: CI traverses all projects, OIDC
+pre-restores the API graph, and the Docker API build copies root MSBuild
+properties and uses locked restore followed by `publish --no-restore`.
+Root `Directory.Build.props` enables fail-closed implicit restores in
+CI. No lock regeneration/--force-evaluate in a release workflow. Native
+devices, .NET SDK patch, NuGet availability, SBOM and supply-chain
+attestation are separate incomplete criteria.
 
 ## Pyramid
 

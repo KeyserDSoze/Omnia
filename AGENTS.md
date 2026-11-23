@@ -1659,3 +1659,15 @@ CodeQL actually ran or uploaded results. Check the full four-job scan and
 CI/OIDC/Pages on the same commit before closing #211; never dismiss findings,
 weaken permissions/failures, or claim release/privacy readiness. #22/#15/#10
 remain open.
+
+## Official MCR tag-index drift response (#212, amendment ADR 0088)
+
+Do not suppress the mandatory `verify_dotnet_image_pins.py --remote`
+gate when Microsoft changes a published tag's multiarch index. On
+failure, CI runs its **read-only** `--discover` conditional and still
+fails. Verify the SDK/runtime patch pair against official Microsoft
+releases, inspect index media type and linux/amd64 + linux/arm64, and
+review the new digest before a replacement Dockerfile pin. Must test
+the exact final Docker image build, locked NuGet restore, runtime and
+same-SHA CI/OIDC/Pages; no floating tags or force-push. Keep #15/#10
+open for other supply-chain/security release gates.

@@ -69,3 +69,20 @@ Official references:
 - https://docs.docker.com/dhi/explore/security-concepts/digests/
 - https://github.com/dotnet/dotnet-docker/blob/main/README.sdk.md
 - https://github.com/dotnet/dotnet-docker/blob/main/README.aspnet.md
+
+## 2026-11-23 amendment — official tag republishing observed (#212)
+
+The same official MCR version tags began resolving to different multiarch
+index digests, so the existing strict CI pin contract correctly rejected
+both tags: [red CI](https://github.com/KeyserDSoze/Omnia/actions/runs/45227656682).
+A CI-only conditional **read-only** `--discover` after failure obtained
+new index digests on [diagnostic run](https://github.com/KeyserDSoze/Omnia/actions/runs/45228302048)
+for both linux/amd64 and linux/arm64. Official Microsoft November 10
+2026 .NET 10.0.15 security release still names SDK 10.0.404 and runtime
+10.0.15 as current: https://dotnet.microsoft.com/en-us/download/dotnet/10.0 .
+For the unchanged `10.0.404-noble` and `10.0.15-noble` tags, respectively,
+updated only the reviewed index pins to `sha256:8c6edfb26c85153f236d26efebd9ad349aec403583f343f201ee67838b23658d` and `sha256:aac50ceef10391e78a899e3d2ccd00bbafa2dcb56ccf4586cbccf00edb84fc21`.
+No claim is made about WHY upstream changed the indexes or whether images
+carry current Ubuntu CVE coverage. Existing `--remote` + Docker build +
+real SDK/runtime checks remain mandatory. #212 cannot close before
+same-SHA CI/OIDC/Pages green. #15/#10 remain OPEN.

@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0.404-noble@sha256:2b1e13a22e46b55117f9cdb4b38e73172de08a30370166c8227d06cdaff82473 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.404-noble@sha256:8c6edfb26c85153f236d26efebd9ad349aec403583f343f201ee67838b23658d AS build
 WORKDIR /workspace
 COPY global.json ./
 # Reject an unexpectedly different SDK in the actual image, not just the tag.
@@ -12,7 +12,7 @@ COPY src/backend/Omnia.Api/ src/backend/Omnia.Api/
 RUN dotnet restore src/backend/Omnia.Api/Omnia.Api.csproj --locked-mode
 RUN dotnet publish src/backend/Omnia.Api/Omnia.Api.csproj --no-restore -c Release -o /output
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.15-noble@sha256:0bfa6494dead26049c1e0d6c9dc890be79259cb7300f5f23ae1df1cdac3da7df
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.15-noble@sha256:aac50ceef10391e78a899e3d2ccd00bbafa2dcb56ccf4586cbccf00edb84fc21
 # Real runtime image must contain the intended framework patch versions.
 RUN dotnet --list-runtimes | grep -F 'Microsoft.AspNetCore.App 10.0.15 ' \
  && dotnet --list-runtimes | grep -F 'Microsoft.NETCore.App 10.0.15 '

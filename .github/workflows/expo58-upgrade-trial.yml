@@ -1,0 +1,112 @@
+name: Omnia Expo SDK58 compatibility and HIGH advisory trial (#195)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/expo58-upgrade-trial.yml
+permissions:
+  contents: read
+jobs:
+  trial:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Trial official Expo 58 dependency matrix without repository write privileges
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const p='src/mobile/package.json';
+          const manifest=JSON.parse(fs.readFileSync(p,'utf8'));
+          if (manifest.overrides || !manifest.dependencies?.expo.startsWith('~57') ||
+              manifest.dependencies['react-native']!=='0.86.2') {
+            throw new Error('Unexpected baseline: do not attempt unreviewed SDK major migration');
+          }
+          // Stable SDK58 / React Native 0.88 / React 19.3. Expo CLI
+          // independently validates and aligns native module versions.
+          const native={
+            '@expo/metro-runtime':'~58.0.15',
+            'expo':'^58.0.0',
+            'expo-asset':'~58.0.18',
+            'expo-audio':'~58.0.10',
+            'expo-constants':'~58.0.13',
+            'expo-font':'~58.0.10',
+            'expo-linking':'~58.0.14',
+            'expo-router':'~58.0.26',
+            'expo-status-bar':'~58.0.4',
+            'react':'19.3.0',
+            'react-dom':'19.3.0',
+            'react-native':'0.88.1',
+            'react-native-gesture-handler':'~3.3.0',
+            'react-native-reanimated':'4.7.1',
+            'react-native-safe-area-context':'~5.11.1',
+            'react-native-screens':'~4.30.1',
+            'react-native-web':'~0.21.4',
+            'react-native-worklets':'0.13.0',
+          };
+          for(const [key,value] of Object.entries(native)){
+            if(!(key in manifest.dependencies))throw new Error('Missing planned module '+key);
+            manifest.dependencies[key]=value;
+          }
+          manifest.devDependencies['@types/react']='~19.3.0';
+          fs.writeFileSync(p,JSON.stringify(manifest,null,2)+'\n');
+          NODE
+          cd src/mobile
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --no-audit --no-fund
+          npx expo install --fix --npm
+          node scripts/verify-mobile-lockfile.mjs
+          node --test scripts/mobile-lock-policy.test.mjs scripts/query-string-compatibility.test.mjs
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm test
+          npm run build:web
+          npm run test:e2e
+          npx expo export --platform android
+      - name: Require official npm full and production advisory zero high/critical
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src/mobile
+          for scope in all production; do
+            result=0
+            if [ "$scope" = production ]; then
+              npm audit --json --omit=dev --audit-level=high > "$RUNNER_TEMP/audit-$scope.json" || result=$?
+            else
+              npm audit --json --audit-level=high > "$RUNNER_TEMP/audit-$scope.json" || result=$?
+            fi
+            python3 - "$RUNNER_TEMP/audit-$scope.json" "$scope" "$result" <<'PY'
+          import json,sys
+          report=json.load(open(sys.argv[1],encoding='utf-8'))
+          scope=sys.argv[2]
+          code=int(sys.argv[3])
+          counts=report.get('metadata',{}).get('vulnerabilities')
+          if (report.get('auditReportVersion')!=2 or report.get('error') or
+              not isinstance(counts,dict) or
+              counts.get('total')!=len(report.get('vulnerabilities',{})) or
+              code not in (0,1)):
+              raise RuntimeError('Missing or invalid npm advisory feed response')
+          print(scope,'npm audit severity counts:',counts)
+          if counts.get('high',0) or counts.get('critical',0) or code!=0:
+              raise RuntimeError('HIGH/CRITICAL remains: SDK58 trial cannot be promoted')
+          PY
+          done
+      - name: Report trial graph summary without publishing to repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const p=require('./src/mobile/package.json');
+          const lock=require('./src/mobile/package-lock.json');
+          for (const name of ['expo','expo-router','react','react-native','react-native-reanimated','react-native-worklets','react-native-gesture-handler'])
+            console.log(name,p.dependencies[name],'=>',lock.packages['node_modules/'+name]?.version);
+          console.log('query-string present:',Boolean(lock.packages['node_modules/query-string']));
+          console.log('decode-uri-component present:',Boolean(lock.packages['node_modules/decode-uri-component']));
+          NODE

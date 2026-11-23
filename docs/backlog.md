@@ -235,3 +235,16 @@ distributed quota or reserved-fair ingress, WAF,
 media/storage/connector/AI budget, load-test result
 or GDPR go-live; parent #37 and #2 OPEN. Historical
 issue counts above are not current totals.
+
+
+## #183 — Web day grouping over already-loaded timeline rows
+
+Child of #79 / UX epic #7, following #182 source-filter slice.
+An Italian accessible header groups canonical signed
+\`occurredAt\` values in the DEVICE timezone, including
+midnight/DST and later keyset pages; source filtering is
+applied before grouping. It is client-only, not a server
+day query or automatic collection. Authentication, RLS,
+retention and erasure behavior are unchanged. See ADR 0081
+and child #183 for RED→GREEN real Keycloak/CI evidence.
+#79/#41/#7/#2 remain OPEN for broader requirements.

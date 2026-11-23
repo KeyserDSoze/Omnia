@@ -8,13 +8,15 @@ import { MemoryApi, type ConsentDto, type RemoteMemory } from '../services/memor
 import { CloudViewEpoch, appendUniqueById } from '../services/cloudViewEpoch';
 import { ConsentLedgerEpoch, appendUniqueConsents } from '../services/consentLedgerView';
 import { filterLoadedMemories, sourceOptions } from '../services/timelineSourceFilter';
+import { groupTimelineByLocalDay } from '../services/timelineDayGrouping';
 
-type LocalMemo = { id: string; source: string; content: string; tags: string[]; time: string };
+type LocalMemo = { id: string; source: string; occurredAt: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
 const activeManualGrant = (grants: ConsentDto[]) =>
   grants.find(item => item.source === 'manual' && item.purpose === 'memory.capture' && item.active) ?? null;
 const timelineMemo = (item: RemoteMemory): LocalMemo => ({
-  id: item.id, source: item.source, content: item.summary, tags: item.tags,
+  id: item.id, source: item.source, occurredAt: item.occurredAt,
+  content: item.summary, tags: item.tags,
   time: new Date(item.occurredAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
 });
 type Palette = { bg: string; surface: string; text: string; subtle: string; border: string; accent: string; accentText: string; card2: string };
@@ -35,6 +37,9 @@ export default function Home() {
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const loadedSources = sourceOptions(memos);
   const visibleMemos = filterLoadedMemories(memos, sourceFilter);
+  // Recompute from actor-scoped rows after each source switch, first-page
+  // refresh or older-page append. No duplicate persisted day headings.
+  const timelineDays = groupTimelineByLocalDay(visibleMemos);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [olderError, setOlderError] = useState('');
@@ -409,6 +414,7 @@ export default function Home() {
       if (webMode.kind !== 'cloud') {
         setMemos(current => [{
           id: normalized.externalId, source: normalized.source,
+          occurredAt: normalized.occurredAt,
           content: normalized.content, tags: normalized.tags,
           time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
         }, ...current]);
@@ -764,10 +770,23 @@ export default function Home() {
               Nessuna nota della sorgente {sourceFilter} tra quelle caricate.
               {nextCursor ? ' Puoi caricare altre note senza rimuovere il filtro.' : ''}
             </Text>
-          ) : visibleMemos.map(memo => <View key={memo.id} style={[styles.memo, { borderColor: p.border }]}>
-            <Text style={[styles.memoTime, { color: p.subtle }]}>{memo.time} · {memo.tags.join(', ')}</Text>
-            <Text style={[styles.memoText, heading]}>{memo.content}</Text>
-          </View>)}
+          ) : timelineDays.map(day => (
+            <View key={day.key} testID="memory-day-group">
+              <Text testID="memory-day-heading" accessibilityRole="header"
+                style={[styles.dayHeading, { color: p.text }]}>
+                {day.label}
+              </Text>
+              {day.items.map(memo => (
+                <View key={memo.id} testID="memory-day-item"
+                  style={[styles.memo, { borderColor: p.border }]}>
+                  <Text style={[styles.memoTime, { color: p.subtle }]}>
+                    {memo.time} · {memo.source} · {memo.tags.join(', ')}
+                  </Text>
+                  <Text style={[styles.memoText, heading]}>{memo.content}</Text>
+                </View>
+              ))}
+            </View>
+          ))}
           {webMode.kind === 'cloud' && authState === 'signed-in' && nextCursor && (
             <Pressable testID="load-older" accessibilityRole="button"
               accessibilityLabel="Carica note precedenti"
@@ -824,7 +843,9 @@ const styles = StyleSheet.create({
   buttonText: { fontSize: 15, fontWeight: '700' }, separator: { height: 1, marginVertical: 15 },
   hint: { fontSize: 12, lineHeight: 18, marginTop: 8 }, notice: { marginTop: 12, fontSize: 12, lineHeight: 18 },
   empty: { paddingTop: 17, alignItems: 'flex-start' }, emptyTitle: { fontSize: 18, fontWeight: '700', paddingTop: 12 },
-  memo: { borderTopWidth: 1, paddingVertical: 12 }, memoTime: { fontSize: 11, fontWeight: '700' }, memoText: { fontSize: 15, marginTop: 7, lineHeight: 22 },
+  memo: { borderTopWidth: 1, paddingVertical: 12 },
+  dayHeading: { fontSize: 14, fontWeight: '800', marginTop: 15, marginBottom: 4 },
+  memoTime: { fontSize: 11, fontWeight: '700' }, memoText: { fontSize: 15, marginTop: 7, lineHeight: 22 },
   features: { marginTop: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   feature: { flex: 1, minWidth: 250, borderWidth: 1, borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 12 },
   featureTitle: { fontSize: 16, fontWeight: '700' }, featureState: { fontSize: 9, fontWeight: '800' },

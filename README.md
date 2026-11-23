@@ -467,3 +467,17 @@ la sorgente visualizzata non concede privilegi su servizi
 esterni. Sessione, 401 ed erasure azzerano il filtro.
 Vedi [docs/timeline-source-filter.md](docs/timeline-source-filter.md)
 e ADR 0080. #79/#41/#2 restano aperte.
+
+
+## Timeline Web per giornate locali (#183)
+
+La timeline ora mostra intestazioni in italiano per la
+giornata del dispositivo, calcolate dal timestamp originale
+\`occurredAt\` (corrette anche intorno a mezzanotte e cambio
+ora). Le note mantengono ora, sorgente e tag: quando una
+giornata continua in una pagina successiva, la UI usa una
+sola intestazione. Il filtro sorgente #182 agisce prima
+dei gruppi e il logout/401/erase li cancella insieme
+alle note. Non è un riepilogo AI, né una ricerca su
+tutte le giornate o sincronizzazione native.
+[Guida](docs/timeline-day-grouping.md) · ADR 0081; #79 aperta.

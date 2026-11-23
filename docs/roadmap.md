@@ -878,3 +878,15 @@ selection. This is **not** server-side search, daily
 thread grouping, device parity or production GDPR scope.
 Actual RED/GREEN Actions evidence is tracked in issue #182;
 #79, #41 and #2 stay OPEN.
+
+
+## #183 — daily headings for the authenticated Web timeline (ADR 0081)
+
+Client-only local calendar day grouping from real \`occurredAt\`
+with DST-aware \`Intl\`, merging loaded keyset pages without
+duplicated day headings. Rows preserve signed source/time,
+optional #182 source filter and session-bound privacy fences.
+This closes only the narrow child #183 after same-SHA CI
+evidence; parent #79 and #7/#41 remain OPEN for threads,
+day search, tag/person views and native parity. AI recap
+is a separate, unimplemented product capability.

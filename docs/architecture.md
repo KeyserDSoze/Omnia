@@ -563,3 +563,16 @@ is introduced. Paging remains independent and opt-in;
 visible/loaded counts and no-result state do not imply a
 full-database search. Browser selection is transient and
 cleared on session invalidation, 401 and erasure.
+
+
+## UI timeline local-day projection (#183 / ADR 0081)
+
+Client-only \`groupTimelineByLocalDay\` constructs calendar
+day keys from signed \`occurredAt\` instants using the device
+timezone, after loaded-row source filtering. Date headings
+are recomputed from the same session-scoped memo list on
+new pages and logout; the server's keyset cursor and
+PostgreSQL FORCE RLS remain unchanged. No event's original
+timezone is yet stored, so day labels can differ across
+devices in different zones; this is intentional and not
+a modification to canonical provenance.

@@ -696,7 +696,7 @@ jobs:
           cache-dependency-path: src/mobile/package-lock.json
       - name: Test and validate frozen npm lockfile
         run: |
-          node --test scripts/mobile-lock-policy.test.mjs
+          node --test scripts/mobile-lock-policy.test.mjs scripts/sdk58-security-policy.test.mjs
           node scripts/verify-mobile-lockfile.mjs
       - name: Install Expo dependencies
         run: npm ci --no-audit --no-fund

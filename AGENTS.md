@@ -1428,20 +1428,21 @@ Always read via signed JWT tenant+subject and restricted PostgreSQL
 `LIMIT limit+1`, to avoid missing identical timestamps.
 A cursor is a position, not authentication/snapshot/consent.
 `IConsentGuard`, regrant/withdrawal locks and memory write gate
-must not be affected. The typed client method is NOT a complete
-UI: #179 remains OPEN until cross-source consent navigation and
-revocation are implemented and proven under real Keycloak E2E.
+must not be affected. Web first-party history navigation and source withdrawal are implemented
+in #181 / ADR 0079, with real Keycloak E2E as acceptance gate.
+Parent #29/#41/#2 remain OPEN for other consent, native/offline,
+third-party and GDPR requirements.
 
 
 ## Explicit signed Web consent ledger lifecycle (#181 / ADR 0079)
 
 The Web consent history browser is opt-in, fetches only bounded
-signed \`consentPage()\` data, shows exact continuation status and
+signed `consentPage()` data, shows exact continuation status and
 source/purpose/active/expired/revoked statuses, and revokes only
 an active actor-owned grant UUID via existing DELETE. Do not
 pretend a source label authorizes external connectors or third
-party processing. Keep all records and \`nextCursor\` in transient
-state; \`ConsentLedgerEpoch\` invalidates old results/errors on
+party processing. Keep all records and `nextCursor` in transient
+state; `ConsentLedgerEpoch` invalidates old results/errors on
 logout/401, erase, grant/revoke and refreshCloud. A 204 is
 required before telling the user a source was withdrawn;
 backend authority/locks/FORCE RLS remain unchanged. Browser

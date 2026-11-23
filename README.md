@@ -420,8 +420,8 @@ poi agli altri grant attivi e infine allo storico recente. In questo
 modo 260 rinnovi/scadenze/revoche non possono far apparire "nessun
 consenso" in Web quando la cattura manuale è tuttora autorizzata:
 la voce resta visibile e revocabile. Il gate reale di consenso continua
-a essere PostgreSQL con JWT/RLS. Il ledger completo non è ancora
-paginato; #29/#41/#2 rimangono aperte.
+a essere PostgreSQL con JWT/RLS. Il ledger completo è ora paginato lato API (#180) e consultabile da Web
+autenticato (#181); #29/#41/#2 rimangono aperte.
 
 
 ## First-party consent history API (#180)
@@ -431,8 +431,8 @@ JWT-actor-scoped PostgreSQL consent history without the old 200-row
 cutoff. It uses canonical keyset `granted_at DESC, id DESC`,
 max 50 rows per call, explicit continuation and signed actor/RLS on
 every SQL query. `GET /api/v1/consents` remains backward-compatible
-and prioritizes active manual consent. The Web API adapter has a typed
-method, but the full multi-scope **UI is still pending** (#179).
+and prioritizes active manual consent. The Web API adapter has a typed method and the authenticated UI
+can now browse and withdraw first-party source grants (#181, ADR 0079).
 No implication of complete GDPR/provider coverage or of production
 readiness.
 
@@ -450,3 +450,6 @@ La revoca **non cancella** automaticamente le note già
 conservate e non prova consenso di terzi. Restano
 fuori scope OAuth provider, native cloud offline,
 snapshot storico e valutazione di conformità GDPR.
+
+
+**Evidenza TDD UI:** issue [#181](https://github.com/KeyserDSoze/Omnia/issues/181), ADR [0079](adr/0079-signed-web-consent-ledger-lifecycle.md), test Vitest dei fence e browser Keycloak reale. La UI non inventa permessi di provider esterni né afferma conformità GDPR completa.

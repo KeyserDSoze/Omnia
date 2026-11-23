@@ -1429,7 +1429,9 @@ select another actor: all SELECTs include JWT actor constraints.
 Invalid token/limit fails generically without echo, and private
 no-store headers cover success, 401/403 and 400. Other scopes,
 third-party OAuth, page snapshot consistency, legal consent notices
-and revoke UI of all non-manual scopes remain open in #179/#29/#2.
+and full legal/provider coverage remain out of scope of #181/#29/#2.
+The signed Web first-party UI now supports explicit history browsing
+and per-source withdrawal, as documented below in ADR 0079.
 
 
 ## Web first-party consent ledger session fence (#181 / ADR 0079)

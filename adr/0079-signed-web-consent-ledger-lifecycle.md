@@ -1,7 +1,7 @@
 # ADR 0079 — Signed Web consent history navigation and source withdrawal
 
 - Date: 2026-11-23
-- Status: slice under verification (issue #181; parent #179)
+- Status: accepted design; see issue #181 for exact-SHA RED/GREEN evidence
 - Related: ADR 0005 (first-party scope), 0007 (FORCE RLS),
   0068 (actor request-rate budget), 0069/0070/0071 (Web session and in-flight
   fences), 0075 (stale grant scope revocation), 0077 (legacy manual visibility),
@@ -9,9 +9,9 @@
 
 ## Context
 
-The actor-scoped \`GET /api/v1/consents/page\` API now returns
+The actor-scoped `GET /api/v1/consents/page` API now returns
 a paged chronological first-party ledger. Before #181, the Web UI
-only showed the current manual capture grant from legacy \`GET /consents\`.
+only showed the current manual capture grant from legacy `GET /consents`.
 A user with active grants for other first-party source strings had no
 UI affordance to find or withdraw them, or traverse >200 historical rows.
 
@@ -20,22 +20,22 @@ UI affordance to find or withdraw them, or traverse >200 historical rows.
 For authenticated Web cloud mode only:
 
 1. An explicit **Consulta registro consensi** action reads the first
-   chronological page using the authenticated \`MemoryApi.consentPage\`.
-   The page contains up to 25 grant records and \`nextCursor\`; an
+   chronological page using the authenticated `MemoryApi.consentPage`.
+   The page contains up to 25 grant records and `nextCursor`; an
    explicit **Carica altri consensi** action appends further pages.
    No background crawling, auto-pagination, token storage or client
    owner/tenant input. A count + "altre pagine" / "fine storico"
    tells users whether more pages exist.
-2. Render each first-party record's \`source\`, \`purpose\`,
-   \`policyVersion\` and **server-derived** active/revoked/expired
-   status. Revocation is offered only when \`active=true\`; it sends
-   only its ID to existing \`DELETE /api/v1/consents/{id}\`.
+2. Render each first-party record's `source`, `purpose`,
+   `policyVersion` and **server-derived** active/revoked/expired
+   status. Revocation is offered only when `active=true`; it sends
+   only its ID to existing `DELETE /api/v1/consents/{id}`.
    The backend resolves and revokes the scope atomically under
    the signed actor PostgreSQL lock and FORCE RLS (#176).
    An HTTP 204 is the only confirmation of withdrawal, not a click.
    A new signed refresh obtains current status, and no note is
    silently erased by consent withdrawal.
-3. The \`ConsentLedgerEpoch\` gate ignores obsolete first-page/page
+3. The `ConsentLedgerEpoch` gate ignores obsolete first-page/page
    responses and failures. Reset rows/cursors/error/loading immediately
    on logout, 401, grant, withdrawal, erasure or first-page timeline
    refresh. Generational fences plus session-scoped HTTP responses
@@ -47,20 +47,20 @@ For authenticated Web cloud mode only:
 
 ## TDD and evidence
 
-- RED commit \`52a44ff86b83f7f2070bc05708f5284f1249afd1\`
+- RED commit `52a44ff86b83f7f2070bc05708f5284f1249afd1`
   introduces Vitest lifecycle tests and real Keycloak E2E attempting
   to open the absent ledger UI; see CI and E2E jobs in #181.
 - GREEN adds view-only epoch helper, controlled UI and real JWT
   Playwright scenario with 27 synthetic first-party grants, keyset
   continuation, authenticated source withdrawal, post-revoke
-  \`consent_required\` 403, status reread and sign-out clearing.
+  `consent_required` 403, status reread and sign-out clearing.
 - Tests and actions must be verified on final **same main SHA**.
 
 ## Trust boundaries / limitations
 
 The UI does not prove permission from third parties or activate
 real external connectors; a source string is only a first-party
-capture label and \`memory.capture\` purpose. An outdated view can
+capture label and `memory.capture` purpose. An outdated view can
 display stale active flags until refreshed; the server remains
 authoritative and rejects unknown/revoked/foreign IDs. The page
 cursor is a position, **not** a cross-request snapshot. No

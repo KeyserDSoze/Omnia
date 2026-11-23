@@ -77,12 +77,12 @@ private API response. Record ordering `grantedAt DESC, id DESC`
 uses UUID tie-breaks when timestamps are equal.
 
 The original bounded `GET /api/v1/consents` array remains unchanged,
-including its first active manual grant priority. The Web typed client
-exposes `consentPage`, but navigation/selection/revoke of arbitrary
-active sources is **not yet implemented in the UI**, tracked in #179.
-Do not claim that UI displays all active grants or that the paginated
-API itself grants consent. Concurrent changes are not snapshot-isolated
-across pages; GDPR/third-party consents require separate review.
+including its first active manual grant priority. The Web typed client exposes `consentPage`, and explicit paginated
+navigation and per-source withdrawal are implemented in the authenticated
+UI (#181 / ADR 0079), without silently truncating the history.
+Neither a paginated API nor a UI control grants consent. Concurrent changes
+are not snapshot-isolated across pages; GDPR/third-party consents require
+separate review.
 
 
 ## Explicit Web browsing and source-scoped withdrawal (#181 / ADR 0079)
@@ -104,4 +104,4 @@ No browser token/history persistence or automatic crawling of
 unbounded pages. A stale page is never accepted after a session
 change. Client paging does not provide a transactional
 cross-request snapshot and only contains first-party
-\`memory.capture\` records; #29/#41/#2 stay OPEN.
+`memory.capture` records; #29/#41/#2 stay OPEN.

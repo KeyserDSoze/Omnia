@@ -1471,9 +1471,9 @@ selected state. #79/#41 and GDPR parent #2 remain OPEN.
 
 ## Local-calendar day group for loaded timeline (#183 / ADR 0081)
 
-Preserve the signed API \`occurredAt\` instant in the Web
+Preserve the signed API `occurredAt` instant in the Web
 display model, and derive date headings using the DEVICE's
-calendar timezone via \`Intl.DateTimeFormat.formatToParts\`.
+calendar timezone via `Intl.DateTimeFormat.formatToParts`.
 Never group by UTC date slicing or by ingestion/retention
 timestamps. Perform exact source filtering before grouping.
 Group only already-loaded rows and merge a day when a keyset
@@ -1481,7 +1481,7 @@ page continues it; never auto-fetch unbounded history or
 persist derived headings. Keep original note order/UUID,
 show canonical source and local clock, and use accessible
 header semantics. All headings are derivatives of private
-\`memos\`: existing epoch+JWT fences clear them on logout,
+`memos`: existing epoch+JWT fences clear them on logout,
 401 or erase. Tests must cover DST, same-day page boundary,
 source filter, real signed Keycloak→PostgreSQL and no stale
 row on sign-out. #79/#41/#2/#17 remain OPEN.

@@ -473,7 +473,7 @@ e ADR 0080. #79/#41/#2 restano aperte.
 
 La timeline ora mostra intestazioni in italiano per la
 giornata del dispositivo, calcolate dal timestamp originale
-\`occurredAt\` (corrette anche intorno a mezzanotte e cambio
+`occurredAt` (corrette anche intorno a mezzanotte e cambio
 ora). Le note mantengono ora, sorgente e tag: quando una
 giornata continua in una pagina successiva, la UI usa una
 sola intestazione. Il filtro sorgente #182 agisce prima

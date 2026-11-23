@@ -21,3 +21,13 @@ This is a #79/#41 *partial UX* slice, not daily grouping,
 semantic/person/tag search, cross-device sync or a GDPR claim.
 See [ADR 0080](../adr/0080-web-loaded-timeline-source-filter.md) and
 [#182](https://github.com/KeyserDSoze/Omnia/issues/182).
+
+
+## Intestazioni giornaliere (#183)
+
+Dopo il filtro delle righe già caricate, Omnia raggruppa le note
+visibili in giornate del fuso del dispositivo, ricavate dal campo
+`occurredAt` senza modificare il tempo canonico. Le pagine successive
+possono estendere lo stesso gruppo senza creare due intestazioni.
+Dettagli e limiti: [guida timeline](timeline-day-grouping.md) e
+[ADR 0081](../adr/0081-web-local-day-timeline-grouping.md).

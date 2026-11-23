@@ -241,7 +241,7 @@ issue counts above are not current totals.
 
 Child of #79 / UX epic #7, following #182 source-filter slice.
 An Italian accessible header groups canonical signed
-\`occurredAt\` values in the DEVICE timezone, including
+`occurredAt` values in the DEVICE timezone, including
 midnight/DST and later keyset pages; source filtering is
 applied before grouping. It is client-only, not a server
 day query or automatic collection. Authentication, RLS,

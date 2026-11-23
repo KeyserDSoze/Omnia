@@ -567,8 +567,8 @@ cleared on session invalidation, 401 and erasure.
 
 ## UI timeline local-day projection (#183 / ADR 0081)
 
-Client-only \`groupTimelineByLocalDay\` constructs calendar
-day keys from signed \`occurredAt\` instants using the device
+Client-only `groupTimelineByLocalDay` constructs calendar
+day keys from signed `occurredAt` instants using the device
 timezone, after loaded-row source filtering. Date headings
 are recomputed from the same session-scoped memo list on
 new pages and logout; the server's keyset cursor and

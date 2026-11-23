@@ -1101,7 +1101,21 @@ test('real Keycloak picks loaded calendar days with source/tag AND and explicit 
   await page.getByTestId('memory-source-all').click();
   await expect(timeline.getByTestId('memory-day-group')).toHaveCount(2);
   await expect(timeline.getByTestId('memory-day-item')).toHaveCount(13);
+  // RED #187: local text is a fourth AND-only selector over loaded signed rows.
+  const search = page.getByTestId('memory-text-filter');
+  await expect(search).toBeVisible();
+  await search.fill('FaMiGlIa   GiOrNo filtro');
+  await expect(timeline.getByTestId('memory-day-item')).toHaveCount(2);
+  await expect(timeline.getByText(memo(12), { exact: true })).toBeVisible();
+  await expect(timeline.getByText(memo(1), { exact: true })).toHaveCount(0);
+  await page.getByTestId('memory-tag-option').filter({ hasText: 'lavoro' }).click();
+  await expect(timeline.getByTestId('memory-day-group')).toHaveCount(0);
+  await page.getByTestId('memory-tag-all').click();
+  await search.fill('');
+  await expect(timeline.getByTestId('memory-day-item')).toHaveCount(13);
+  await search.fill('famiglia');
   await page.getByTestId('auth-logout').click();
+  await expect(search).toHaveCount(0);
   await expect(page.getByTestId('memory-day-filter')).toHaveCount(0);
   await expect(timeline.getByTestId('memory-day-group')).toHaveCount(0);
 });

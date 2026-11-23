@@ -576,3 +576,15 @@ PostgreSQL FORCE RLS remain unchanged. No event's original
 timezone is yet stored, so day labels can differ across
 devices in different zones; this is intentional and not
 a modification to canonical provenance.
+
+
+## Web tag/source view-only selection (#184, ADR 0082)
+
+The actor-scoped `RemoteMemory.tags` list is mapped to
+a local `tagOptions` chooser computed from **all** loaded
+memory pages, independent of selected source/tag. Both
+exact-match predicates are combined before local-day grouping.
+The API's JWT/RLS, cursor, read budgets and private no-store
+responses remain unchanged. Selection is transient React
+state, cleared with private notes on session loss or erase;
+it is not a full-text search or external permission.

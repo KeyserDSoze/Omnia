@@ -890,3 +890,16 @@ This closes only the narrow child #183 after same-SHA CI
 evidence; parent #79 and #7/#41 remain OPEN for threads,
 day search, tag/person views and native parity. AI recap
 is a separate, unimplemented product capability.
+
+
+## #184 — combined loaded tag/source selector (ADR 0082)
+
+After #182 and #183, signed-in Web now filters only
+already-loaded notes with exact source AND tag while preserving
+the original local-day grouping and page cursor. Tag options
+come from the whole loaded list. Empty state/count honestly
+describe loaded rows, never server-wide search. Backend tags
+are heuristic keywords (not AI). RED→GREEN and same-SHA CI
+evidence is in #184. Parents #79/#7/#41/#17/#2 stay OPEN
+for editable tags, thread/person views, native parity and
+privacy/compliance gates.

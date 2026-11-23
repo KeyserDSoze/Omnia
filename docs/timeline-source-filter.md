@@ -31,3 +31,12 @@ visibili in giornate del fuso del dispositivo, ricavate dal campo
 possono estendere lo stesso gruppo senza creare due intestazioni.
 Dettagli e limiti: [guida timeline](timeline-day-grouping.md) e
 [ADR 0081](../adr/0081-web-local-day-timeline-grouping.md).
+
+
+## Tag in combinazione con la fonte (#184)
+
+Puoi aggiungere un tag alla sorgente scelta; entrambi
+devono corrispondere e i tag si estraggono da tutte le
+note già caricate, indipendentemente dalla fonte scelta.
+Si mantiene il cursore e la stessa policy di sessione.
+[Guida tag](timeline-tag-filter.md) · ADR 0082.

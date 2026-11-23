@@ -32,3 +32,12 @@ Il backend non salva ancora la timezone originale di ogni
 sorgente. Gli scenari TDD Vitest e browser Keycloak reali
 sono nella [issue #183](https://github.com/KeyserDSoze/Omnia/issues/183).
 La #79 resta aperta per thread, tag, persone e parità native.
+
+
+## Filtraggio tag (#184)
+
+La UI applica il filtro sorgente (#182) e quello tag
+(#184) **prima** di derivare i giorni locali. Una giornata
+senza note visibili non mostra intestazioni residue;
+una pagina successiva può aggiungere altre note o tag.
+[Guida ai filtri](timeline-tag-filter.md) · ADR 0082.

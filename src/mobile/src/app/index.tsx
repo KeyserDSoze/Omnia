@@ -8,6 +8,7 @@ import { MemoryApi, type ConsentDto, type RemoteMemory } from '../services/memor
 import { CloudViewEpoch, appendUniqueById } from '../services/cloudViewEpoch';
 import { ConsentLedgerEpoch, appendUniqueConsents } from '../services/consentLedgerView';
 import { filterLoadedMemories, sourceOptions } from '../services/timelineSourceFilter';
+import { filterLoadedByTag, tagOptions } from '../services/timelineTagFilter';
 import { groupTimelineByLocalDay } from '../services/timelineDayGrouping';
 
 type LocalMemo = { id: string; source: string; occurredAt: string; content: string; tags: string[]; time: string };
@@ -35,8 +36,13 @@ export default function Home() {
   // Source filters are intentionally limited to loaded, actor-scoped rows.
   // Never store filter state in the URL, browser storage or server.
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  // Derive choices from ALL already-loaded signed rows, independently of
+  // either selection. The two exact matches compose with AND semantics.
   const loadedSources = sourceOptions(memos);
-  const visibleMemos = filterLoadedMemories(memos, sourceFilter);
+  const loadedTags = tagOptions(memos);
+  const visibleMemos = filterLoadedByTag(
+    filterLoadedMemories(memos, sourceFilter), tagFilter);
   // Recompute from actor-scoped rows after each source switch, first-page
   // refresh or older-page append. No duplicate persisted day headings.
   const timelineDays = groupTimelineByLocalDay(visibleMemos);
@@ -101,6 +107,7 @@ export default function Home() {
     setAuthState('signed-out');
     setMemos([]);
     setSourceFilter(null);
+    setTagFilter(null);
     setGrant(null);
     setAccepted(false);
     setErasePhrase('');
@@ -391,6 +398,7 @@ export default function Home() {
       setGrant(null);
       setMemos([]);
       setSourceFilter(null);
+      setTagFilter(null);
       setNextCursor(null);
       setOlderError('');
       setDraft('');
@@ -753,8 +761,39 @@ export default function Home() {
                   </Pressable>
                 ))}
               </View>
+              <View testID="memory-tag-filter" style={{ marginTop: 14 }}>
+                <Text style={[styles.hint, { color: p.subtle }]}>
+                  Filtra anche per tag presenti solo nelle note caricate.
+                  Le etichette attuali derivano da regole di parole chiave,
+                  non da analisi AI né da permessi per servizi esterni.
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 11 }}>
+                  <Pressable testID="memory-tag-all" accessibilityRole="button"
+                    accessibilityLabel="Mostra tutti i tag"
+                    accessibilityState={{ selected: tagFilter === null }}
+                    onPress={() => setTagFilter(null)}
+                    style={[styles.secondaryButton, { backgroundColor: p.card2,
+                      paddingHorizontal: 12, minHeight: 38,
+                      borderWidth: tagFilter === null ? 2 : 0, borderColor: p.accent }]}>
+                    <Text style={[styles.buttonText, heading]}>Tutti i tag</Text>
+                  </Pressable>
+                  {loadedTags.map(tag => (
+                    <Pressable key={tag} testID="memory-tag-option"
+                      accessibilityRole="button"
+                      accessibilityLabel={'Filtra tag ' + tag}
+                      accessibilityState={{ selected: tagFilter === tag }}
+                      onPress={() => setTagFilter(tag)}
+                      style={[styles.secondaryButton, { backgroundColor: p.card2,
+                        paddingHorizontal: 12, minHeight: 38,
+                        borderWidth: tagFilter === tag ? 2 : 0, borderColor: p.accent }]}>
+                      <Text style={[styles.buttonText, heading]}>{tag}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
               <Text testID="memory-source-count" style={[styles.hint, { color: p.subtle }]}>
-                {visibleMemos.length} di {memos.length} note caricate visualizzate.
+                {visibleMemos.length} di {memos.length} note caricate visualizzate
+                dopo i filtri sorgente e tag.
                 {nextCursor ? ' Altre pagine disponibili.' : ' Fine delle pagine caricate.'}
               </Text>
             </View>
@@ -767,8 +806,8 @@ export default function Home() {
             </View>
           ) : visibleMemos.length === 0 ? (
             <Text testID="memory-source-empty" style={[styles.hint, { color: p.subtle }]}>
-              Nessuna nota della sorgente {sourceFilter} tra quelle caricate.
-              {nextCursor ? ' Puoi caricare altre note senza rimuovere il filtro.' : ''}
+              Nessuna nota per i filtri selezionati tra quelle già caricate.
+              {nextCursor ? ' Puoi caricare altre note senza rimuovere i filtri.' : ''}
             </Text>
           ) : timelineDays.map(day => (
             <View key={day.key} testID="memory-day-group">

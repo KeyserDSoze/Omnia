@@ -248,3 +248,16 @@ day query or automatic collection. Authentication, RLS,
 retention and erasure behavior are unchanged. See ADR 0081
 and child #183 for RED→GREEN real Keycloak/CI evidence.
 #79/#41/#7/#2 remain OPEN for broader requirements.
+
+
+## #184 — first-party Web loaded-tag filter
+
+Child of #79/#7 after #182 source filter and #183 local
+day headings. The signed-memory Web view exposes exact
+keyword-tag selection independently of source choice,
+then intersects both selections before grouping days,
+without fetching unbounded pages or changing the DB.
+The server's `tags` are heuristic metadata, not LLM
+insights or cross-provider permissions. Exact tests/CI and
+limitations are in issue #184 and ADR 0082. #79/#41/#2
+remain OPEN; no global query, tag editing or native sync.

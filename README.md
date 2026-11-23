@@ -481,3 +481,16 @@ dei gruppi e il logout/401/erase li cancella insieme
 alle note. Non è un riepilogo AI, né una ricerca su
 tutte le giornate o sincronizzazione native.
 [Guida](docs/timeline-day-grouping.md) · ADR 0081; #79 aperta.
+
+
+## Filtro tag combinato con sorgente e giornate Web (#184)
+
+Nella timeline Web autenticata puoi selezionare **Tutti i tag**
+o un'etichetta presente nelle note già caricate, insieme alla
+sorgente (#182). I due filtri lavorano in **AND** e i
+raggruppamenti giornalieri (#183) mostrano solo i record che
+corrispondono; «Carica altre note» rimane disponibile anche
+con zero risultati. Queste etichette derivano da regole di
+parole chiave, non sono insight AI. Nessuna ricerca globale,
+consenso provider o funzione native/offline è implicita.
+[Guida](docs/timeline-tag-filter.md) · ADR 0082; #79 OPEN.

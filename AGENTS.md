@@ -1485,3 +1485,20 @@ header semantics. All headings are derivatives of private
 401 or erase. Tests must cover DST, same-day page boundary,
 source filter, real signed Keycloak→PostgreSQL and no stale
 row on sign-out. #79/#41/#2/#17 remain OPEN.
+
+
+## Signed loaded-note tag/source intersection (#184 / ADR 0082)
+
+The Web tag filter is a purely local, view-only option derived
+from the `tags` fields of ALL already-loaded RLS/JWT note
+rows. Choices stay independent of active source/tag selection,
+so older pages can add new tags. Use exact array membership
+(`source AND tag`), then group remaining rows by the local
+day. Keep 10-item keyset pagination opt-in and independent,
+the visible/loaded count honest, and preserve the empty state
+without residual headings. Tag labels are deterministic
+keyword heuristics, NEVER AI insights or provider authorization.
+No localStorage/AsyncStorage/URL persistence, no extra API
+fetch, no mutation to tags, provenance or consent. Always
+wipe source, tag and notes together on logout/401/erase.
+The broader #79/#41/#2/#17 remain OPEN.

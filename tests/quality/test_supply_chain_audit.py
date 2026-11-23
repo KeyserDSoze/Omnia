@@ -119,6 +119,15 @@ class SupplyChainSecurityContractTests(unittest.TestCase):
             parse_nuget(report, "tests/Example/Example.csproj",
                         {"example.package": {"1.0.0"}})
 
+    def test_empty_but_valid_nuget_project_still_rejects_unknown_advisory(self):
+        report = {"version": 1, "parameters": "--vulnerable --include-transitive",
+                  "sources": ["https://api.nuget.org/v3/index.json"],
+                  "projects": [{"path": "/repo/tests/Example/Example.csproj"}]}
+        self.assertEqual(parse_nuget(report, "tests/Example/Example.csproj", {}), [])
+        report["projects"][0]["frameworks"] = nuget_report()["projects"][0]["frameworks"]
+        with self.assertRaisesRegex(ValueError, "not in lock"):
+            parse_nuget(report, "tests/Example/Example.csproj", {})
+
     def test_npm_indirect_high_without_advisory_is_not_waivable(self):
         report = npm_report()
         report["vulnerabilities"]["example"]["via"] = ["meta-vulnerable-parent"]

@@ -125,7 +125,7 @@ def parse_npm(report, locked):
 
 def parse_nuget(report, expected_project, locked):
     validate_scanner_result(0, report, "nuget")
-    if not isinstance(locked, dict) or not locked:
+    if not isinstance(locked, dict):
         raise ValueError("NuGet lock graph missing")
     projects = report["projects"]
     if len(projects) != 1 or not isinstance(projects[0], dict):

@@ -72,6 +72,8 @@ def nuget_index(project):
     graphs = lock.get("dependencies")
     if not isinstance(graphs, dict) or not graphs:
         raise ValueError("NuGet graph missing for project " + str(project))
+    # A valid lock may represent a project with zero NuGet packages.
+    # An advisory for that project still fails the membership check.
     indexed = {}
     for graph in graphs.values():
         if not isinstance(graph, dict):

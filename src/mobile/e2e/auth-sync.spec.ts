@@ -633,23 +633,18 @@ test('real Keycloak captures at the same clock instant must not collide (#177)',
 test('real Keycloak JWT can read bounded consent history and rejects invalid cursors (#180)', async ({ page }) => {
   test.setTimeout(120_000);
   if (!user1 || !password) throw new Error('Missing ephemeral OIDC account');
+  // Observe the initial legitimate API GET that makes consent-state
+  // visible during the Keycloak sign-in itself. A later "Refresh" click
+  // may be skipped while busy, so waiting for a second GET is racy.
+  // This listener does not mock, intercept, log or persist any token.
+  let bearer = '';
+  page.on('request', request => {
+    if (request.method() === 'GET' &&
+        request.url().endsWith('/api/v1/consents'))
+      bearer = request.headers()['authorization'] ?? '';
+  });
   await page.goto('/Omnia/');
   await browserLogin(page, user1);
-
-  // Observe the real browser's authenticated request without mocking the
-  // provider, token exchange, ASP.NET route or PostgreSQL response.
-  // The bearer is never printed, persisted or exposed to the UI.
-  let bearer = '';
-  await page.route('**/api/v1/consents', async route => {
-    if (route.request().method() === 'GET')
-      bearer = route.request().headers()['authorization'] ?? '';
-    await route.continue();
-  });
-  const refreshed = page.waitForResponse(response =>
-    response.url().endsWith('/api/v1/consents') &&
-    response.request().method() === 'GET' && response.status() === 200);
-  await page.getByTestId('sync-reload').click();
-  await refreshed;
   expect(bearer).toMatch(/^Bearer .{20,}$/);
 
   const endpoint = 'http://127.0.0.1:8080/api/v1/consents/page';

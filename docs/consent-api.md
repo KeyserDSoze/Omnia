@@ -83,3 +83,25 @@ active sources is **not yet implemented in the UI**, tracked in #179.
 Do not claim that UI displays all active grants or that the paginated
 API itself grants consent. Concurrent changes are not snapshot-isolated
 across pages; GDPR/third-party consents require separate review.
+
+
+## Explicit Web browsing and source-scoped withdrawal (#181 / ADR 0079)
+
+In signed-in Web cloud mode, **Consulta registro consensi** loads
+the first 25 chronological first-party grants; **Carica altri
+consensi** loads further bounded pages until **Fine dello storico**.
+Each row shows source, purpose, policy version and active/expired/
+revoked state from the signed API. Only active grants have a
+**Revoca [source]** action; a 204 from the existing actor-scoped
+DELETE is required before announcing success. A fresh server read
+after **Aggiorna registro** verifies the updated history. Revocation
+stops new ingestion for that source/purpose but **does not erase**
+historical notes or prove third-party permission.
+
+Logout/401/erase/explicit consent mutation/timeline refresh
+invalidate in-flight ledger reads and clear client rows and cursors.
+No browser token/history persistence or automatic crawling of
+unbounded pages. A stale page is never accepted after a session
+change. Client paging does not provide a transactional
+cross-request snapshot and only contains first-party
+\`memory.capture\` records; #29/#41/#2 stay OPEN.

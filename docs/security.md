@@ -1430,3 +1430,20 @@ Invalid token/limit fails generically without echo, and private
 no-store headers cover success, 401/403 and 400. Other scopes,
 third-party OAuth, page snapshot consistency, legal consent notices
 and revoke UI of all non-manual scopes remain open in #179/#29/#2.
+
+
+## Web first-party consent ledger session fence (#181 / ADR 0079)
+
+The browser ledger is an *opt-in read UI*, not a substitute
+for signed JWT+PostgreSQL FORCE RLS. The view-only epoch discards
+late page results/errors after logout, 401, erasure,
+source revocation, renewal or timeline refresh. Rows/cursors
+are kept in component state only, wiped on session invalidation
+and never saved to localStorage. An active source can be
+explicitly withdrawn by persisted UUID only; the API resolves
+owner/source/purpose under the actor lock (ADR 0075).
+A 204 is required before confirming withdrawal, and signed
+re-read supplies the status. A consent GET, client badge or
+cursor itself never grants collection privileges. This is
+first-party manual capture authorization, not a third-party
+OAuth or GDPR assessment.

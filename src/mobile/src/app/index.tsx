@@ -6,6 +6,7 @@ import { configuredWebMode, type WebMode } from '../services/config';
 import { createBrowserAuth, type BrowserAuth } from '../services/webAuth';
 import { MemoryApi, type ConsentDto, type RemoteMemory } from '../services/memoryApi';
 import { CloudViewEpoch, appendUniqueById } from '../services/cloudViewEpoch';
+import { ConsentLedgerEpoch, appendUniqueConsents } from '../services/consentLedgerView';
 
 type LocalMemo = { id: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
@@ -34,6 +35,12 @@ export default function Home() {
   const [authState, setAuthState] = useState<'checking' | 'signed-out' | 'signed-in' | 'error'>(
     webMode.kind === 'cloud' ? 'checking' : 'signed-out');
   const [grant, setGrant] = useState<ConsentDto | null>(null);
+  const [ledgerVisible, setLedgerVisible] = useState(false);
+  const [ledgerRows, setLedgerRows] = useState<ConsentDto[]>([]);
+  const [ledgerCursor, setLedgerCursor] = useState<string | null>(null);
+  const [ledgerLoaded, setLedgerLoaded] = useState(false);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerError, setLedgerError] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [erasePhrase, setErasePhrase] = useState('');
@@ -41,6 +48,9 @@ export default function Home() {
   const authRef = useRef<BrowserAuth | null>(null);
   const apiRef = useRef<MemoryApi | null>(null);
   const cloudViewRef = useRef(new CloudViewEpoch());
+  const ledgerViewRef = useRef(new ConsentLedgerEpoch());
+  const ledgerRequestRef = useRef(0);
+  const ledgerInProgressRef = useRef(false);
   const pageRequestRef = useRef(0);
   const pagingInProgressRef = useRef(false);
   const sessionEpochRef = useRef(0);
@@ -51,11 +61,27 @@ export default function Home() {
   const [notice, setNotice] = useState('');
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
+  // Keep every consent-history page and its opaque cursor confined to the
+  // current signed-in view. Never retain an old account's ledger on sign-out,
+  // 401, erasure, consent mutation or a new timeline refresh.
+  function resetConsentLedger() {
+    ledgerViewRef.current.invalidate();
+    ledgerRequestRef.current++;
+    ledgerInProgressRef.current = false;
+    setLedgerLoading(false);
+    setLedgerError('');
+    setLedgerRows([]);
+    setLedgerCursor(null);
+    setLedgerLoaded(false);
+  }
+
   // Invalidate the authenticated view before any awaited token/provider I/O.
   // No signed-out or expired session may continue showing its old private notes.
   function clearSignedInView() {
     sessionEpochRef.current++;
     cloudViewRef.current.invalidate();
+    resetConsentLedger();
+    setLedgerVisible(false);
     pageRequestRef.current++;
     pagingInProgressRef.current = false;
     setLoadingOlder(false);
@@ -80,6 +106,7 @@ export default function Home() {
   async function refreshCloud(): Promise<boolean> {
     const api = apiRef.current;
     if (!api) throw new Error('Connessione API non disponibile.');
+    resetConsentLedger();
     // A new first-page refresh supersedes in-flight older pages. Neither
     // previous-account nor old-page responses may repopulate the timeline.
     pageRequestRef.current++;
@@ -116,6 +143,89 @@ export default function Home() {
         if (sameSession(epoch)) setLoadingOlder(false);
       }
     }
+  }
+
+  async function openConsentLedger() {
+    const api = apiRef.current;
+    if (authState !== 'signed-in' || !api || busy || ledgerInProgressRef.current) return;
+    const epoch = sessionEpochRef.current;
+    resetConsentLedger();
+    setLedgerVisible(true);
+    const request = ++ledgerRequestRef.current;
+    ledgerInProgressRef.current = true;
+    setLedgerLoading(true);
+    try {
+      await ledgerViewRef.current.refresh(api, page => {
+        setLedgerRows(page.items);
+        setLedgerCursor(page.nextCursor);
+        setLedgerLoaded(true);
+      });
+    } catch {
+      if (sameSession(epoch) && ledgerRequestRef.current === request)
+        setLedgerError('Registro non disponibile. Riprova; nessuna revoca è stata eseguita.');
+    } finally {
+      if (ledgerRequestRef.current === request) {
+        ledgerInProgressRef.current = false;
+        if (sameSession(epoch)) setLedgerLoading(false);
+      }
+    }
+  }
+
+  async function loadMoreConsents() {
+    const api = apiRef.current;
+    if (authState !== 'signed-in' || !api || !ledgerVisible || !ledgerCursor ||
+        busy || ledgerInProgressRef.current) return;
+    const epoch = sessionEpochRef.current;
+    const cursor = ledgerCursor;
+    const request = ++ledgerRequestRef.current;
+    ledgerInProgressRef.current = true;
+    setLedgerLoading(true);
+    setLedgerError('');
+    try {
+      await ledgerViewRef.current.append(api, cursor, page => {
+        setLedgerRows(current => appendUniqueConsents(current, page.items));
+        setLedgerCursor(page.nextCursor);
+      });
+    } catch {
+      if (sameSession(epoch) && ledgerRequestRef.current === request)
+        setLedgerError('Pagina dei consensi non caricata. Riprova.');
+    } finally {
+      if (ledgerRequestRef.current === request) {
+        ledgerInProgressRef.current = false;
+        if (sameSession(epoch)) setLedgerLoading(false);
+      }
+    }
+  }
+
+  async function revokeSourceConsent(item: ConsentDto) {
+    const api = apiRef.current;
+    if (authState !== 'signed-in' || !item.active || !api ||
+        busy || ledgerInProgressRef.current) return;
+    const epoch = sessionEpochRef.current;
+    // Withdraw any stale read BEFORE starting a private mutation.
+    resetConsentLedger();
+    cloudViewRef.current.invalidate();
+    setBusy(true);
+    try {
+      // Server resolves the scope from the persisted, actor-owned grant ID
+      // and withdraws any newer regrant for the same source+purpose.
+      await api.revokeConsent(item.id);
+      if (!sameSession(epoch)) return;
+      if (item.source === 'manual' && item.purpose === 'memory.capture')
+        setGrant(null);
+      setNotice('Consenso revocato per ' + item.source +
+        '. I dati precedenti non sono cancellati. Aggiorna il registro.');
+      try {
+        await refreshCloud();
+      } catch {
+        if (sameSession(epoch))
+          setNotice('Revoca confermata per ' + item.source +
+            ', ma aggiornamento non disponibile. Aggiorna timeline e registro.');
+      }
+    } catch {
+      if (sameSession(epoch))
+        setNotice('Revoca non confermata: verifica il registro prima di riprovare.');
+    } finally { if (sameSession(epoch)) setBusy(false); }
   }
 
   useEffect(() => {
@@ -197,6 +307,7 @@ export default function Home() {
     if (!accepted || !apiRef.current || busy || authState !== 'signed-in') return;
     const epoch = sessionEpochRef.current;
     cloudViewRef.current.invalidate();
+    resetConsentLedger();
     setBusy(true);
     try {
       await apiRef.current.grantManualCapture();
@@ -213,6 +324,7 @@ export default function Home() {
     if (!grant || !apiRef.current || busy) return;
     const epoch = sessionEpochRef.current;
     cloudViewRef.current.invalidate();
+    resetConsentLedger();
     setBusy(true);
     try {
       await apiRef.current.revokeConsent(grant.id);
@@ -258,6 +370,8 @@ export default function Home() {
         busy || erasePhrase !== 'ELIMINA' || !eraseAcknowledged) return;
     const epoch = sessionEpochRef.current;
     cloudViewRef.current.invalidate();
+    resetConsentLedger();
+    setLedgerVisible(false);
     setBusy(true);
     try {
       const receipt = await apiRef.current.erasePersonalData('ERASE_MY_DATA');
@@ -442,6 +556,84 @@ export default function Home() {
                   <Text style={[styles.buttonText, heading]}>Attiva salvataggio note</Text>
                 </Pressable>
               </>
+            )}
+          </View>
+        )}
+        {webMode.kind === 'cloud' && authState === 'signed-in' && (
+          <View testID="consent-ledger" style={{ marginTop: 18, borderTopWidth: 1,
+            borderTopColor: p.border, paddingTop: 15 }}>
+            <Text style={[styles.kicker, { color: p.subtle }]}>REGISTRO DEI CONSENSI</Text>
+            <Text style={[styles.hint, heading]}>
+              Storico delle autorizzazioni first-party per sorgente. Ogni pagina
+              mostra al massimo 25 record, anche scaduti o revocati.
+              Usa Carica altri consensi per vedere il resto dello storico.
+              Revocare blocca nuovi salvataggi, non cancella dati già conservati.
+            </Text>
+            <Pressable testID="consent-ledger-open" accessibilityRole="button"
+              disabled={busy || ledgerLoading}
+              onPress={() => { void openConsentLedger(); }}
+              style={[styles.secondaryButton, { backgroundColor: p.card2,
+                paddingHorizontal: 16, marginTop: 11, alignSelf: 'flex-start',
+                opacity: busy || ledgerLoading ? 0.5 : 1 }]}>
+              <Text style={[styles.buttonText, heading]}>
+                {ledgerVisible ? 'Aggiorna registro consensi' : 'Consulta registro consensi'}
+              </Text>
+            </Pressable>
+            {ledgerVisible && (
+              <View style={{ marginTop: 11 }}>
+                <Text testID="consent-ledger-count" style={[styles.hint, heading]}>
+                  {ledgerLoaded
+                    ? 'Visualizzati ' + ledgerRows.length + ' consensi. ' +
+                      (ledgerCursor ? 'Altre pagine disponibili.' : 'Fine dello storico.')
+                    : ledgerLoading ? 'Caricamento registro…' :
+                      'Registro da aggiornare. Premi Aggiorna registro consensi.'}
+                </Text>
+                {ledgerRows.map(item => (
+                  <View key={item.id} testID="consent-ledger-row"
+                    style={{ borderTopWidth: 1, borderColor: p.border,
+                      paddingVertical: 11 }}>
+                    <Text style={[styles.memoText, heading]}>
+                      {item.source} · {item.purpose}
+                    </Text>
+                    <Text style={[styles.hint, { color: p.subtle }]}>
+                      {item.active
+                        ? 'Attivo fino al ' + new Date(item.expiresAt).toLocaleDateString('it-IT')
+                        : item.revokedAt
+                          ? 'Revocato il ' + new Date(item.revokedAt).toLocaleDateString('it-IT')
+                          : 'Scaduto il ' + new Date(item.expiresAt).toLocaleDateString('it-IT')}
+                      {' · policy ' + item.policyVersion}
+                    </Text>
+                    {item.active && (
+                      <Pressable testID="consent-ledger-revoke" accessibilityRole="button"
+                        accessibilityLabel={'Revoca consenso per ' + item.source}
+                        disabled={busy || ledgerLoading}
+                        onPress={() => { void revokeSourceConsent(item); }}
+                        style={[styles.secondaryButton, { backgroundColor: p.card2,
+                          paddingHorizontal: 12, marginTop: 8, alignSelf: 'flex-start',
+                          opacity: busy || ledgerLoading ? 0.5 : 1 }]}>
+                        <Text style={[styles.buttonText, heading]}>
+                          {'Revoca ' + item.source}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
+                {ledgerLoaded && ledgerCursor && (
+                  <Pressable testID="consent-ledger-more" accessibilityRole="button"
+                    disabled={busy || ledgerLoading}
+                    onPress={() => { void loadMoreConsents(); }}
+                    style={[styles.secondaryButton, { backgroundColor: p.card2,
+                      paddingHorizontal: 16, marginTop: 12, alignSelf: 'flex-start' }]}>
+                    <Text style={[styles.buttonText, heading]}>
+                      {ledgerLoading ? 'Caricamento…' : 'Carica altri consensi'}
+                    </Text>
+                  </Pressable>
+                )}
+                {!!ledgerError && (
+                  <Text testID="consent-ledger-error" accessibilityRole="alert"
+                    style={[styles.hint, heading]}>{ledgerError}</Text>
+                )}
+              </View>
             )}
           </View>
         )}

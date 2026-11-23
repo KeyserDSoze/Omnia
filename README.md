@@ -435,3 +435,18 @@ and prioritizes active manual consent. The Web API adapter has a typed
 method, but the full multi-scope **UI is still pending** (#179).
 No implication of complete GDPR/provider coverage or of production
 readiness.
+
+
+## Web registro dei consensi first-party (#181)
+
+L'interfaccia Web autenticata permette di aprire esplicitamente
+il registro consensi, caricare pagine successive da 25 grant,
+distinguere attivi/scaduti/revocati e revocare una fonte
+first-party per volta tramite API e JWT reali. Lo storico
+non è troncato silenziosamente a 200: il cursore indica
+altre pagine fino alla fine. Le richieste tardive sono
+invalidate su logout/401, erase, rinnovo e revoca.
+La revoca **non cancella** automaticamente le note già
+conservate e non prova consenso di terzi. Restano
+fuori scope OAuth provider, native cloud offline,
+snapshot storico e valutazione di conformità GDPR.

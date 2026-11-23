@@ -685,11 +685,71 @@ test('real Keycloak JWT can read bounded consent history and rejects invalid cur
 });
 
 
-test('real signed Web user can open source-scoped consent history and revoke CRM (#181)', async ({ page }) => {
+test('real signed Web user can page all first-party grants and revoke an older source (#181)', async ({ page }) => {
   test.setTimeout(150_000);
   if (!user2 || !password) throw new Error('Missing disposable Keycloak account');
+  // The last E2E uses the second independent actor budget. Never bypass
+  // signed JWT auth, #169's 429 limits or real PostgreSQL consent writes.
+  let bearer = '';
+  page.on('request', req => {
+    if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
+      bearer = req.headers()['authorization'] ?? '';
+  });
   await page.goto('/Omnia/');
   await browserLogin(page, user2);
-  // RED: #180 provides the real paginated API but no authenticated UI to use it.
-  await expect(page.getByTestId('consent-ledger-open')).toBeVisible({ timeout: 12_000 });
+  await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
+  await expect(page.getByTestId('consent-ledger-open')).toBeVisible();
+  const base = 'ui181-' + Date.now();
+  const sources = Array.from({ length: 27 }, (_, i) => base + '-' + i);
+  // Synthetic **real API** grants deliberately exceed the 25-row UI page.
+  // Neither SQL seeding nor token stubs grant the browser extra access.
+  for (const source of sources) {
+    const grant = await page.request.post('http://127.0.0.1:8080/api/v1/consents', {
+      headers: { Authorization: bearer },
+      data: { source, purpose: 'memory.capture', policyVersion: 'privacy-v1',
+        expiresAt: new Date(Date.now() + 3 * 86400_000).toISOString(), accepted: true }
+    });
+    expect(grant.status()).toBe(201);
+  }
+
+  await page.getByTestId('consent-ledger-open').click();
+  await expect(page.getByTestId('consent-ledger-row')).toHaveCount(25, { timeout: 20_000 });
+  await expect(page.getByTestId('consent-ledger-count')).toContainText('Altre pagine disponibili');
+  await page.getByTestId('consent-ledger-more').click();
+  await expect.poll(async () => page.getByTestId('consent-ledger-row').count()).toBeGreaterThan(25);
+  // The oldest of the 27 genuine grants must be discoverable after paging.
+  const target = page.getByTestId('consent-ledger-row')
+    .filter({ hasText: sources[0] + ' · memory.capture' });
+  await expect(target).toBeVisible();
+  await expect(target).toContainText('Attivo');
+  const other = page.getByTestId('consent-ledger-row')
+    .filter({ hasText: sources[26] + ' · memory.capture' });
+  await expect(other).toContainText('Attivo');
+  await target.getByTestId('consent-ledger-revoke').click();
+  await expect(page.getByTestId('notice')).toContainText('Consenso revocato per ' + sources[0]);
+  // Signed API enforces withdrawal for exact source, not merely a UI status.
+  const forbidden = await page.request.post('http://127.0.0.1:8080/api/v1/memories', {
+    headers: { Authorization: bearer },
+    data: { source: sources[0], externalId: 'revoked-' + Date.now(),
+      contentType: 'text/plain', content: 'synthetic revoked cross-source capture',
+      occurredAt: new Date().toISOString() }
+  });
+  expect(forbidden.status()).toBe(403);
+  expect((await forbidden.json()).error).toBe('consent_required');
+
+  await page.getByTestId('consent-ledger-open').click();
+  // Grant status comes from a NEW signed PostgreSQL read, not optimistic UI.
+  await expect(page.getByTestId('consent-ledger-row')).toHaveCount(25);
+  await page.getByTestId('consent-ledger-more').click();
+  const revoked = page.getByTestId('consent-ledger-row')
+    .filter({ hasText: sources[0] + ' · memory.capture' });
+  await expect(revoked).toContainText('Revocato');
+  await expect(revoked.getByTestId('consent-ledger-revoke')).toHaveCount(0);
+  await expect(page.getByTestId('consent-ledger-row')
+    .filter({ hasText: sources[26] + ' · memory.capture' })).toContainText('Attivo');
+
+  // Session boundary must immediately remove private ledger rows.
+  await page.getByTestId('auth-logout').click();
+  await expect(page.getByTestId('consent-ledger-row')).toHaveCount(0);
+  await expect(page.getByTestId('consent-ledger')).toHaveCount(0);
 });

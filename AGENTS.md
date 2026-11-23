@@ -1431,3 +1431,21 @@ A cursor is a position, not authentication/snapshot/consent.
 must not be affected. The typed client method is NOT a complete
 UI: #179 remains OPEN until cross-source consent navigation and
 revocation are implemented and proven under real Keycloak E2E.
+
+
+## Explicit signed Web consent ledger lifecycle (#181 / ADR 0079)
+
+The Web consent history browser is opt-in, fetches only bounded
+signed \`consentPage()\` data, shows exact continuation status and
+source/purpose/active/expired/revoked statuses, and revokes only
+an active actor-owned grant UUID via existing DELETE. Do not
+pretend a source label authorizes external connectors or third
+party processing. Keep all records and \`nextCursor\` in transient
+state; \`ConsentLedgerEpoch\` invalidates old results/errors on
+logout/401, erase, grant/revoke and refreshCloud. A 204 is
+required before telling the user a source was withdrawn;
+backend authority/locks/FORCE RLS remain unchanged. Browser
+real Keycloak E2E should use synthetic source grants, enforce
+429 budgets and test pagination past 25, foreign-actor isolation
+at the API, 403 on revoked source ingestion and private
+session wipe. No native offline or GDPR legal approval claimed.

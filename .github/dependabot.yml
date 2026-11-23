@@ -1,0 +1,57 @@
+{
+  "version": 2,
+  "updates": [
+    {
+      "package-ecosystem": "npm",
+      "directory": "/src/mobile",
+      "schedule": {
+        "interval": "weekly"
+      },
+      "open-pull-requests-limit": 5,
+      "labels": [
+        "area:quality"
+      ]
+    },
+    {
+      "package-ecosystem": "nuget",
+      "directories": [
+        "/src/backend/*",
+        "/tests/*"
+      ],
+      "schedule": {
+        "interval": "weekly"
+      },
+      "open-pull-requests-limit": 5,
+      "labels": [
+        "area:quality"
+      ],
+      "groups": {
+        "nuget-across-projects": {
+          "group-by": "dependency-name"
+        }
+      }
+    },
+    {
+      "package-ecosystem": "github-actions",
+      "directory": "/",
+      "schedule": {
+        "interval": "weekly"
+      },
+      "open-pull-requests-limit": 5,
+      "labels": [
+        "area:quality"
+      ]
+    },
+    {
+      "package-ecosystem": "docker",
+      "directory": "/docker",
+      "schedule": {
+        "interval": "weekly"
+      },
+      "open-pull-requests-limit": 5,
+      "labels": [
+        "area:quality"
+      ]
+    }
+  ]
+}

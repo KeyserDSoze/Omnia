@@ -25,6 +25,10 @@ jobs:
           python3 -m unittest discover -s tests/quality -p 'test_dotnet_toolchain.py'
           python3 tests/quality/verify_dotnet_toolchain.py
           test "$(dotnet --version)" = "10.0.404"
+      - name: Validate reviewed Dependabot version-update policy (#197)
+        run: |
+          python3 -m unittest discover -s tests/quality -p 'test_dependabot_policy.py'
+          python3 tests/quality/verify_dependabot_policy.py
       - name: TDD security policy fixtures (high/critical, feed errors, expiry)
         run: python3 -m unittest discover -s tests/quality -p 'test_supply_chain_audit.py'
       - name: TDD gate for lock-derived CycloneDX inventory

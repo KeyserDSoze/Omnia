@@ -1,5 +1,28 @@
 # Omnia — threat model / privacy gates (draft)
 
+## Dependency vulnerability advisory gate — not release-ready (2026-11-23)
+
+The independent GitHub Actions `security-audit` job enforces
+npm audit (all plus production subset) and NuGet audit for
+20 locked .NET project graphs, direct and transitive. It fails closed
+when registries are unavailable or reports cannot be interpreted.
+HIGH/CRITICAL vulnerabilities block the job and therefore CI,
+with an issue-linked report artifact retained 14 days even on red.
+`security/audit-exceptions.json` is empty; no broad allowlisting.
+See [ADR 0090](../adr/0090-fail-closed-npm-nuget-advisory-gate.md),
+[runbook](dependency-advisory-scan.md), issues #193–#195.
+The 2026-11-23 security audit observed 2 CRITICAL (Vitest/tinypool),
+3 HIGH (Expo Router/query-string/decode-uri-component) and 4 MODERATE.
+Vitest was updated to 5.1.1 with clean tests, removing the two
+critical findings and one moderate. **Three HIGH production findings
+remain**, and an incompatible decode-uri-component override was
+rejected by an actual runtime CJS test. Do not treat CI as fully
+green or release this image to process real personal data.
+NuGet had no reported vulnerable packages in the 20 audited projects
+at the observed point in time; that is not a permanent absence of CVEs.
+SCA does not cover runtime base images, other OSS services, all licenses,
+malicious packages, signatures, SAST, Expo device artifacts or GDPR.
+
 ## Data classes
 
 - Sensitive: third-party conversations, recordings, calendar/CRM content, behavioral inferences, location, biometric/voice characteristics. Data may belong to other people, not only the account owner.

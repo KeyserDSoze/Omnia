@@ -111,6 +111,32 @@ giorni. Vedi [ADR 0089](adr/0089-deterministic-locked-package-cyclonedx-sbom.md)
 licenze, attestation, runtime/binary/container coverage o compliance:
 #22/#15/#10 restano aperte.
 
+## Vulnerabilità dipendenze — CI security gate (non ancora verde)
+
+Omnia esegue in CI il job **`security-audit`**: scanner npm ufficiale
+su tutti i package del lock e sul sottoinsieme produzione, più verifica
+NuGet delle dipendenze dirette/transitive di tutti i 20 progetti.
+Lo script `tests/quality/run_live_advisory_audit.py` pubblica un report
+JSON come artefatto Actions `omnia-security-audit` (14 giorni),
+**anche quando il gate fallisce**. Gli output incompleti o le advisory
+non disponibili producono fallimento, mai un falso esito pulito.
+Le eccezioni sono inizialmente assenti e, se introdotte, richiedono
+advisory, versione, issue, owner, motivazione e scadenza entro 30 giorni.
+I controlli usano il grafo bloccato, senza installazioni forzate.
+
+Il 23 novembre 2026 è stato aggiornato il **solo Vitest alla 5.1.1**
+con `npm ci`, TypeScript, Vitest, Expo export e Playwright superati,
+eliminando **2 critical** di `tinypool`/tooling. Restano **3 high**
+nella catena di produzione `expo-router` /`query-string` /
+`decode-uri-component`, più 3 moderate: [#194](https://github.com/KeyserDSoze/Omnia/issues/194).
+L'override ingenuo alla versione ESM `decode-uri-component 0.5.1`
+ha rotto il parser CommonJS; il test di compatibilità impedisce di
+ripeterlo. È aperta [#195](https://github.com/KeyserDSoze/Omnia/issues/195)
+per una migrazione Expo compatibile. **Finché ci sono finding high
+non mitigati la CI security resta volutamente rossa.**
+Vedi [ADR 0090](adr/0090-fail-closed-npm-nuget-advisory-gate.md)
+e il [runbook](docs/dependency-advisory-scan.md).
+
 ## Avvio API locale (servizi open source)
 
 ```sh

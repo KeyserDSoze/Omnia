@@ -126,6 +126,36 @@ graph, official CycloneDX JSON Schema validation, external SCA/SBOM
 signature, CVE and license evaluation are separate open objectives in
 #22/#15/#10. The bundle is not a release attestation.
 
+## Fail-closed live SCA advisory gate (#193/#194/#195 / ADR 0090)
+
+GitHub CI has a separate **blocking** `security-audit` job with read-only
+repository access. It validates the existing locked npm and NuGet graphs,
+runs `npm audit --json` twice (full graph and `--omit=dev` production),
+then independently checks each of 20 .NET projects against official NuGet
+advisory sources, direct and transitive. Unit tests under
+`tests/quality/test_supply_chain_audit.py` cover HIGH/CRITICAL rejection,
+moderate/low visibility, malformed scanner output, unaudited sources,
+expired/overbroad exceptions and the NuGet no-findings JSON shape. The
+`security/audit-exceptions.json` list defaults to EMPTY; every exception
+must match exact ecosystem/package/version/advisory, include a tracked
+issue/owner/concrete mitigation and expire within 30 days. Never bypass
+high/critical via `continue-on-error`, `--force`, `--legacy-peer-deps`,
+silent lockfile rewrites or generic waivers. The report artifact is uploaded
+even if CI is red; this does not mean the gate passed. A registry outage
+is INCOMPLETE (failure), never a false PASS.
+
+As of 2026-11-23, read-only npm audit initially reported 2 CRITICAL,
+3 HIGH and 4 MODERATE. A validated Vitest 5.1.1 graph upgrade on main
+removed both critical and one moderate; **3 HIGH and 3 MODERATE remain**.
+HIGH findings include `expo-router` -> `query-string 7` ->
+`decode-uri-component 0.2.2`, present in production. An attempted ESM
+`decode-uri-component 0.5.1` override broke CommonJS
+(`TypeError: decodeComponent is not a function`) and MUST NOT be
+reintroduced. Preserve `src/mobile/scripts/query-string-compatibility.test.mjs`
+as a live CI gate. #195 coordinates the official Expo SDK/Router upgrade.
+**Do not claim CI green, release-ready, zero CVEs, GDPR or GDPR readiness
+while SCA is red.** #193/#194/#195, #22/#15/#10 remain OPEN.
+
 ## Backlog e feature management
 
 Leggere `docs/backlog.md` e `docs/product-requirements.md` prima di nuove funzionalità. Non duplicare issue: cercare per area/titolo. Ogni nuova feature usa `.github/ISSUE_TEMPLATE/feature.yml`, include epic parent, phase label, priorità, RED → GREEN → REFACTOR, evidenza commit SHA e URL di Actions. Le 14 epic e 116 issue child non indicano funzionalità completate. Le milestone sono label logiche; GitHub Projects/Milestones non configurati. Prima del lavoro su dati veri completare #29, #30, #31, #32, #33, #34, #36, #39, #41, #43 e test #17.

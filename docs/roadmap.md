@@ -14,7 +14,10 @@
 - [x] Toolchain .NET SDK esatta 10.0.404 via root global.json + Actions CI/OIDC, immagini API Docker Ubuntu Noble SDK 10.0.404 / ASP.NET 10.0.15 per version tag e controlli reali; ADR 0087 / #190.
 - [x] API Microsoft .NET Docker `FROM tag@sha256:index` verificati con registry discovery su amd64 e arm64, policy source fail-closed e reale build Docker CI amd64; ADR 0088 / #191.
 - [x] SBOM **inventario lockfile** CycloneDX JSON 1.6 npm + 20 NuGet, SHA-512, PURL, determinismo/diff e artefatti CI temporanei; ADR 0089 / #192. NON un SBOM di binary/container.
-- [ ] Complete OCI/SBOM runtime & immagini PostgreSQL/Keycloak, official schema validation and full dependency edges, SCA/CVE e license gates, signed provenance, Node/Chromium patch, ARM64 build, reproducible binaries, native device smoke e altri gate qualità prima di chiudere #22/#15/#10.
+- [x] SCA **fail-closed** delle dipendenze bloccate: gate CI separato npm all+production e NuGet 20/20, report temporanei, test high/critical e waiver stretti (#193, ADR 0090). **Gate attualmente ROSSO per high reali in Expo Router.**
+- [x] Mitigazione verificata 2 critical in test tooling: Vitest 5.1.1, rimozione tinypool vulnerabile, 61 test + Playwright e audit reale. Rimangono 3 high produzione e 3 moderate (#194). Test di regressione CommonJS contro override ESM incompatibile.
+- [ ] Migrare compatibilmente Expo SDK/Router per rimuovere query-string 7 / decode-uri-component 0.2.2 HIGH (#195); nessun waiver generico, CI security non è verde.
+- [ ] Complete OCI/SBOM runtime & immagini PostgreSQL/Keycloak, official schema validation and full dependency edges, SCA/CVE remediation e license gates, signed provenance, Node/Chromium patch, ARM64 build, reproducible binaries, native device smoke e altri gate qualità prima di chiudere #22/#15/#10.
 
 ## v0.2 — Functional secure personal timeline (next)
 

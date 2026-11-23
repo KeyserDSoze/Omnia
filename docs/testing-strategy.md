@@ -79,6 +79,40 @@ vulnerability intelligence, licenses, signed provenance, installed
 binary/image SBOM or security-release readiness. Those are open under
 #22/#15/#10.
 
+## Live advisory scanning and blocked HIGH findings (#193–#195 / ADR 0090)
+
+CI's read-only, independent `security-audit` job uses the official
+`npm audit --json --audit-level=high` for all and production graphs,
+and NuGet 10 `dotnet restore --locked-mode` with
+`NuGetAudit=true` / `NuGetAuditMode=all` followed by
+`dotnet package list --project ... --vulnerable --include-transitive
+--format json --output-version 1 --no-restore` for all 20 projects.
+The Python stdlib security policy recognizes npm audit v2, NuGet JSON v1,
+advisory URLs/severity, failures and a no-finding project response.
+Any unavailable scanner, missing source or malformed JSON is
+`incomplete` and fails. Any unwaived HIGH/CRITICAL is `blocked`;
+MODERATE/LOW remain visible as warnings. Exceptions are an empty
+versioned list by default, and narrowly scoped with exact advisory,
+package/version, 30-day expiry, owner, issue and mitigation.
+The latest report is uploaded even on failed CI for transparency,
+not as evidence of PASS.
+
+TDD: RED [CI 45210743119](https://github.com/KeyserDSoze/Omnia/actions/runs/45210743119)
+demonstrated 6 policy tests identifying 9 assertions failing on stub;
+8/8 Python policy tests later passed in
+[CI 45213586840](https://github.com/KeyserDSoze/Omnia/actions/runs/45213586840),
+which scanned NuGet 20/20 (no advisory reported) and **correctly
+blocked** known npm high/critical. A safe, isolated Vitest 5.1.1
+upgrade [Actions 45215428007](https://github.com/KeyserDSoze/Omnia/actions/runs/45215428007)
+passed npm ci/TS, 61 Vitest, static Playwright, Expo web, and
+the audit showed critical 2→0; **3 HIGH remain production**.
+A negative query-string CJS test rejects decode-uri-component 0.5.1
+ESM override, demonstrated by
+[trial 45214808484](https://github.com/KeyserDSoze/Omnia/actions/runs/45214808484).
+The full SCA job is intentionally red until #195 addresses these
+HIGH findings. Other OSS/image/license/SAST/runtime scans remain
+separate incomplete supply-chain controls.
+
 ## Pyramid
 
 | Layer | Test runner | Esempio | Frequenza |

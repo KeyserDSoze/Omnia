@@ -67,7 +67,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       # deploy-pages uses the internal Actions artifact service; REST visibility
       # does NOT imply internal visibility. The prior job completion acts as
       # the publication boundary and a bounded grace period mitigates lag.

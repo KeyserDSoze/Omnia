@@ -703,3 +703,15 @@ L'aggiunta del test browser sulle giornate caricate (#185) è stata introdotta i
 La stessa CI GREEN preliminare [45170398192](https://github.com/KeyserDSoze/Omnia/actions/runs/45170398192) ha rilevato un test di protocollo Azure Blob WORM con `now` fisso al 21 novembre 2026: la retention sintetica al 23 novembre si era avvicinata alla scadenza, e la verifica di produzione `retention > DateTimeOffset.UtcNow.AddHours(1)` ha **correttamente** rifiutato l'input. La #186 corregge **solo il clock della fixture** usando UTC reale e retention futura di 2/3 giorni, preservando i controlli fail-closed. Il test negativo verifica anche che una data del chiamante retrodatata non aggiri la verifica sull'orologio attuale.
 
 La #185/#186 si chiudono solo quando CI (Azure 31/31, PG, PITR, Docker, Vitest, Playwright), E2E vero Keycloak e Pages siano tutte `SUCCESS` sul medesimo ultimo commit. I test Azure sono di protocollo **scriptato**, non attestazione di account Azure WORM reale, né della conformità normativa.
+
+## CodeQL source scanner — advanced setup (#211 / ADR 0093)
+
+Independent CodeQL workflow scans C#, TypeScript/JavaScript, Python and
+GitHub Actions on main/PR/weekly/manual runs with `security-extended`
+queries. Eight stdlib policy fixtures plus an exact reviewed workflow
+recipe run in the existing CI; any matrix, trigger, token or query drift is
+rejected. The recipe check is intentionally strict, **not** a generic YAML
+parser, source vulnerability scan, or SARIF upload verification. Only
+completed CodeQL matrix jobs on the final SHA establish that real SAST
+executed; check [the runbook](codeql-scanning.md). The C# scanner uses
+build-mode none, distinct from actual locked .NET builds and database tests.

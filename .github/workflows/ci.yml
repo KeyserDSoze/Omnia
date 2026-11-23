@@ -25,6 +25,10 @@ jobs:
           python3 -m unittest discover -s tests/quality -p 'test_dotnet_toolchain.py'
           python3 tests/quality/verify_dotnet_toolchain.py
           test "$(dotnet --version)" = "10.0.404"
+      - name: TDD reviewed CodeQL SAST workflow policy (#211)
+        run: |
+          python3 -m unittest discover -s tests/quality -p 'test_codeql_policy.py'
+          python3 tests/quality/verify_codeql_policy.py
       - name: Validate reviewed Dependabot version-update policy (#197)
         run: |
           python3 -m unittest discover -s tests/quality -p 'test_dependabot_policy.py'

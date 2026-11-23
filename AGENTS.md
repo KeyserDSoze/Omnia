@@ -1643,3 +1643,19 @@ The broader #79/#41/#2/#17 remain OPEN.
 ## Signed loaded-day selection (#185 / ADR 0083)
 
 Expose device-local day options derived from **ALL already-loaded signed actor notes** through the same `groupTimelineByLocalDay` implementation as ADR 0081. No UTC slicing, guessed global day availability, extra fetching, source timezone claims, or derived thread assertions. Exact day selection ANDs with source and keyword tag before rendering grouped headings; keep manual keyset paging independent even when zero records are visible. Use accessible selected-state controls and honest visible/loaded counts. All private selection must be wiped with signed session notes on logout, 401, or erasure; never persist in URL or browser storage. Verify RED→GREEN Vitest DST and genuine Keycloak/JWT/PostgreSQL paging E2E; keep broader #79/#7/#41/#2 OPEN.
+
+## Reviewed CodeQL SAST workflow (#211 / ADR 0093)
+
+The dedicated `.github/workflows/codeql.yml` must scan **all four** source
+families (GitHub Actions, C#, JavaScript/TypeScript, Python) with CodeQL v4,
+`security-extended`, read-only checkout and job-scoped SARIF upload permission
+on main/PR/weekly/dispatch. Keep `build-mode: none` documented as **source**
+analysis, not a compiled runtime check. CI must run
+`python3 -m unittest discover -s tests/quality -p 'test_codeql_policy.py'`
+and `python3 tests/quality/verify_codeql_policy.py`. This intentionally
+pins the exact small workflow recipe; changing the file requires updating and
+reviewing policy/tests together. The source policy does not prove GitHub
+CodeQL actually ran or uploaded results. Check the full four-job scan and
+CI/OIDC/Pages on the same commit before closing #211; never dismiss findings,
+weaken permissions/failures, or claim release/privacy readiness. #22/#15/#10
+remain open.

@@ -1,7 +1,7 @@
 # ADR 0092 — Controlled Dependabot version-update proposals
 
 - Date: 2026-11-23
-- Status: accepted as a bounded implementation, pending same-SHA GitHub Actions confirmation
+- Status: accepted after final same-SHA GitHub Actions confirmation in #197
 - Child: #197; parents #22, #15 and #10 remain open
 
 ## Context

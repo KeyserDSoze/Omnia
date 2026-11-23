@@ -38,7 +38,7 @@ jobs:
       - name: Check exact native peer versions after install
         working-directory: src/mobile
         run: npm ls react-native-reanimated react-native-worklets react-native-gesture-handler
-      - name: Commit ONLY verified lockfile on main with non-force fast-forward
+      - name: Publish ONLY verified new lockfile on main via scoped GitHub Contents API
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -46,20 +46,35 @@ jobs:
           set -euo pipefail
           current="$(git ls-remote origin refs/heads/main | cut -f1)"
           if [ "$current" != "$GITHUB_SHA" ]; then
-            echo "Main moved; refusing stale lockfile commit." >&2
+            echo "Main moved; refusing stale lockfile write." >&2
             exit 1
           fi
           test -f src/mobile/package-lock.json
           git add -- src/mobile/package-lock.json
           if git diff --cached --quiet; then
-            echo "No generated lockfile change; refusing bootstrap without evidence." >&2
+            echo "No new lockfile change: refusing write." >&2
             exit 1
           fi
           changed="$(git diff --cached --name-only)"
           test "$changed" = "src/mobile/package-lock.json"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'build(deps): commit tested npm 10 lock graph #188'
-          # Token available only for this final push step, not npm scripts.
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer $GH_TOKEN" \
-            push origin HEAD:refs/heads/main
+          payload="$RUNNER_TEMP/omnia-npm-lock-commit.json"
+          trap 'rm -f "$payload"' EXIT
+          node - <<'NODE'
+          const {readFileSync, writeFileSync} = require('node:fs');
+          const {join} = require('node:path');
+          const body = {
+            message: 'build(deps): commit tested npm 10 lock graph #188',
+            branch: 'main',
+            content: readFileSync('src/mobile/package-lock.json').toString('base64')
+          };
+          writeFileSync(join(process.env.RUNNER_TEMP, 'omnia-npm-lock-commit.json'),
+            JSON.stringify(body), {mode: 0o600});
+          NODE
+          # GITHUB_TOKEN is used only here, after all npm scripts/tests. No force push.
+          curl --fail-with-body -sS -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            --data-binary "@$payload" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/src/mobile/package-lock.json" \
+            | jq -e '.commit.sha | type == "string" and length == 40'

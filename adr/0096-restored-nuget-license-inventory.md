@@ -1,7 +1,7 @@
 # ADR 0096 — Inventory license declarations from restored NuGet archives
 
 - Date: 2026-11-24
-- Status: accepted for bounded implementation; external CI validation pending
+- Status: accepted; #217 closed after all four workflows SUCCESS on 59100c94
 - Child #217; parents #22/#10 and related #131 remain open.
 
 ## Decision
@@ -38,3 +38,7 @@ Legal review of distribution notices, source obligations, actual
 runtime/container artifacts, repository licensing and owner approval
 remains open. A successful NuGet verification is not a complete
 publisher-trust policy or production-release approval.
+
+Final evidence: CI 45413936743, 77 real NuGet signature verifications,
+74 expressions, 1 file, 2 legacy URLs, no missing metadata, 4 additional
+review candidates. Artifact 14932175500. No legal clearance.

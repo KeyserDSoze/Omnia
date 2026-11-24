@@ -1709,3 +1709,13 @@ hashes, not raw ZIP SHA-512 for signed packages. Require the official
 Preserve declarations/file hashes and legacy/missing metadata; do not
 extract archives, fetch license URLs, resolve OR branches or claim legal
 clearance. Keep #22/#131 open for notice and distribution assessment.
+
+## Installed npm notice candidates and Web export evidence (#218 / ADR 0097)
+
+After npm ci and Web export, mobile CI must run the web_notice_evidence
+unit tests and generate the separate digest report before native exports.
+Keep all locked occurrences, explicit optional absences and declaration
+or notice gaps visible. Reject identity/structure/path errors; no file
+contents are published by the evidence tool. This is not actual module
+inclusion analysis, Pages byte equivalence or legal clearance. #22/#131
+remain open for full distributed artifact and notice review.

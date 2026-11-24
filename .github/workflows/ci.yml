@@ -765,6 +765,19 @@ jobs:
         run: npm test
       - name: Export Expo web
         run: npm run build:web
+      - name: TDD and record installed notice candidates and Web export evidence (#218)
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s ../../tests/quality -p 'test_web_notice_evidence.py'
+          python3 ../../tests/quality/web_notice_evidence.py \
+            --root . --output "$RUNNER_TEMP/omnia-web-notice-evidence/report.json"
+      - name: Publish Web notice evidence (not legal clearance)
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnia-web-notice-evidence
+          path: ${{ runner.temp }}/omnia-web-notice-evidence/report.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Verify SDK58 Metro bundles Android and iOS (not native device builds)
         run: |
           npx expo export --platform android

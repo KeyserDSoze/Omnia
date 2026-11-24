@@ -22,7 +22,8 @@
 - [ ] Complete OCI/SBOM runtime & immagini PostgreSQL/Keycloak, official schema validation and full dependency edges, SCA/CVE remediation e license gates, signed provenance, Node/Chromium patch, ARM64 build, reproducible binaries, native device smoke e altri gate qualità prima di chiudere #22/#15/#10.
 
 - [x] #216: inventario dichiarazioni licenze npm, triage e report CI (CI/OIDC/Pages/CodeQL SUCCESS sullo SHA 36bba27a; non clearance legale).
-- [ ] #217: inventario licenze degli archivi NuGet ripristinati, hash e manifest verificati; verifica CI tracciata nell'issue. Licenze container e notice dei bundle restano da verificare.
+- [x] #217: 77/77 pacchetti NuGet verificati realmente, 20 progetti, tutte le pipeline SUCCESS sullo SHA 59100c94; non clearance legale.
+- [ ] #218: evidenza candidati notice npm installate e hash export Web reale, verifica CI tracciata nell'issue. Attribuzione bundle, native e container restano da verificare.
 
 ## v0.2 — Functional secure personal timeline (next)
 

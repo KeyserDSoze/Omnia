@@ -1671,3 +1671,18 @@ review the new digest before a replacement Dockerfile pin. Must test
 the exact final Docker image build, locked NuGet restore, runtime and
 same-SHA CI/OIDC/Pages; no floating tags or force-push. Keep #15/#10
 open for other supply-chain/security release gates.
+
+## Expiring npm MODERATE review (#215 / ADR 0094)
+
+After every live npm/NuGet audit, security-audit MUST execute
+\`tests/quality/verify_moderate_reviews.py\` against the current
+\`summary.json\`, exact \`GITHUB_SHA\`, and
+\`security/moderate-advisory-reviews.json\`; CI checks its eight
+unit tests too. This is **not** a severity waiver or package override:
+the HIGH/CRITICAL gate, full warning artifact, npm ci, NuGet locked
+restore, SDK58 policy, native smoke and OIDC remain unchanged. Every
+moderate npm finding must be explicitly reviewed in both audit
+scopes with risk reasoning, owner and expiry no later than 14 days.
+Current review expires **2026-12-08 UTC**; block expired, newly
+discovered or changed advisories until reviewed and documented.
+#196/#22/#15/#10 remain OPEN for actual remediation/release gates.

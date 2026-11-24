@@ -82,3 +82,7 @@ images, signed provenance, malicious dependencies, binary runtime
 bundles, licenses, source SAST or Android/iOS artifacts. It does
 not determine whether a CVE can be exploited in a specific code path.
 Release gates for privacy, consent, RLS, Azure and GDPR remain open.
+
+## Mandatory moderate review and expiry (#215 / ADR 0094)
+
+See [moderate advisory review runbook](moderate-advisory-review.md). After the live high/critical SCA gate succeeds, CI independently checks that all current npm MODERATE warnings are covered by a precise, owner-tracked, expiring risk review. This does not waive, hide or patch findings; unexpected or expired entries make CI fail. The initial 2026-11-24 review is due 2026-12-08 UTC. The actual npm SCA artifact, not old tables in this document, is authoritative.

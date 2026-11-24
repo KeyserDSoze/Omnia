@@ -682,12 +682,18 @@ jobs:
           node src/mobile/scripts/verify-mobile-lockfile.mjs
           python3 tests/quality/verify_nuget_locks.py
           python3 tests/quality/generate_locked_sbom.py --output "$RUNNER_TEMP/omnia-audit-sbom"
+      - name: TDD expiring moderate advisory review (#215)
+        run: python3 -m unittest discover -s tests/quality -p 'test_moderate_reviews.py'
       - name: Audit live official npm and NuGet advisories (all + production)
         shell: bash
         run: |
           set -euo pipefail
           python3 tests/quality/run_live_advisory_audit.py \
             --output "$RUNNER_TEMP/omnia-security-audit/summary.json"
+          python3 tests/quality/verify_moderate_reviews.py \
+            --report "$RUNNER_TEMP/omnia-security-audit/summary.json" \
+            --reviews security/moderate-advisory-reviews.json \
+            --source-sha "$GITHUB_SHA"
       - name: Publish advisory evidence even if the fail-closed gate blocks
         if: always()
         uses: actions/upload-artifact@v4

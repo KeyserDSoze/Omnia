@@ -702,6 +702,23 @@ jobs:
           path: ${{ runner.temp }}/omnia-security-audit/summary.json
           if-no-files-found: ignore
           retention-days: 14
+      - name: TDD and inventory declared npm licenses (#216)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests/quality -p 'test_npm_license_inventory.py'
+          python3 tests/quality/npm_license_inventory.py \
+            --lock src/mobile/package-lock.json \
+            --output "$RUNNER_TEMP/omnia-npm-licenses/inventory.json"
+      - name: Publish npm license metadata inventory (not legal clearance)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnia-npm-license-inventory
+          path: ${{ runner.temp }}/omnia-npm-licenses/inventory.json
+          if-no-files-found: ignore
+          retention-days: 14
 
   mobile:
     runs-on: ubuntu-24.04

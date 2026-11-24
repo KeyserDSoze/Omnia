@@ -21,6 +21,8 @@
 - [ ] #195: smoke EAS build Android/iOS, distribuzione firmata e test su device/emulatore con credenziali adeguate; release-readiness ancora non dimostrata.
 - [ ] Complete OCI/SBOM runtime & immagini PostgreSQL/Keycloak, official schema validation and full dependency edges, SCA/CVE remediation e license gates, signed provenance, Node/Chromium patch, ARM64 build, reproducible binaries, native device smoke e altri gate qualità prima di chiudere #22/#15/#10.
 
+- [ ] #216: inventario dichiarazioni licenze npm, triage e report CI (implementazione tracciata; non clearance legale); licenze NuGet/container e notice dei bundle restano da verificare.
+
 ## v0.2 — Functional secure personal timeline (next)
 
 - [ ] Expo Web/Android/iOS OIDC PKCE auth & token refresh using platform-safe storage and logout.

@@ -1686,3 +1686,15 @@ scopes with risk reasoning, owner and expiry no later than 14 days.
 Current review expires **2026-12-08 UTC**; block expired, newly
 discovered or changed advisories until reviewed and documented.
 #196/#22/#15/#10 remain OPEN for actual remediation/release gates.
+
+## npm license metadata inventory (#216 / ADR 0095)
+
+The security-audit job must independently generate the npm declared-license
+inventory using tests/quality/npm_license_inventory.py after existing SCA.
+Run its behavioral tests and retain the separate report, including
+unclassified declarations, with source commit and lock digest. Never
+interpret notice-review or additional-review as legal clearance.
+Do not choose an OR branch automatically, skip dev/optional packages,
+or relax the original SCA/lock gates. Actual upstream license/notice
+files, NuGet, containers, distributed artifacts and legal assessment
+remain open under #22/#131. See docs/npm-license-inventory.md.

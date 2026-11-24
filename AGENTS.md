@@ -1677,7 +1677,7 @@ open for other supply-chain/security release gates.
 After every live npm/NuGet audit, security-audit MUST execute
 `tests/quality/verify_moderate_reviews.py` against the current
 `summary.json`, exact `GITHUB_SHA`, and
-`security/moderate-advisory-reviews.json`; CI checks its eight
+`security/moderate-advisory-reviews.json`; CI checks its ten
 unit tests too. This is **not** a severity waiver or package override:
 the HIGH/CRITICAL gate, full warning artifact, npm ci, NuGet locked
 restore, SDK58 policy, native smoke and OIDC remain unchanged. Every
@@ -1698,3 +1698,14 @@ Do not choose an OR branch automatically, skip dev/optional packages,
 or relax the original SCA/lock gates. Actual upstream license/notice
 files, NuGet, containers, distributed artifacts and legal assessment
 remain open under #22/#131. See docs/npm-license-inventory.md.
+
+## Restored NuGet license inventory (#217 / ADR 0096)
+
+The security-audit job must use a fresh runner-temporary NUGET_PACKAGES
+directory for audited locked restores, then inventory actual archives
+using tests/quality/nuget_license_inventory.py. Validate NuGet content
+hashes, not raw ZIP SHA-512 for signed packages. Require the official
+.NET 10 verifier for signed archives; never use a cached hash as proof.
+Preserve declarations/file hashes and legacy/missing metadata; do not
+extract archives, fetch license URLs, resolve OR branches or claim legal
+clearance. Keep #22/#131 open for notice and distribution assessment.

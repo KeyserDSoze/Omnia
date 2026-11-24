@@ -1,7 +1,7 @@
 # ADR 0095 — Deterministic npm declared-license inventory
 
 - Date: 2026-11-24
-- Status: accepted for bounded implementation; external validation in #216
+- Status: accepted; same-SHA CI/OIDC/Pages/CodeQL SUCCESS on 36bba27a, #216 closed
 - Child #216; parents #22, #10 and related #131 remain open.
 
 ## Context

@@ -686,6 +686,8 @@ jobs:
         run: python3 -m unittest discover -s tests/quality -p 'test_moderate_reviews.py'
       - name: Audit live official npm and NuGet advisories (all + production)
         shell: bash
+        env:
+          NUGET_PACKAGES: ${{ runner.temp }}/omnia-nuget-license-cache
         run: |
           set -euo pipefail
           python3 tests/quality/run_live_advisory_audit.py \
@@ -717,6 +719,22 @@ jobs:
         with:
           name: omnia-npm-license-inventory
           path: ${{ runner.temp }}/omnia-npm-licenses/inventory.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: TDD and inventory restored NuGet package licenses (#217)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests/quality -p 'test_nuget_license_inventory.py'
+          python3 tests/quality/nuget_license_inventory.py \
+            --cache "$RUNNER_TEMP/omnia-nuget-license-cache" \
+            --output "$RUNNER_TEMP/omnia-nuget-licenses/inventory.json"
+      - name: Publish NuGet license inventory (not legal clearance)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnia-nuget-license-inventory
+          path: ${{ runner.temp }}/omnia-nuget-licenses/inventory.json
           if-no-files-found: ignore
           retention-days: 14
 

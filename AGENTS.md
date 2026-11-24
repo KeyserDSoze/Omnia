@@ -1487,14 +1487,14 @@ remain OPEN.
 ## Immutable live memory capture retries (#175 / ADR 0074)
 
 For every authenticated actor, source and externalId, an unexpired
-\`memory_entries\` row is WRITE-ONCE. Keep \`PostgresActorLock\`, active
-scoped consent, restricted runtime FORCE RLS and \`FOR UPDATE\` in the
+`memory_entries` row is WRITE-ONCE. Keep `PostgresActorLock`, active
+scoped consent, restricted runtime FORCE RLS and `FOR UPDATE` in the
 same transaction. Compare original sealed content using AEAD tenant,
 owner, canonical UUID plus stored occurredAt at PostgreSQL microsecond
 precision. Same source event must return the existing UUID without
 another Encrypt, SQL UPDATE, changed DEK, expiry extension or
 provenance mutation. Reusing a live key for a DIFFERENT event MUST
-return generic HTTP 409 \`memory_idempotency_conflict\`, without
+return generic HTTP 409 `memory_idempotency_conflict`, without
 personal data, key, actor or tenant echo; Web should show conflict,
 not logout or silent success. Only a truly EXPIRED row may be
 explicitly reacquired, with fresh consent, subject to existing TTL
@@ -1593,15 +1593,15 @@ session wipe. No native offline or GDPR legal approval claimed.
 ## Authenticated loaded-timeline source filter (#182 / ADR 0080)
 
 The Web source selector derives choices ONLY from signed,
-RLS-scoped \`memos\` already loaded via memory keyset pages.
+RLS-scoped `memos` already loaded via memory keyset pages.
 Use canonical exact source equality, render visible/loaded
 counts and explicit "loaded rows only" notice. An empty
 filtered view is not evidence of no server rows; preserve
-the \`loadOlder\` action and cursor regardless of filter.
+the `loadOlder` action and cursor regardless of filter.
 Do not turn the client-only filter into OAuth provider search
 or guess ungranted data. Never persist selection to URL or
 browser storage, and clear it alongside private view state
-on signout/401/erasure. Keep existing \`CloudViewEpoch\`
+on signout/401/erasure. Keep existing `CloudViewEpoch`
 session fences, note idempotency and API/RLS consent gates.
 React Native Pressable uses accessible button roles and
 selected state. #79/#41 and GDPR parent #2 remain OPEN.
@@ -1675,9 +1675,9 @@ open for other supply-chain/security release gates.
 ## Expiring npm MODERATE review (#215 / ADR 0094)
 
 After every live npm/NuGet audit, security-audit MUST execute
-\`tests/quality/verify_moderate_reviews.py\` against the current
-\`summary.json\`, exact \`GITHUB_SHA\`, and
-\`security/moderate-advisory-reviews.json\`; CI checks its eight
+`tests/quality/verify_moderate_reviews.py` against the current
+`summary.json`, exact `GITHUB_SHA`, and
+`security/moderate-advisory-reviews.json`; CI checks its eight
 unit tests too. This is **not** a severity waiver or package override:
 the HIGH/CRITICAL gate, full warning artifact, npm ci, NuGet locked
 restore, SDK58 policy, native smoke and OIDC remain unchanged. Every

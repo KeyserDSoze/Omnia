@@ -128,5 +128,16 @@ class ModerateAdvisoryReviewTests(unittest.TestCase):
         self.assert_rejected(report, review, 'count')
 
 
+    def test_malformed_scope_value_fails_with_valueerror(self):
+        report, review = sample()
+        review['entries'][0]['scopes'] = [['all']]
+        self.assert_rejected(report, review, 'scopes')
+
+    def test_indirect_root_must_appear_as_direct_audit_ghsa(self):
+        report, review = sample()
+        review['entries'][1]['rootAdvisory'] = 'https://github.com/advisories/GHSA-aaaa-bbbb-cccc'
+        self.assert_rejected(report, review, 'root advisory')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -103,6 +103,8 @@ def validate_review(report: object, registry: object,
     entries = registry['entries']
     if not isinstance(entries, list) or not entries or len(entries) > 64:
         raise ValueError('review entries missing or too numerous')
+    direct_roots = {advisory for _, _, advisory, _ in expected
+                    if advisory.startswith('https://github.com/advisories/GHSA-')}
     actual = set()
     unique = set()
     for entry in entries:
@@ -117,6 +119,8 @@ def validate_review(report: object, registry: object,
             raise ValueError('review advisory must be exact URL or indirect marker')
         if not isinstance(entry['rootAdvisory'], str) or not ROOT.fullmatch(entry['rootAdvisory']):
             raise ValueError('review needs canonical root GHSA URL')
+        if entry['rootAdvisory'] not in direct_roots:
+            raise ValueError('root advisory must appear as a direct GHSA in the audit')
         if advisory.startswith('https://') and entry['rootAdvisory'] != advisory:
             raise ValueError('direct GHSA must be its own root advisory')
         if not _url(entry['upstream']):
@@ -125,7 +129,10 @@ def validate_review(report: object, registry: object,
             if not isinstance(entry[field], str) or len(entry[field].strip()) < 90:
                 raise ValueError(f'review requires substantial {field}')
         scopes_list = entry['scopes']
-        if not isinstance(scopes_list, list) or not scopes_list or len(scopes_list) != len(set(scopes_list)) or not set(scopes_list) <= SCOPE:
+        if (not isinstance(scopes_list, list) or not scopes_list
+                or not all(isinstance(s, str) for s in scopes_list)
+                or len(scopes_list) != len(set(scopes_list))
+                or not set(scopes_list) <= SCOPE):
             raise ValueError('review has unsupported scopes')
         identity = (pkg, version, advisory)
         if identity in unique:

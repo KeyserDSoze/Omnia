@@ -51,7 +51,7 @@ jobs:
           python3 tests/quality/generate_locked_sbom.py --verify "$RUNNER_TEMP/omnia-locked-sbom"
           sha256sum "$RUNNER_TEMP/omnia-locked-sbom/"*.cdx.json
       - name: Publish locked CycloneDX inventory as short-lived CI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: omnia-locked-dependency-sbom
           path: ${{ runner.temp }}/omnia-locked-sbom/*.cdx.json
@@ -698,7 +698,7 @@ jobs:
             --source-sha "$GITHUB_SHA"
       - name: Publish advisory evidence even if the fail-closed gate blocks
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: omnia-security-audit
           path: ${{ runner.temp }}/omnia-security-audit/summary.json
@@ -715,7 +715,7 @@ jobs:
             --output "$RUNNER_TEMP/omnia-npm-licenses/inventory.json"
       - name: Publish npm license metadata inventory (not legal clearance)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: omnia-npm-license-inventory
           path: ${{ runner.temp }}/omnia-npm-licenses/inventory.json
@@ -731,7 +731,7 @@ jobs:
             --output "$RUNNER_TEMP/omnia-nuget-licenses/inventory.json"
       - name: Publish NuGet license inventory (not legal clearance)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: omnia-nuget-license-inventory
           path: ${{ runner.temp }}/omnia-nuget-licenses/inventory.json
@@ -772,7 +772,7 @@ jobs:
           python3 ../../tests/quality/web_notice_evidence.py \
             --root . --output "$RUNNER_TEMP/omnia-web-notice-evidence/report.json"
       - name: Publish Web notice evidence (not legal clearance)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: omnia-web-notice-evidence
           path: ${{ runner.temp }}/omnia-web-notice-evidence/report.json
@@ -786,7 +786,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Playwright browser E2E
         run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: omnia-browser-diagnostics

@@ -38,9 +38,22 @@ export function resolveWebMode(raw: { issuer?: string; clientId?: string; apiBas
   } };
 }
 
+/** On-prem gateway: the web app, `/api` and Keycloak `/auth` share one origin (nginx). */
+export function sameOriginConfig(origin: string, realm = 'tao', clientId = 'tao-web'): WebCloudConfig {
+  const base = origin.replace(/\/$/, '');
+  return { issuer: `${base}/auth/realms/${realm}`, clientId, apiBaseUrl: base };
+}
+
 export function configuredWebMode(): WebMode {
   // Expo replaces static process.env.EXPO_PUBLIC_* references at build time.
   // These are public client settings, never OAuth client secrets.
+  if (process.env.EXPO_PUBLIC_TAO_SAME_ORIGIN === 'true') {
+    // Static pre-rendering has no window; the browser re-evaluates with its real origin.
+    const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+    return resolveWebMode(sameOriginConfig(origin,
+      process.env.EXPO_PUBLIC_TAO_OIDC_REALM || 'tao',
+      process.env.EXPO_PUBLIC_TAO_OIDC_CLIENT_ID || 'tao-web'));
+  }
   return resolveWebMode({
     issuer: process.env.EXPO_PUBLIC_TAO_OIDC_ISSUER,
     clientId: process.env.EXPO_PUBLIC_TAO_OIDC_CLIENT_ID,

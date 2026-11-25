@@ -2,18 +2,20 @@
 set -euo pipefail
 : "${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}"
 : "${RETENTION_DB_PASSWORD:?RETENTION_DB_PASSWORD is required}"
+: "${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD is required}"
 : "${PGPASSWORD:?PGPASSWORD is required}"
 
 # This command runs as the schema/migration administrator, never as the API role.
 # SQL quote_literal via psql :'app_password' prevents interpolation of secrets.
-psql -v ON_ERROR_STOP=1 -v app_password="$APP_DB_PASSWORD" -v retention_password="$RETENTION_DB_PASSWORD" <<'SQL'
+psql -v ON_ERROR_STOP=1 -v app_password="$APP_DB_PASSWORD" -v retention_password="$RETENTION_DB_PASSWORD" \
+  -v keycloak_password="$KEYCLOAK_DB_PASSWORD" <<'SQL'
 SELECT format(
   'CREATE ROLE tao_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
   :'app_password'
 )
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tao_app')
 \gexec
--- Also rotate credentials on existing volumes to match the current local .env.
+-- Also rotate credentials on existing volumes to match the current .env.
 SELECT format('ALTER ROLE tao_app PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
   :'app_password')
 \gexec
@@ -30,39 +32,14 @@ SELECT format(
   :'retention_password'
 )
 \gexec
-SQL
-
-# Backfill is opt-in and never borrows the API or migration identity.
-if [[ -n "${BACKFILL_DB_PASSWORD:-}" ]]; then
-  psql -v ON_ERROR_STOP=1 -v backfill_password="$BACKFILL_DB_PASSWORD" <<'SQL'
-SELECT format(
-  'CREATE ROLE tao_backfill LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-  :'backfill_password'
-)
-WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tao_backfill')
+-- Keycloak keeps its own database and owner role on the same server.
+SELECT format('CREATE ROLE keycloak LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE',
+  :'keycloak_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'keycloak')
 \gexec
-SELECT format(
-  'ALTER ROLE tao_backfill PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-  :'backfill_password'
-)
+SELECT format('ALTER ROLE keycloak PASSWORD %L', :'keycloak_password')
+\gexec
+SELECT 'CREATE DATABASE keycloak OWNER keycloak'
+WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'keycloak')
 \gexec
 SQL
-fi
-
-
-# Dedicated COUNT-only role, disjoint from API, data backfill and retention.
-if [[ -n "${BACKFILL_AUDIT_DB_PASSWORD:-}" ]]; then
-  psql -v ON_ERROR_STOP=1 -v audit_password="$BACKFILL_AUDIT_DB_PASSWORD" <<'SQL'
-SELECT format(
-  'CREATE ROLE tao_backfill_audit LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-  :'audit_password'
-)
-WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tao_backfill_audit')
-\gexec
-SELECT format(
-  'ALTER ROLE tao_backfill_audit PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-  :'audit_password'
-)
-\gexec
-SQL
-fi

@@ -1,0 +1,22 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+COPY src/mobile/package.json src/mobile/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY src/mobile/ ./
+# Same-origin gateway build: OIDC issuer and API are derived from the browser origin,
+# so one image works for any public URL (localhost, Cloudflare Tunnel, LAN TLS).
+ARG TAO_OIDC_REALM=tao
+ARG TAO_OIDC_CLIENT_ID=tao-web
+ENV EXPO_PUBLIC_TAO_SAME_ORIGIN=true \
+    EXPO_PUBLIC_TAO_OIDC_REALM=${TAO_OIDC_REALM} \
+    EXPO_PUBLIC_TAO_OIDC_CLIENT_ID=${TAO_OIDC_CLIENT_ID} \
+    TAO_WEB_BASE_PATH=""
+RUN npx expo export -p web \
+ # nginx CSP allows exactly this inline hydration script by hash; fail if Expo changes it.
+ && grep -q '<script id="_R_">globalThis.__EXPO_ROUTER_HYDRATE__=true;</script>' dist/index.html
+
+FROM nginxinc/nginx-unprivileged:1.30-alpine
+COPY docker/nginx/tao.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx/tao-proxy.inc /etc/nginx/tao-proxy.inc
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 8080

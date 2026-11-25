@@ -24,9 +24,6 @@
       "output": "static",
       "name": "Tao"
     },
-    "experiments": {
-      "baseUrl": "/Tao"
-    },
     "plugins": [
       [
         "expo-audio",

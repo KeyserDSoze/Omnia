@@ -2,7 +2,7 @@ namespace Tao.Api;
 
 /// <summary>
 /// Server-side non-cacheability for personal /api/v1 HTTP responses.
-/// Works before auth, recovery quarantine, rate limits, body guards and
+/// Works before auth, rate limits, body guards and
 /// streaming results. Browser request cache:no-store is not sufficient:
 /// intermediate HTTP caches see only the origin server response headers.
 /// </summary>

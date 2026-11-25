@@ -1,4 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
+// Must match the export: '' (gateway) or '/Tao' (GitHub Pages and the OIDC E2E job).
+const base = (process.env.TAO_WEB_BASE_PATH ?? '').replace(/\/+$/, '');
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
@@ -6,7 +8,7 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:19006', ...devices['Desktop Chrome'], trace: 'retain-on-failure' },
   webServer: {
     command: 'node scripts/serve-static.mjs',
-    url: 'http://127.0.0.1:19006/Tao/',
+    url: `http://127.0.0.1:19006${base}/`,
     timeout: 30_000,
     reuseExistingServer: !process.env.CI
   }

@@ -28,14 +28,23 @@ if (string.IsNullOrWhiteSpace(runtimeUser) || string.IsNullOrWhiteSpace(migratio
     throw new InvalidOperationException("Runtime, retention and migration PostgreSQL identities must be distinct.");
 var issuer = builder.Configuration["Auth:Issuer"];
 var audience = builder.Configuration["Auth:Audience"];
+var development = builder.Environment.IsDevelopment();
+// HTTP is accepted only for local development, loopback-only installs and, for the
+// metadata/JWKS back channel, single-label hosts on the private container network.
+static bool AllowedOidcUri(Uri uri, bool development, bool internalNetwork) =>
+    uri.Scheme == Uri.UriSchemeHttps ||
+    (uri.Scheme == Uri.UriSchemeHttp &&
+        (development || uri.IsLoopback || (internalNetwork && !uri.Host.Contains('.'))));
 if (!Uri.TryCreate(issuer, UriKind.Absolute, out var authority) ||
-    (authority.Scheme != Uri.UriSchemeHttps && !builder.Environment.IsDevelopment()) ||
+    !AllowedOidcUri(authority, development, internalNetwork: false) ||
     string.IsNullOrWhiteSpace(audience))
-    throw new InvalidOperationException("Auth:Issuer (HTTPS outside Development) and Auth:Audience are mandatory.");
+    throw new InvalidOperationException("Auth:Issuer (HTTPS unless loopback/Development) and Auth:Audience are mandatory.");
 var metadata = builder.Configuration["Auth:MetadataAddress"];
+Uri? metadataUri = null;
 if (!string.IsNullOrWhiteSpace(metadata) &&
-    (!builder.Environment.IsDevelopment() || !Uri.TryCreate(metadata, UriKind.Absolute, out _)))
-    throw new InvalidOperationException("Custom metadata endpoints are allowed only in Development.");
+    (!Uri.TryCreate(metadata, UriKind.Absolute, out metadataUri) ||
+     !AllowedOidcUri(metadataUri, development, internalNetwork: true)))
+    throw new InvalidOperationException("Auth:MetadataAddress must be HTTPS or an internal/loopback HTTP URL.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -43,8 +52,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.MapInboundClaims = false;
         options.Authority = issuer;
         options.Audience = audience;
-        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-        if (!string.IsNullOrWhiteSpace(metadata)) options.MetadataAddress = metadata;
+        options.RequireHttpsMetadata = (metadataUri ?? authority).Scheme == Uri.UriSchemeHttps;
+        if (metadataUri is not null) options.MetadataAddress = metadataUri.ToString();
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true, ValidIssuer = issuer,

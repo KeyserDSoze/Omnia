@@ -19,7 +19,9 @@ export interface BrowserAuth {
  */
 export function createBrowserAuth(config: WebCloudConfig): BrowserAuth {
   if (typeof window === 'undefined') throw new Error('OIDC Web richiede un browser.');
-  const uri = new URL('/Tao/', window.location.origin).toString();
+  // EXPO_BASE_URL is inlined from experiments.baseUrl ('' on the gateway, '/Tao' on Pages).
+  const base = (process.env.EXPO_BASE_URL ?? '').replace(/\/+$/, '');
+  const uri = new URL(`${base}/`, window.location.origin).toString();
   const manager = new UserManager({
     authority: config.issuer,
     client_id: config.clientId,

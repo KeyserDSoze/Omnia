@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { hasOidcCallback, isAllowedPublicEndpoint, resolveWebMode } from '../../src/mobile/src/services/config';
+import { hasOidcCallback, isAllowedPublicEndpoint, resolveWebMode, sameOriginConfig } from '../../src/mobile/src/services/config';
 import { CloudApiError, MemoryApi } from '../../src/mobile/src/services/memoryApi';
 
 const cloud = { issuer: 'http://localhost:8081/realms/tao', clientId: 'tao-web', apiBaseUrl: 'http://localhost:8080' };
@@ -25,6 +25,18 @@ describe('OIDC public client config', () => {
     expect(hasOidcCallback('?code=abc&state=def')).toBe(true);
     expect(hasOidcCallback('?error=access_denied')).toBe(true);
     expect(hasOidcCallback('?utm_source=mail')).toBe(false);
+  });
+  it('derives same-origin gateway config (web, /api and /auth behind one port)', () => {
+    expect(sameOriginConfig('https://tao.example.com')).toEqual({
+      issuer: 'https://tao.example.com/auth/realms/tao', clientId: 'tao-web',
+      apiBaseUrl: 'https://tao.example.com'
+    });
+    expect(resolveWebMode(sameOriginConfig('https://tao.example.com')).kind).toBe('cloud');
+    expect(resolveWebMode(sameOriginConfig('http://localhost:59800')).kind).toBe('cloud');
+    // Plain HTTP on a LAN address never carries OIDC tokens.
+    expect(resolveWebMode(sameOriginConfig('http://192.168.1.20:59800')).kind).toBe('invalid');
+    expect(sameOriginConfig('https://tao.example.com', 'work', 'tao-desk').issuer)
+      .toBe('https://tao.example.com/auth/realms/work');
   });
 });
 

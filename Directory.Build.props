@@ -7,5 +7,9 @@
          restores. During an explicit lock regeneration, use
          -p:RestoreLockedMode=false (outside CI/release gates). -->
     <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+    <!-- Audit direct and transitive packages; CI fails on high/critical advisories. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors Condition="'$(CI)' == 'true'">$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
   </PropertyGroup>
 </Project>

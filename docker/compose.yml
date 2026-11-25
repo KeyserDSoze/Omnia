@@ -1,13 +1,14 @@
 name: tao
+# On-prem stack: a single public port (TAO_HTTP_PORT, default 59800) served by the nginx
+# gateway -> web app on /, .NET API on /api/, Keycloak on /auth/.
+# Put TLS in front (e.g. Cloudflare Tunnel to http://127.0.0.1:59800).
 services:
   db:
     image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: tao
       POSTGRES_USER: tao
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env file}
-    ports:
-      - "127.0.0.1:5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,6 +16,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
+
   db-bootstrap:
     image: pgvector/pgvector:pg17
     environment:
@@ -22,62 +25,109 @@ services:
       PGPORT: "5432"
       PGDATABASE: tao
       PGUSER: tao
-      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
-      RETENTION_DB_PASSWORD: ${RETENTION_DB_PASSWORD:?Set RETENTION_DB_PASSWORD in .env}
-      BACKFILL_DB_PASSWORD: ${BACKFILL_DB_PASSWORD:-}
-      BACKFILL_AUDIT_DB_PASSWORD: ${BACKFILL_AUDIT_DB_PASSWORD:-}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in docker/.env}
+      RETENTION_DB_PASSWORD: ${RETENTION_DB_PASSWORD:?Set RETENTION_DB_PASSWORD in docker/.env}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD in docker/.env}
     volumes:
       - ./db/bootstrap.sh:/opt/tao/bootstrap.sh:ro
     entrypoint: ["bash", "/opt/tao/bootstrap.sh"]
     depends_on:
       db: { condition: service_healthy }
     restart: "no"
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
-    command: ["start-dev", "--import-realm", "--hostname=http://localhost:8081"]
+    command:
+      - start
+      - --import-realm
+      - --http-enabled=true
+      - --http-relative-path=/auth
+      - --proxy-headers=xforwarded
+      - --hostname=${TAO_PUBLIC_URL:?Set TAO_PUBLIC_URL in docker/.env}/auth
+      # Admin console only on the host-local port, never through the public gateway.
+      - --hostname-admin=http://localhost:${TAO_KEYCLOAK_ADMIN_PORT:-59801}/auth
+      # The API fetches OIDC metadata/JWKS on the internal network.
+      - --hostname-backchannel-dynamic=true
+      - --health-enabled=true
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?Set KEYCLOAK_ADMIN in .env}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD in docker/.env}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?Set KEYCLOAK_ADMIN in docker/.env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in docker/.env}
+      # Placeholders resolved by the realm import (docker/keycloak/tao-realm.json).
+      TAO_PUBLIC_URL: ${TAO_PUBLIC_URL}
+      TAO_TENANT_ID: ${TAO_TENANT_ID:-default}
     volumes:
-      - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+      - ./keycloak/tao-realm.json:/opt/keycloak/data/import/tao-realm.json:ro
     ports:
-      - "127.0.0.1:8081:8080"
-  ollama:
-    image: ollama/ollama:latest
-    volumes:
-      - ollama:/root/.ollama
-    ports:
-      - "127.0.0.1:11434:11434"
+      - "127.0.0.1:${TAO_KEYCLOAK_ADMIN_PORT:-59801}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /auth/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      db-bootstrap: { condition: service_completed_successfully }
+    restart: unless-stopped
+
   api:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
       Database__ConnectionString: Host=db;Port=5432;Database=tao;Username=tao_app;Password=${APP_DB_PASSWORD}
       Database__MigrationConnectionString: Host=db;Port=5432;Database=tao;Username=tao;Password=${POSTGRES_PASSWORD}
       Database__RetentionConnectionString: Host=db;Port=5432;Database=tao;Username=tao_retention;Password=${RETENTION_DB_PASSWORD}
-      Database__BackfillRole: ${TAO_BACKFILL_ROLE:-}
-      Database__BackfillAuditRole: ${TAO_BACKFILL_AUDIT_ROLE:-}
       Crypto__KeyRingPath: /run/secrets/tao-envelope.keyring.json
-      Auth__Issuer: http://localhost:8081/realms/tao
-      Auth__MetadataAddress: http://keycloak:8080/realms/tao/.well-known/openid-configuration
+      Auth__Issuer: ${TAO_PUBLIC_URL}/auth/realms/tao
+      Auth__MetadataAddress: http://keycloak:8080/auth/realms/tao/.well-known/openid-configuration
       Auth__Audience: tao-api
+      Tao__PublicBaseUrl: ${TAO_PUBLIC_URL}
+      Connectors__Microsoft__ClientId: ${MICROSOFT_CLIENT_ID:-}
+      Connectors__Microsoft__ClientSecret: ${MICROSOFT_CLIENT_SECRET:-}
+      Connectors__Microsoft__Tenant: ${MICROSOFT_TENANT:-common}
+      Connectors__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+      Connectors__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+      Llm__Endpoint: ${LLM_ENDPOINT:-}
+      Llm__ApiKey: ${LLM_API_KEY:-}
+      Llm__Model: ${LLM_MODEL:-}
       Embeddings__Provider: ${EMBEDDINGS_PROVIDER:-none}
-      Embeddings__Endpoint: http://ollama:11434/
-      Embeddings__Model: nomic-embed-text
-      Cors__Origins__0: http://localhost:19006
-      Cors__Origins__1: http://127.0.0.1:19006
+      Embeddings__Endpoint: ${EMBEDDINGS_ENDPOINT:-}
+      Embeddings__Model: ${EMBEDDINGS_MODEL:-nomic-embed-text}
     volumes:
-      - ./secrets/envelope.keyring.json:/run/secrets/tao-envelope.keyring.json:ro
-    ports:
-      - "127.0.0.1:8080:8080"
+      - ${TAO_KEYRING_FILE:-./secrets/envelope.keyring.json}:/run/secrets/tao-envelope.keyring.json:ro
     depends_on:
       db: { condition: service_healthy }
       db-bootstrap: { condition: service_completed_successfully }
-      keycloak: { condition: service_started }
+      keycloak: { condition: service_healthy }
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    ports:
+      # Bind to all interfaces only if the tunnel runs on another machine (TAO_HTTP_BIND=0.0.0.0).
+      - "${TAO_HTTP_BIND:-127.0.0.1}:${TAO_HTTP_PORT:-59800}:8080"
+    depends_on:
+      api: { condition: service_started }
+      keycloak: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Optional local models: docker compose --profile ollama up -d
+  ollama:
+    image: ollama/ollama:0.40.18
+    profiles: ["ollama"]
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+
 volumes:
   pgdata:
   ollama:

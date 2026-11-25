@@ -1,0 +1,12 @@
+.git
+**/node_modules
+**/bin
+**/obj
+**/TestResults
+src/mobile/dist
+src/mobile/.expo
+src/mobile/test-results
+src/mobile/playwright-report
+docker/.env
+docker/secrets
+**/*.keyring.json

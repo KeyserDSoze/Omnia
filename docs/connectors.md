@@ -132,6 +132,17 @@ Un permesso mancante su una categoria (es. chat) nasconde solo quella categoria;
 raggiungibile appare come `unavailable` senza bloccare gli altri; un account senza deleghe di
 lettura appare come `paused`.
 
+## Quante carte si leggono
+
+- Ogni elenco segue la paginazione del provider (`@odata.nextLink` di Graph, `nextPageToken` di Google)
+  per **al massimo 3 pagine**: 150 elementi per calendario, posta Microsoft e attività di ogni lista,
+  40 messaggi Gmail. Oltre il tetto la lettura si ferma, mai senza limite.
+- Un `nextLink` di Graph che non punta a `https://graph.microsoft.com` non viene seguito: il token non
+  viene mai inviato a un host indicato da una risposta.
+- Se un contatto compare solo come indirizzo (mittente senza nome, organizzatore Google), Tao usa il nome
+  con cui lo stesso indirizzo appare nella stessa lettura (organizzatori, partecipanti, mittenti). Nessun
+  permesso aggiuntivo e nulla viene salvato.
+
 ## Priorità delle carte (deterministica)
 
 | Carta | Punteggio |

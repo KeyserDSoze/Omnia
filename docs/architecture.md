@@ -97,5 +97,6 @@ per i popup OAuth. Le risposte di una sessione chiusa non possono aggiornare la 
 ## Limiti noti
 
 - Nessuna alta disponibilità: un solo host, backup a cura dell'operatore (epic #221).
-- Lettura live: nessuna sincronizzazione delta né webhook (epic #222).
+- Lettura live: nessuna sincronizzazione delta, nessun webhook e nessuna rubrica (ADR 0108); le
+  liste seguono la paginazione fino a un tetto.
 - Key ring su file, senza HSM/Key Vault; rotazione manuale via rewrap.

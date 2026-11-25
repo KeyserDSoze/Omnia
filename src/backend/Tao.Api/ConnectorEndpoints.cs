@@ -150,6 +150,12 @@ public static class ConnectorEndpoints
             Results.Ok(await service.DecideAsync(tenant, subject,
                 new TriageCommand(input.Key ?? "", input.Decision ?? "", input.SnoozeMinutes, input.ApplyToSource),
                 ct))));
+        today.MapDelete("/decisions", (string? key, TodayService service, ClaimsPrincipal user,
+            CancellationToken ct) => Run(user, async (tenant, subject) =>
+        {
+            await service.UndoAsync(tenant, subject, key ?? "", ct);
+            return Results.NoContent();
+        }));
         today.MapPost("/briefing", (BriefingCommand input, DailyBriefingService service, TimeProvider time,
             ClaimsPrincipal user, CancellationToken ct) => Run(user, async (tenant, subject) =>
         {
@@ -240,6 +246,10 @@ public static class ConnectorEndpoints
         catch (DelegationRequiredException)
         {
             return Results.Json(new { error = "delegation_required" }, statusCode: StatusCodes.Status403Forbidden);
+        }
+        catch (UndoNotAllowedException)
+        {
+            return Results.Json(new { error = "applied_to_source" }, statusCode: StatusCodes.Status409Conflict);
         }
         catch (SettingsValidationException e)
         {

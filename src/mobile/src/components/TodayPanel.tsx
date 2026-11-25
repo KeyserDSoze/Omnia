@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Animated, Linking, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   CloudApiError, type ConnectorProviderDto, type TodayDto, type TriageDecision
 } from '../services/memoryApi';
 import type { TodaySource } from '../services/demoToday';
 import {
-  canApplyToSource, decisionCounts, deckWindow, kindLabel, pendingCards, providerTaskApp, safeWebLink,
-  whenLabel, withDecision
+  canApplyToSource, deckShortcut, decisionCounts, deckWindow, kindLabel, pendingCards, providerTaskApp, safeWebLink,
+  tomorrowSnoozeMinutes, whenLabel, withDecision, withoutDecision, type DeckAction
 } from '../services/todayDeck';
 import { useT } from '../i18n';
 
@@ -20,8 +20,10 @@ const kindIcons = { event: '◷', mail: '✉', task: '☐', chat: '💬' } as co
 
 /**
  * "Oggi": one card at a time, ordered by the server's deterministic priority. Swipe right =
- * done, left = not done; buttons do the same plus "later" (back in the queue after 2h) and
- * "dismiss". A provider write (completing a task) happens ONLY with the explicit checkbox.
+ * done, left = not done; buttons do the same plus "later" (back in the queue after 2h), "tomorrow"
+ * (back at 08:00) and "dismiss". With the card focused on the web: arrows, Del and Z (undo the last
+ * decision). A provider write (completing a task) happens ONLY with the explicit checkbox, and a
+ * decision that did it cannot be undone from here.
  */
 export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }: {
   api: TodaySource;
@@ -40,7 +42,11 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
   const [now, setNow] = useState(() => new Date());
   const live = useRef(true);
   const position = useRef(new Animated.Value(0)).current;
+  const rootRef = useRef<ComponentRef<typeof View>>(null);
   const decideRef = useRef<(decision: TriageDecision) => void>(() => { });
+  const actRef = useRef<(action: DeckAction) => void>(() => { });
+  // Decisions taken in this session, newest last: only these can be undone.
+  const [history, setHistory] = useState<{ key: string; label: string; applied: boolean }[]>([]);
 
   async function load() {
     setLoading(true);
@@ -61,9 +67,27 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
 
   useEffect(() => {
     live.current = true;
+    setHistory([]);
     void load();
     return () => { live.current = false; };
   }, [api]);
+
+  // Keys act only while focus is inside this panel and not in a text field.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const onKey = (event: KeyboardEvent) => {
+      const root = rootRef.current as unknown as HTMLElement | null;
+      const active = document.activeElement;
+      if (!root || !active || !root.contains(active)) return;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
+      const action = deckShortcut(event);
+      if (!action) return;
+      event.preventDefault();
+      actRef.current(action);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const range = deckWindow(now);
   const items = snapshot?.items ?? [];
@@ -73,14 +97,17 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
   const troubled = (snapshot?.accounts ?? []).filter(a => a.status !== 'ok');
   const canApply = card !== null && canApplyToSource(card.item, providers);
 
-  async function decide(decision: TriageDecision) {
+  async function decide(decision: TriageDecision, queueForTomorrow = false) {
     if (!card || busy) return;
     setBusy(true);
     setError('');
     const apply = decision === 'done' && canApply && applyToSource;
     try {
-      const result = await api.decide(card.key, decision,
-        { applyToSource: apply, snoozeMinutes: decision === 'later' ? 120 : undefined });
+      const result = await api.decide(card.key, decision, {
+        applyToSource: apply,
+        snoozeMinutes: decision !== 'later' ? undefined
+          : queueForTomorrow ? tomorrowSnoozeMinutes(new Date()) : 120
+      });
       if (!live.current) return;
       const decidedAt = new Date();
       setSnapshot(current => current === null ? current : {
@@ -88,6 +115,10 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
         items: withDecision(current.items, result.key, result.decision, result.snoozedUntil,
           result.appliedToSource, decidedAt)
       });
+      setHistory(h => [...h.slice(-9), {
+        key: result.key, applied: result.appliedToSource,
+        label: queueForTomorrow ? t('today.tomorrow') : decisionLabel(decision)
+      }]);
       setNow(decidedAt);
       setApplyToSource(false);
     } catch (e) {
@@ -100,6 +131,33 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
     }
   }
   decideRef.current = (decision) => { void decide(decision); };
+
+  const decisionLabel = (decision: TriageDecision) => t(decision === 'done' ? 'today.done'
+    : decision === 'not_done' ? 'today.notDone' : decision === 'later' ? 'today.later' : 'today.dismiss');
+  const plain = (text: string) => text.replace(/^[^\p{L}\p{N}]+/u, '');
+  const last = history[history.length - 1] ?? null;
+
+  async function undo() {
+    if (!last || last.applied || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.undoDecision(last.key);
+      if (!live.current) return;
+      setSnapshot(current => current === null ? current : { ...current, items: withoutDecision(current.items, last.key) });
+      setHistory(h => h.slice(0, -1));
+      setNow(new Date());
+    } catch (e) {
+      if (live.current) setError(e instanceof CloudApiError ? e.message : t('today.decideFailed'));
+    } finally {
+      if (live.current) setBusy(false);
+    }
+  }
+  actRef.current = action => {
+    if (action === 'undo') void undo();
+    else if (action === 'tomorrow') void decide('later', true);
+    else void decide(action);
+  };
 
   const pan = useRef(PanResponder.create({
     // Capture phase: a horizontal drag wins over text and buttons inside the card.
@@ -117,7 +175,7 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
   const link = card ? safeWebLink(card.item.webLink) : null;
   const heading = { color: p.text };
   return (
-    <View testID="today-panel" style={[styles.card, { backgroundColor: p.surface, borderColor: p.border }]}>
+    <View ref={rootRef} testID="today-panel" style={[styles.card, { backgroundColor: p.surface, borderColor: p.border }]}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.kicker, { color: p.subtle }]}>{demo ? t('today.kickerDemo') : t('today.kicker')}</Text>
@@ -145,7 +203,7 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
       )}
 
       {card && (
-        <Animated.View testID="today-card" {...pan.panHandlers}
+        <Animated.View testID="today-card" tabIndex={0} {...pan.panHandlers}
           style={[styles.deckCard, { backgroundColor: p.bg, borderColor: p.border,
             transform: [{ translateX: position }, { rotate: position.interpolate({
               inputRange: [-300, 0, 300], outputRange: ['-6deg', '0deg', '6deg'] }) }] }]}>
@@ -182,13 +240,29 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
           <View style={styles.actions}>
             <Action testID="today-not-done" label={t('today.notDone')} onPress={() => { void decide('not_done'); }} p={p} disabled={busy} />
             <Action testID="today-later" label={t('today.later')} onPress={() => { void decide('later'); }} p={p} disabled={busy} />
+            <Action testID="today-tomorrow" label={t('today.tomorrow')} onPress={() => { void decide('later', true); }} p={p} disabled={busy} />
             <Action testID="today-dismiss" label={t('today.dismiss')} onPress={() => { void decide('dismissed'); }} p={p} disabled={busy} />
             <Action testID="today-done" label={t('today.done')} onPress={() => { void decide('done'); }} p={p} disabled={busy} primary />
           </View>
           <Text style={[styles.hint, { color: p.subtle }]}>
             {Platform.OS === 'web' ? t('today.dragHint') + ' ' : ''}{t('today.queue', { count: pending.length })}
           </Text>
+          {Platform.OS === 'web' && (
+            <Text testID="today-shortcuts" style={[styles.hint, { color: p.subtle }]}>
+              {'→ ' + plain(t('today.done')) + ' · ← ' + plain(t('today.notDone')) + ' · ↓ ' + plain(t('today.later')) +
+                ' · ↑ ' + plain(t('today.tomorrow')) + ' · Del ' + plain(t('today.dismiss')) + ' · Z ' + t('today.undo')}
+            </Text>
+          )}
         </Animated.View>
+      )}
+
+      {last && !last.applied && (
+        <View style={styles.undoRow}>
+          <Text style={[styles.hint, { color: p.subtle, flex: 1, marginTop: 0 }]}>
+            {t('today.lastDecision', { decision: plain(last.label) })}
+          </Text>
+          <Action testID="today-undo" label={t('today.undo')} onPress={() => { void undo(); }} p={p} disabled={busy} />
+        </View>
       )}
 
       {snapshot && !card && snapshot.accounts.length > 0 && (
@@ -232,5 +306,6 @@ const styles = StyleSheet.create({
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
   check: { width: 22, height: 22, borderWidth: 1.5, borderRadius: 6, textAlign: 'center', fontWeight: '800', lineHeight: 19 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
+  undoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
   action: { minHeight: 44, paddingHorizontal: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexGrow: 1 }
 });

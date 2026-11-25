@@ -144,7 +144,7 @@ export async function loginOptions(apiBaseUrl: string): Promise<ConnectorProvide
 const knownErrors = new Set([
   'connector_not_configured', 'reconnect_required', 'unknown_state', 'expired_state', 'invalid_request',
   'authorization_failed', 'invalid_identity', 'provider_error', 'rate_limited', 'permission_missing', 'apply_failed',
-  'apply_not_supported', 'invalid_item', 'invalid_decision', 'invalid_snooze', 'invalid_window',
+  'apply_not_supported', 'applied_to_source', 'invalid_item', 'invalid_decision', 'invalid_snooze', 'invalid_window',
   'assistant_not_configured', 'assistant_consent_required', 'model_error', 'model_unreachable', 'model_rate_limited',
   'invalid_model_output', 'invalid_time_zone', 'invalid_language', 'delegation_required', 'invalid_settings'
 ] as const);
@@ -341,6 +341,9 @@ export class MemoryApi {
     return this.request('POST', '/api/v1/today/decisions', {
       key, decision, snoozeMinutes: options.snoozeMinutes ?? null, applyToSource: options.applyToSource === true
     });
+  }
+  undoDecision(key: string): Promise<void> {
+    return this.request('DELETE', '/api/v1/today/decisions?key=' + encodeURIComponent(key));
   }
   assistant(): Promise<AssistantInfoDto> {
     return this.request('GET', '/api/v1/assistant');

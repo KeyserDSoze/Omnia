@@ -189,3 +189,29 @@ test('demo: il deck di oggi si smista con fatto, dopo, scarta e completamento es
   await expect(page.getByTestId('today-clear')).toBeVisible();
   await expect(page.getByTestId('today-summary')).toHaveText('Fatte 2 · Non fatte 1 · Rimandate 1 · Scartate 1');
 });
+
+test('demo: una carta si rimanda a domani, si annulla e si smista con la tastiera', async ({ page }) => {
+  test.skip(!!process.env.TAO_E2E_BASE_URL, 'Demo deck exists only in the static export.');
+  await page.goto(appPath);
+  await page.getByTestId('chat-login-microsoft').click();
+  await page.getByTestId('chat-hint-today').click();
+  const title = page.getByTestId('today-card-title');
+  await expect(title).toHaveText('Rinnovare il dominio aziendale');
+  await page.getByTestId('today-tomorrow').click();
+  await expect(title).toHaveText('Inviare l’offerta a ACME');
+  await expect(page.getByTestId('today-undo')).toBeVisible();
+  await page.getByTestId('today-undo').click();
+  await expect(title).toHaveText('Rinnovare il dominio aziendale');
+  await expect(page.getByTestId('today-undo')).toHaveCount(0);
+
+  await page.getByTestId('today-card').focus();
+  await page.keyboard.press('ArrowRight'); // done
+  await expect(title).toHaveText('Inviare l’offerta a ACME');
+  await page.keyboard.press('ArrowLeft'); // not done
+  await expect(title).toHaveText('Standup di team');
+  await page.keyboard.press('z'); // undo the last decision
+  await expect(title).toHaveText('Inviare l’offerta a ACME');
+  await page.keyboard.press('ArrowDown'); // later
+  await expect(title).toHaveText('Standup di team');
+  await expect(page.getByTestId('today-summary')).toHaveText('Fatte 1 · Non fatte 0 · Rimandate 1 · Scartate 0');
+});

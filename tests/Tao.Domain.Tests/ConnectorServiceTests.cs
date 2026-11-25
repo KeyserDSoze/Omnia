@@ -124,7 +124,51 @@ public sealed class ConnectorServiceTests
         Assert.Equal("ok", snapshot.Accounts.Single(a => a.AccountId == account.Id).Status);
         Assert.Equal("unavailable", snapshot.Accounts.Single(a => a.AccountId == broken.Id).Status);
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            today.GetAsync("t", "alice", now, now.AddHours(73), default));
+            today.GetAsync("t", "alice", now, now.AddHours(97), default));
+        // A "tomorrow" queue needs the previous two days: 96 hours are allowed.
+        Assert.Equal(2, (await today.GetAsync("t", "alice", now.AddHours(-72), now.AddHours(24), default)).Items.Count);
+    }
+
+    [Fact]
+    public async Task LaterCanWaitUntilTomorrowButNotLongerThanTwoDays()
+    {
+        var (service, _, _, clock) = Create();
+        var account = await Connect(service);
+        var today = new TodayService(service, new InMemoryTriageStore(), clock);
+        var key = WorkItemKey.Format(ConnectorProviders.Microsoft, account.Id, WorkItemKind.Mail, "m1");
+
+        var result = await today.DecideAsync("t", "alice", new TriageCommand(key, "later", 2880, false), default);
+        Assert.Equal(clock.GetUtcNow().AddMinutes(2880), result.SnoozedUntil);
+        foreach (var minutes in new[] { 14, 2881 })
+            Assert.Equal("invalid_snooze", (await Assert.ThrowsAsync<ArgumentException>(() =>
+                today.DecideAsync("t", "alice", new TriageCommand(key, "later", minutes, false), default))).Message);
+    }
+
+    [Fact]
+    public async Task UndoClearsTheDecisionOfTheActorButNeverOneAppliedAtTheSource()
+    {
+        var (service, _, provider, clock) = Create();
+        var account = await Connect(service);
+        provider.Items = id => [
+            new WorkItem(ConnectorProviders.Microsoft, id, WorkItemKind.Mail, "m1", "FYI"),
+            new WorkItem(ConnectorProviders.Microsoft, id, WorkItemKind.Task, "l|t1", "Offerta")];
+        var today = new TodayService(service, new InMemoryTriageStore(), clock);
+        var mail = WorkItemKey.Format(ConnectorProviders.Microsoft, account.Id, WorkItemKind.Mail, "m1");
+        var task = WorkItemKey.Format(ConnectorProviders.Microsoft, account.Id, WorkItemKind.Task, "l|t1");
+        var now = clock.GetUtcNow();
+
+        await today.DecideAsync("t", "alice", new TriageCommand(mail, "dismissed", null, false), default);
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => today.UndoAsync("t", "mallory", mail, default));
+        await today.UndoAsync("t", "alice", mail, default);
+        var snapshot = await today.GetAsync("t", "alice", now.AddHours(-9), now.AddHours(15), default);
+        Assert.All(snapshot.Items, item => Assert.Null(item.Triage));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => today.UndoAsync("t", "alice", mail, default));
+
+        await today.DecideAsync("t", "alice", new TriageCommand(task, "done", null, true), default);
+        await Assert.ThrowsAsync<UndoNotAllowedException>(() => today.UndoAsync("t", "alice", task, default));
+        snapshot = await today.GetAsync("t", "alice", now.AddHours(-9), now.AddHours(15), default);
+        Assert.Equal(TriageDecision.Done, snapshot.Items.Single(i => i.Key == task).Triage!.Decision);
+        await Assert.ThrowsAsync<ArgumentException>(() => today.UndoAsync("t", "alice", "not-a-key", default));
     }
 
     [Fact]
@@ -343,6 +387,16 @@ public sealed class ConnectorServiceTests
         {
             _records[(tenantId, ownerSubject, key)] = record;
             return Task.CompletedTask;
+        }
+
+        public Task<TriageUndoOutcome> RemoveAsync(string tenantId, string ownerSubject, string key,
+            CancellationToken ct)
+        {
+            if (!_records.TryGetValue((tenantId, ownerSubject, key), out var record))
+                return Task.FromResult(TriageUndoOutcome.NotFound);
+            if (record.AppliedToSource) return Task.FromResult(TriageUndoOutcome.AppliedToSource);
+            _records.Remove((tenantId, ownerSubject, key));
+            return Task.FromResult(TriageUndoOutcome.Removed);
         }
 
         public Task AuditAsync(string tenantId, string ownerSubject, Guid accountId, string action,

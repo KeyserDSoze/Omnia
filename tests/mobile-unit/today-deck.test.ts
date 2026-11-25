@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  canApplyToSource, decisionCounts, deckWindow, pendingCards, safeWebLink, whenLabel, withDecision
+  canApplyToSource, deckShortcut, decisionCounts, deckWindow, pendingCards, safeWebLink, tomorrowSnoozeMinutes,
+  whenLabel, withDecision, withoutDecision
 } from '../../src/mobile/src/services/todayDeck';
+import { createDemoToday } from '../../src/mobile/src/services/demoToday';
 import { MemoryApi, type TodayItemDto, type WorkItemDto } from '../../src/mobile/src/services/memoryApi';
 
 const now = new Date('2026-11-25T08:00:00Z');
@@ -18,12 +20,65 @@ const entry = (over: Partial<WorkItemDto>, triage: TodayItemDto['triage'] = null
 afterEach(() => vi.unstubAllGlobals());
 
 describe('daily deck', () => {
-  it('uses the local calendar day plus the previous evening (DST-safe)', () => {
+  it('uses the local calendar day and keeps two previous days for cards queued for tomorrow (DST-safe)', () => {
     const window = deckWindow(new Date(2026, 2, 29, 10, 0, 0)); // Europe DST switch day
     expect(window.dayStart.getHours()).toBe(0);
     expect(window.to.getDate()).toBe(30);
     expect(window.to.getHours()).toBe(0);
-    expect(window.dayStart.getTime() - window.from.getTime()).toBe(12 * 3600_000);
+    expect(window.dayStart.getTime() - window.from.getTime()).toBe(48 * 3600_000);
+    expect(window.to.getTime() - window.from.getTime()).toBeLessThanOrEqual(96 * 3600_000);
+  });
+
+  it('hides stale undecided mail but brings back what was queued for tomorrow', () => {
+    const queued: TodayItemDto['triage'] = { decision: 'later', decidedAt: '', appliedToSource: false,
+      snoozedUntil: '2026-11-25T07:00:00Z' };
+    const items = [
+      entry({ externalId: 'old', startsAt: '2026-11-23T10:00:00Z' }),
+      entry({ externalId: 'recent', startsAt: '2026-11-24T20:00:00Z' }),
+      entry({ externalId: 'queued', startsAt: '2026-11-24T10:00:00Z' }, queued),
+      entry({ externalId: 'task', kind: 'task' })
+    ];
+    expect(pendingCards(items, now, new Date('2026-11-25T00:00:00Z')).map(x => x.item.externalId))
+      .toEqual(['recent', 'queued', 'task']);
+  });
+
+  it('computes the minutes until tomorrow morning in local time', () => {
+    expect(tomorrowSnoozeMinutes(new Date(2026, 10, 25, 20, 30))).toBe(690);
+    expect(tomorrowSnoozeMinutes(new Date(2026, 10, 25, 2, 0))).toBe(1800);
+    expect(tomorrowSnoozeMinutes(new Date(2026, 10, 25, 20, 30), 9)).toBe(750);
+    expect(tomorrowSnoozeMinutes(new Date(2026, 10, 25, 23, 59))).toBeGreaterThanOrEqual(15);
+  });
+
+  it('puts a card back by dropping its decision locally', () => {
+    const items = [entry({ externalId: 'a' }, { decision: 'dismissed', decidedAt: '', snoozedUntil: null, appliedToSource: false }),
+      entry({ externalId: 'b' }, { decision: 'done', decidedAt: '', snoozedUntil: null, appliedToSource: false })];
+    const next = withoutDecision(items, items[0].key);
+    expect(next.map(x => x.triage?.decision ?? null)).toEqual([null, 'done']);
+    expect(items[0].triage?.decision).toBe('dismissed');
+  });
+
+  it('maps unmodified keys to deck actions', () => {
+    expect(deckShortcut({ key: 'ArrowRight' })).toBe('done');
+    expect(deckShortcut({ key: 'ArrowLeft' })).toBe('not_done');
+    expect(deckShortcut({ key: 'ArrowDown' })).toBe('later');
+    expect(deckShortcut({ key: 'ArrowUp' })).toBe('tomorrow');
+    expect(deckShortcut({ key: 'Delete' })).toBe('dismissed');
+    expect(deckShortcut({ key: 'Backspace' })).toBe('dismissed');
+    expect(deckShortcut({ key: 'z' })).toBe('undo');
+    expect(deckShortcut({ key: 'Z' })).toBe('undo');
+    expect(deckShortcut({ key: 'Enter' })).toBeNull();
+    expect(deckShortcut({ key: 'z', ctrlKey: true })).toBeNull();
+    expect(deckShortcut({ key: 'ArrowRight', metaKey: true })).toBeNull();
+    expect(deckShortcut({ key: 'ArrowLeft', altKey: true })).toBeNull();
+  });
+
+  it('the demo deck undoes a decision', async () => {
+    const demo = createDemoToday(() => now);
+    const first = (await demo.today(now, now)).items[0];
+    await demo.decide(first.key, 'done');
+    expect((await demo.today(now, now)).items[0].triage?.decision).toBe('done');
+    await demo.undoDecision(first.key);
+    expect((await demo.today(now, now)).items[0].triage).toBeNull();
   });
 
   it('shows undecided cards and snoozed cards only after the snooze expires', () => {
@@ -87,6 +142,15 @@ describe('connector and today API calls', () => {
     expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ key: 'k', decision: 'done', snoozeMinutes: null, applyToSource: true });
     expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ key: 'k', decision: 'later', snoozeMinutes: 30, applyToSource: false });
     expect(fetcher.mock.calls[0][0]).toBe('https://tao.example.test/api/v1/today/decisions');
+  });
+
+  it('undoes a decision by item key', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal('fetch', fetcher);
+    const api = new MemoryApi(cfg, async () => 'token');
+    await api.undoDecision('microsoft:abc:mail:m|1');
+    expect(fetcher.mock.calls[0][0]).toBe('https://tao.example.test/api/v1/today/decisions?key=microsoft%3Aabc%3Amail%3Am%7C1');
+    expect(fetcher.mock.calls[0][1].method).toBe('DELETE');
   });
 
   it('requests the window as encoded UTC instants and validates ids before sending', async () => {

@@ -150,6 +150,8 @@ public sealed class SettingsAndDelegationTests
             Decisions.Add(record);
             return Task.CompletedTask;
         }
+        public Task<TriageUndoOutcome> RemoveAsync(string t, string o, string key, CancellationToken ct) =>
+            Task.FromResult(TriageUndoOutcome.NotFound);
         public Task AuditAsync(string t, string o, Guid a, string action, string outcome, CancellationToken ct) =>
             Task.CompletedTask;
         public Task<IReadOnlyList<TriageRecord>> RecentAsync(string t, string o, DateTimeOffset since,

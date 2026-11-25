@@ -144,6 +144,15 @@ public sealed class ConnectorPersistenceTests
         Assert.True(mine[key].AppliedToSource); // a provider write is never "forgotten" by a later swipe
         Assert.Empty(await triage.GetAsync(tenant, "bob", [key, other], default));
 
+        // Undo: only the actor's own decision, never one that already completed the task at the provider.
+        var third = WorkItemKey.Format(ConnectorProviders.Google, Guid.NewGuid(), WorkItemKind.Mail, "undo");
+        await triage.SaveAsync(tenant, "alice", third, new TriageRecord(TriageDecision.Dismissed, now, null, false), default);
+        Assert.Equal(TriageUndoOutcome.NotFound, await triage.RemoveAsync(tenant, "bob", third, default));
+        Assert.Equal(TriageUndoOutcome.AppliedToSource, await triage.RemoveAsync(tenant, "alice", key, default));
+        Assert.Equal(TriageUndoOutcome.Removed, await triage.RemoveAsync(tenant, "alice", third, default));
+        Assert.Equal(TriageUndoOutcome.NotFound, await triage.RemoveAsync(tenant, "alice", third, default));
+        Assert.False((await triage.GetAsync(tenant, "alice", [third], default)).ContainsKey(third));
+
         await using (var age = admin.CreateCommand(
             "UPDATE triage_decisions SET expires_at = now() - interval '1 second' WHERE item_key = @key"))
         {

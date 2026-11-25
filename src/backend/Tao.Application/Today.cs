@@ -21,12 +21,19 @@ public sealed record TriageResult(string Key, string Decision, DateTimeOffset? S
 /// <summary>Decision counts of one local day (latest decision per card), used for the chat's starting hints.</summary>
 public sealed record DayRecap(DateOnly Day, int Done, int NotDone, int Later, int Dismissed);
 
+public enum TriageUndoOutcome { Removed, NotFound, AppliedToSource }
+
+/// <summary>A decision that already completed the task at the provider cannot be undone here.</summary>
+public sealed class UndoNotAllowedException() : Exception("applied_to_source");
+
 /// <summary>Actor-scoped triage decisions and the audit trail of actions run on providers.</summary>
 public interface ITriageStore
 {
     Task<IReadOnlyDictionary<string, TriageRecord>> GetAsync(string tenantId, string ownerSubject,
         IReadOnlyCollection<string> keys, CancellationToken ct);
     Task SaveAsync(string tenantId, string ownerSubject, string key, TriageRecord record, CancellationToken ct);
+    /// <summary>Clears the current decision unless it already completed the task at the provider.</summary>
+    Task<TriageUndoOutcome> RemoveAsync(string tenantId, string ownerSubject, string key, CancellationToken ct);
     Task AuditAsync(string tenantId, string ownerSubject, Guid accountId, string action, string outcome,
         CancellationToken ct);
     /// <summary>Decisions taken since <paramref name="since"/> (bounded); keys and content are not returned.</summary>
@@ -41,8 +48,11 @@ public interface ITriageStore
 public sealed class TodayService(ConnectorService connectors, ITriageStore triage, TimeProvider time,
     ISettingsStore? settingsStore = null)
 {
-    public static readonly TimeSpan MaxWindow = TimeSpan.FromHours(72);
+    // Two previous days plus today: what was queued for tomorrow must still be fetchable then.
+    public static readonly TimeSpan MaxWindow = TimeSpan.FromHours(96);
     public const int DefaultSnoozeMinutes = 120;
+    public const int MinSnoozeMinutes = 15;
+    public const int MaxSnoozeMinutes = 2880;
     public const int MaxRecapDays = 7;
 
     public async Task<TodaySnapshot> GetAsync(string tenantId, string ownerSubject, DateTimeOffset from,
@@ -100,7 +110,7 @@ public sealed class TodayService(ConnectorService connectors, ITriageStore triag
             throw new ArgumentException("invalid_item");
         if (!TriageDecisions.TryParse(command.Decision, out var decision))
             throw new ArgumentException("invalid_decision");
-        if (command.SnoozeMinutes is < 15 or > 1440)
+        if (command.SnoozeMinutes is < MinSnoozeMinutes or > MaxSnoozeMinutes)
             throw new ArgumentException("invalid_snooze");
         if (command.ApplyToSource && (decision != TriageDecision.Done || kind != WorkItemKind.Task))
             throw new ArgumentException("apply_not_supported");
@@ -134,6 +144,18 @@ public sealed class TodayService(ConnectorService connectors, ITriageStore triag
         await triage.SaveAsync(tenantId, ownerSubject, command.Key,
             new TriageRecord(decision, now, snooze, applied), ct);
         return new TriageResult(command.Key, TriageDecisions.ToWire(decision), snooze, applied);
+    }
+
+    /// <summary>Puts a card back in the deck by clearing its decision (only the actor's own).</summary>
+    public async Task UndoAsync(string tenantId, string ownerSubject, string key, CancellationToken ct)
+    {
+        if (!WorkItemKey.TryParse(key, out _, out _, out _, out _))
+            throw new ArgumentException("invalid_item");
+        switch (await triage.RemoveAsync(tenantId, ownerSubject, key, ct))
+        {
+            case TriageUndoOutcome.NotFound: throw new KeyNotFoundException("decision_not_found");
+            case TriageUndoOutcome.AppliedToSource: throw new UndoNotAllowedException();
+        }
     }
 
     /// <summary>Counts of the latest decisions for the last <paramref name="days"/> local days (today included).</summary>

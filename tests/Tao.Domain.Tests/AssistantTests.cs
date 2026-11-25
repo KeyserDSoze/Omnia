@@ -281,6 +281,8 @@ public sealed class AssistantTests
                 .ToDictionary(k => k, _ => new TriageRecord(TriageDecision.Done, Now, null, false)));
         public Task SaveAsync(string t, string o, string key, TriageRecord record, CancellationToken ct) =>
             Task.CompletedTask;
+        public Task<TriageUndoOutcome> RemoveAsync(string t, string o, string key, CancellationToken ct) =>
+            Task.FromResult(TriageUndoOutcome.NotFound);
         public Task AuditAsync(string t, string o, Guid a, string action, string outcome, CancellationToken ct) =>
             Task.CompletedTask;
         public Task<IReadOnlyList<TriageRecord>> RecentAsync(string t, string o, DateTimeOffset since,

@@ -6,6 +6,7 @@ export type TodaySource = {
   today(from: Date, to: Date): Promise<TodayDto>;
   decide(key: string, decision: TriageDecision,
     options?: { snoozeMinutes?: number; applyToSource?: boolean }): Promise<TriageResultDto>;
+  undoDecision(key: string): Promise<void>;
 };
 
 const demoAccount = '00000000000000000000000000000d30';
@@ -64,6 +65,12 @@ export function createDemoToday(clock: () => Date = () => new Date()): TodaySour
       const appliedToSource = options.applyToSource === true && decision === 'done' && target.item.kind === 'task';
       decisions.set(key, { decision, decidedAt: clock().toISOString(), snoozedUntil, appliedToSource });
       return { key, decision, snoozedUntil, appliedToSource };
+    },
+    async undoDecision(key): Promise<void> {
+      const current = decisions.get(key);
+      if (!current) throw new Error(t('error.not_found'));
+      if (current.appliedToSource) throw new Error(t('error.applied_to_source'));
+      decisions.delete(key);
     }
   };
 }

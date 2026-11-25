@@ -138,6 +138,33 @@ public sealed class ApiConnectorTests
             Assert.Equal("later", items[1].GetProperty("triage").GetProperty("decision").GetString());
         }
 
+        // Undo puts a card back in the deck, but a task completed at the provider stays decided.
+        using (var foreignUndo = await Send(http, HttpMethod.Delete,
+            "/api/v1/today/decisions?key=" + Uri.EscapeDataString(mailKey), tenant, subject: "bob"))
+            Assert.Equal(HttpStatusCode.NotFound, foreignUndo.StatusCode);
+        using (var applied = await Send(http, HttpMethod.Delete,
+            "/api/v1/today/decisions?key=" + Uri.EscapeDataString(taskKey), tenant))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, applied.StatusCode);
+            using var json = await Json(applied);
+            Assert.Equal("applied_to_source", json.RootElement.GetProperty("error").GetString());
+        }
+        using (var invalid = await Send(http, HttpMethod.Delete, "/api/v1/today/decisions?key=nope", tenant))
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        using (var undo = await Send(http, HttpMethod.Delete,
+            "/api/v1/today/decisions?key=" + Uri.EscapeDataString(mailKey), tenant))
+            Assert.Equal(HttpStatusCode.NoContent, undo.StatusCode);
+        using (var twice = await Send(http, HttpMethod.Delete,
+            "/api/v1/today/decisions?key=" + Uri.EscapeDataString(mailKey), tenant))
+            Assert.Equal(HttpStatusCode.NotFound, twice.StatusCode);
+        using (var today = await Send(http, HttpMethod.Get, "/api/v1/today", tenant))
+        {
+            using var json = await Json(today);
+            var items = json.RootElement.GetProperty("items").EnumerateArray().ToArray();
+            Assert.Equal("done", items[0].GetProperty("triage").GetProperty("decision").GetString());
+            Assert.Equal(JsonValueKind.Null, items[1].GetProperty("triage").ValueKind);
+        }
+
         using (var foreignDelete = await Send(http, HttpMethod.Delete, $"/api/v1/connectors/accounts/{accountId}",
             tenant, subject: "bob"))
             Assert.Equal(HttpStatusCode.NotFound, foreignDelete.StatusCode);

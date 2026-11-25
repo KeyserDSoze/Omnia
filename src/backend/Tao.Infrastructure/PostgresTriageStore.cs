@@ -70,6 +70,36 @@ public sealed class PostgresTriageStore(NpgsqlDataSource db) : ITriageStore
         await actor.CommitAsync(ct);
     }
 
+    public async Task<TriageUndoOutcome> RemoveAsync(string tenantId, string ownerSubject, string key,
+        CancellationToken ct)
+    {
+        await using var actor = await PostgresActorScope.OpenAsync(db, tenantId, ownerSubject, ct);
+        await PostgresActorLock.AcquireAsync(actor.Connection, actor.Transaction, tenantId, ownerSubject, ct);
+        await using var command = new NpgsqlCommand("""
+            WITH removed AS (
+                DELETE FROM triage_decisions
+                WHERE tenant_id = @tenant AND owner_sub = @owner AND item_key = @key
+                  AND applied_to_source = false AND expires_at > now()
+                RETURNING 1)
+            SELECT (SELECT count(*) FROM removed),
+                   (SELECT count(*) FROM triage_decisions
+                    WHERE tenant_id = @tenant AND owner_sub = @owner AND item_key = @key
+                      AND applied_to_source AND expires_at > now())
+            """, actor.Connection, actor.Transaction);
+        command.Parameters.AddWithValue("tenant", tenantId);
+        command.Parameters.AddWithValue("owner", ownerSubject);
+        command.Parameters.AddWithValue("key", key);
+        long removed, applied;
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            await reader.ReadAsync(ct);
+            (removed, applied) = (reader.GetInt64(0), reader.GetInt64(1));
+        }
+        await actor.CommitAsync(ct);
+        return removed > 0 ? TriageUndoOutcome.Removed
+            : applied > 0 ? TriageUndoOutcome.AppliedToSource : TriageUndoOutcome.NotFound;
+    }
+
     public async Task AuditAsync(string tenantId, string ownerSubject, Guid accountId, string action,
         string outcome, CancellationToken ct)
     {

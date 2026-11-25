@@ -13,21 +13,24 @@ Principi: consenso per scopo, minimizzazione, conservazione limitata, accesso e 
 | Autorizzazioni OAuth in corso | flusso di collegamento | 10 minuti | verifier sigillato, state solo come hash |
 | Decisioni sulle carte (`triage_decisions`) | uso del deck | 30 giorni | solo chiave e decisione, niente contenuti |
 | Audit azioni (`connector_actions`) | scritture confermate | 180 giorni | azione, esito, ora |
+| Impostazioni e deleghe (`user_settings`) | configurazione guidata, compilata dall'utente | fino a cancellazione | documento sigillato, FORCE RLS |
 
 Contenuti di calendario, email, attività e chat **non vengono salvati**: sono letti al momento.
-Il piano del giorno AI non viene salvato.
+Il piano del giorno AI non viene salvato. La configurazione guidata e la chat sono script fissi:
+non inviano nulla a modelli AI e chiedono solo quali account e strumenti usi, non i loro contenuti.
+Le deleghe limitano ciò che Tao chiede ai provider: le categorie non delegate non vengono lette.
 
 ## Export
 
 `GET /api/v1/privacy/export` (pulsante "Esporta i miei dati") produce un JSON con note (decifrate),
-consensi, account collegati (identità e scope, **mai i token**), autorizzazioni in corso,
-decisioni e audit. Lo stream non viene messo in cache (`no-store`).
+consensi, impostazioni (decifrate), account collegati (identità e scope, **mai i token**),
+autorizzazioni in corso, decisioni e audit. Lo stream non viene messo in cache (`no-store`).
 
 ## Cancellazione
 
 `POST /api/v1/privacy/erase` con conferma esplicita: l'API revoca prima, quando possibile, i grant
-presso i provider (Google), poi cancella in un'unica transazione note, consensi, account, decisioni,
-autorizzazioni e audit dell'utente. La ricevuta riporta i conteggi.
+presso i provider (Google), poi cancella in un'unica transazione note, consensi, impostazioni,
+account, decisioni, autorizzazioni e audit dell'utente. La ricevuta riporta i conteggi.
 
 Non inclusi: backup dell'operatore, log dell'host, dati presso Microsoft/Google (la posta resta
 nella tua casella) e consensi dati alle app presso i provider (per Microsoft rimuovili da

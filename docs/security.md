@@ -14,6 +14,12 @@ Questo documento descrive i controlli presenti su `main` e i rischi residui; non
 ## Identità e autorizzazione
 
 - Keycloak in modalità produzione, registrazione disattivata, client pubblico `tao-web` con PKCE S256.
+- **Accesso con Google/Microsoft** (opzionale, `TAO_SOCIAL_LOGIN`): solo su invito. Il flusso di
+  primo accesso `tao-invite-only-first-login` non crea utenti: cerca un utente Keycloak esistente con
+  la stessa e-mail, chiede conferma del collegamento e la password Tao. `trustEmail` è disattivato,
+  quindi un'e-mail dichiarata dal provider non basta a prendere un account. Microsoft usa il tenant
+  di `MICROSOFT_TENANT` (default `organizations`). L'API non cambia: accetta solo JWT del realm `tao`.
+  `GET /api/login-options` (pubblico) espone solo l'elenco dei provider abilitati.
 - Tenant e soggetto arrivano **solo** dal token validato; nessun parametro li sovrascrive.
 - Ogni query passa da `PostgresActorScope` (GUC per transazione) e da **FORCE RLS**; il ruolo
   dell'API non è owner, non ha BYPASSRLS né TRUNCATE (verificato all'avvio). Test su PostgreSQL
@@ -24,7 +30,8 @@ Questo documento descrive i controlli presenti su `main` e i rischi residui; non
 - Segreti generati da `docker/setup.*`; `docker/.env` e `docker/secrets/` non sono versionati.
 - Busta AES-256-GCM (`TAO1`): DEK casuale per record, KEK dal key ring, AAD = tenant + owner +
   scopo + id riga, quindi un ciphertext spostato in un'altra riga non si apre (test dedicato).
-  Sigillati: contenuti delle note, verifier PKCE, token OAuth e identità degli account collegati.
+  Sigillati: contenuti delle note, impostazioni e deleghe, verifier PKCE, token OAuth e identità
+  degli account collegati.
 - I token OAuth non lasciano mai il server: non sono nel browser, nei log o nell'export.
 
 ## Connettori
@@ -34,6 +41,11 @@ Questo documento descrive i controlli presenti su `main` e i rischi residui; non
 - Il popup consegna `{state, code}` solo alla stessa origine (BroadcastChannel/postMessage con
   controllo di origine e di state); il codice viene rimosso dall'URL e non viene salvato.
 - Lettura di default; l'unica scrittura richiede conferma per singola azione e produce audit.
+- **Deleghe per account** (impostazioni): il server le applica prima di chiamare il provider. Le
+  categorie non delegate non vengono richieste; il completamento senza delega `tasks.complete` o in
+  modalità `read_only` risponde 403 `delegation_required` senza contattare il provider. Le
+  impostazioni sono validate nel dominio (orari, etichette senza caratteri di controllo, al massimo
+  10 account, deleghe ammesse per provider) e possono riferirsi solo ad account dello stesso utente.
 - I link provenienti dai provider sono aperti solo se `https:` senza credenziali.
 - I corpi di errore dei provider non vengono mai mostrati o loggati; i log `HttpClient` sono a
   livello Warning per non registrare URL con identificativi.
@@ -55,6 +67,7 @@ SDK .NET e immagini Docker fissati per digest.
 |---|---|
 | Host compromesso = key ring + DB | disco cifrato, utente dedicato, backup cifrati, aggiornamenti |
 | Account Keycloak con password debole | MFA/OTP in Keycloak, Cloudflare Access davanti al tunnel |
+| Account Google/Microsoft dell'utente compromesso | con l'accesso social chi controlla l'account esterno entra in Tao dopo il primo collegamento: tenere MFA sul provider, o lasciare `TAO_SOCIAL_LOGIN` vuoto |
 | Furto del token di sessione nel browser | token solo in memoria, scadenze brevi, CSP; non usare estensioni non fidate |
 | Prompt injection da email/chat | output solo consultivo; nessuna azione automatica (mantenere) |
 | Nessun backup automatico | runbook in epic #221 |

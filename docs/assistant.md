@@ -26,7 +26,8 @@ poi `docker compose ... exec ollama ollama pull <modello>`.
 - L'interfaccia mostra modello e host prima dell'attivazione.
 - Vengono inviate solo le carte **ancora aperte** (massimo 25): tipo, titolo, orario locale,
   nome dell'interlocutore (un indirizzo email viene ridotto alla parte prima di `@`), anteprima
-  di 140 caratteri, flag importante/non letto.
+  di 140 caratteri, flag importante/non letto. Le carte vengono dallo stesso deck, quindi solo
+  dalle categorie delegate nelle impostazioni.
 - Mai inviati: identificativi, chiavi delle carte, link, indirizzi email completi, token.
 - Senza carte aperte il modello non viene chiamato.
 - Il risultato non viene salvato: resta nella pagina finché non ricarichi.

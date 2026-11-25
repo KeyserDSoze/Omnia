@@ -1,24 +1,29 @@
 # Tao · 道
 
-**Tao è un assistente personale di lavoro, self-hosted.** Si collega a Microsoft 365 e Google
-Workspace, legge al momento calendario, email, attività e chat, e ti presenta la giornata come
+**Tao è un assistente personale di lavoro, self-hosted.** Si apre come una chat. Una
+configurazione guidata gli dice quali account hai (Microsoft, Google, anche più di uno) e cosa può
+fare per te. Poi legge al momento calendario, email, attività e chat, e ti presenta la giornata come
 un mazzo di carte da smistare: *fatto*, *non fatto*, *dopo*, *scarta*. Le azioni sulle tue app
 avvengono solo quando le confermi, e restano in un audit.
 
-> Stato: **prima release in sviluppo** (v0.3). Pensata per girare on-prem su un tuo server, dietro
+> Stato: **prima release in sviluppo** (v0.4). Pensata per girare on-prem su un tuo server, dietro
 > un Cloudflare Tunnel. Prima di usarla con dati di lavoro reali leggi [docs/security.md](docs/security.md).
 
 ## Cosa fa oggi
 
 | Funzione | Dettaglio |
 |---|---|
+| **Chat** | La schermata iniziale. Tao apre con una domanda, oppure con spunti dai giorni precedenti (carte fatte o rimandate). Capisce poche richieste fisse per parole chiave (*oggi*, *piano*, *nota*, *impostazioni*): niente AI. |
+| **Configurazione guidata** | Il bottone ✨ fa domande fisse, senza AI: account Microsoft o Google (lavoro o personale), Outlook, Teams, To Do, Gmail, Calendar e Tasks, altri account, CRM, orari, modalità dell'agente. Le risposte diventano le impostazioni, salvate sigillate su PostgreSQL. Alla fine Tao propone di collegare ogni account. |
+| **Impostazioni e deleghe** | In alto a destra: il tuo account Tao, la configurazione e, per ogni account, cosa l'agente può leggere o fare per tuo conto. Le categorie non delegate non vengono mai lette dal provider. |
+| **Accesso con Google o Microsoft** | Opzionale (`TAO_SOCIAL_LOGIN`), tramite Keycloak e solo su invito: entra chi ha già un utente Tao con la stessa e-mail, confermando la prima volta con la password. |
 | **Oggi** (deck) | Una carta alla volta, ordinata per priorità deterministica e spiegabile (niente AI). Swipe a destra = fatto, a sinistra = non fatto; *Dopo* la rimette in coda dopo 2 ore. |
 | **Connettori** | Microsoft 365 (Graph: calendario, posta non letta/contrassegnata, To Do, chat Teams) e Google Workspace (Calendar, Gmail, Tasks). OAuth con PKCE, client confidenziale lato server, token sigillati (AES-256-GCM). |
 | **Azioni con conferma** | Completare un'attività su Microsoft To Do / Google Tasks solo con la spunta esplicita sulla carta; ogni tentativo è registrato. |
 | **Piano del giorno (AI)** | Opzionale: un modello OpenAI-compatibile (OpenAI, Azure OpenAI, Ollama locale) propone il focus del giorno e una pre-azione per le carte più importanti. Consenso dedicato, dati minimizzati, output mai salvato. |
 | **Note** | Cattura rapida di note sigillate nel database, con consenso, retention di 30 giorni, timeline filtrabile. |
-| **Privacy** | Export JSON completo e cancellazione dei tuoi dati (note, consensi, account collegati, decisioni, audit) dall'interfaccia. |
-| **Demo** | La build statica su [GitHub Pages](https://keyserdsoze.github.io/Tao/) mostra il deck con dati di esempio, senza backend. |
+| **Privacy** | Vista *Note e privacy*: export JSON completo e cancellazione dei tuoi dati (note, consensi, impostazioni, account collegati, decisioni, audit). |
+| **Demo** | La build statica su [GitHub Pages](https://keyserdsoze.github.io/Tao/) mostra la chat, la configurazione guidata e il deck con dati di esempio, senza backend e senza salvare nulla. |
 
 Non ancora disponibile (vedi [docs/roadmap.md](docs/roadmap.md)): uso vocale in cuffia, ping e
 notifiche, memoria giornaliera da CRM/transcript, flussi di business definiti da te, profilo di
@@ -82,10 +87,15 @@ cloudflared tunnel run --url http://127.0.0.1:59800 tao
 nginx accetta l'header `X-Forwarded-Proto: https` dal tunnel e abilita HSTS solo in quel caso.
 Valuta Cloudflare Access davanti a Tao come secondo fattore.
 
-### Connettori e assistente
+### Connettori, accesso social e assistente
 
 - Registrazione app Microsoft Entra e Google Cloud, permessi e redirect URI:
   [docs/connectors.md](docs/connectors.md).
+- Accesso con Google o Microsoft sull'account Tao: `TAO_SOCIAL_LOGIN=google,microsoft` in
+  `docker/.env`, con le stesse app dei connettori. Aggiungi il redirect URI
+  `${TAO_PUBLIC_URL}/auth/realms/tao/broker/<google|microsoft>/endpoint`. Il servizio
+  `keycloak-config` applica la configurazione a ogni avvio. Gli utenti vanno comunque creati prima
+  in Keycloak (vedi [docs/security.md](docs/security.md)).
 - Configurazione e privacy del piano del giorno: [docs/assistant.md](docs/assistant.md).
 
 ## Sviluppo
@@ -111,8 +121,8 @@ Strategia di test: [docs/testing-strategy.md](docs/testing-strategy.md). Regole 
 ## Repository
 
 ```text
-src/backend/Tao.Domain          invarianti: memoria, consensi, carte di lavoro, triage
-src/backend/Tao.Application     casi d'uso e porte (connettori, oggi, assistente, privacy)
+src/backend/Tao.Domain          invarianti: memoria, consensi, carte di lavoro, triage, impostazioni
+src/backend/Tao.Application     casi d'uso e porte (connettori, oggi, impostazioni, assistente, privacy)
 src/backend/Tao.Infrastructure  PostgreSQL (migrazioni, RLS), Graph/Google, modello AI, cifratura
 src/backend/Tao.Api             REST /api/v1, OIDC JWT, limiti, DI
 src/mobile                      Expo Router: web statico (gateway e Pages), iOS/Android

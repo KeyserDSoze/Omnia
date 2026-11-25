@@ -13,6 +13,35 @@ spunta esplicita sulla carta. Decisione architetturale: [ADR 0099](../adr/0099-w
 
 Unica scrittura: `PATCH` dello stato a *completed* di un'attività To Do / Google Tasks.
 
+## Deleghe: cosa può fare l'agente per tuo conto
+
+La configurazione guidata (e poi le impostazioni) registra per ogni account dichiarato le
+**deleghe**, cioè le categorie che Tao può leggere o le azioni che può fare a tuo nome. Decisione:
+[ADR 0101](../adr/0101-chat-first-scripted-setup-and-delegations.md).
+
+| Delega | Significato | Microsoft | Google |
+|---|---|---|---|
+| `calendar.read` | leggere le riunioni del giorno | sì | sì |
+| `mail.read` | leggere i metadati della posta in arrivo | sì | sì |
+| `tasks.read` | leggere le attività aperte | sì | sì |
+| `tasks.complete` | completare un'attività, sempre con conferma sulla carta | sì | sì |
+| `chats.read` | leggere le chat non lette | sì (Teams) | — |
+
+- Le risposte della configurazione diventano deleghe: Outlook → posta e calendario, Teams → chat,
+  To Do / Tasks → attività, Gmail → posta, Calendar → calendario. Un account senza strumenti
+  dichiarati riceve tutte le letture del suo provider.
+- Modalità dell'agente: `read_only` (default) toglie ogni scrittura anche se delegata;
+  `act_with_confirmation` consente `tasks.complete`, sempre e solo con la spunta esplicita sulla carta.
+- **Minimizzazione**: il connettore chiama solo gli endpoint delle categorie delegate. Un account
+  senza deleghe di lettura appare come `paused` e non viene interrogato.
+- Un account collegato che non corrisponde a nessun account dichiarato riceve tutte le capacità del
+  suo provider, sempre filtrate dalla modalità dell'agente. Chi non ha fatto la configurazione
+  mantiene il comportamento di prima: tutte le letture, completamento solo con conferma.
+- Il collegamento tra account dichiarato e account OAuth (`connectedAccountId`) è accettato solo se
+  l'account appartiene allo stesso utente e allo stesso provider; altrimenti viene scartato.
+- Le deleghe non sostituiscono i permessi OAuth: Tao non può fare più di quanto il provider ha
+  concesso, e con le deleghe può fare di meno.
+
 ## Registrazione Microsoft Entra
 
 1. [Entra admin center](https://entra.microsoft.com) → *App registrations* → *New registration*.
@@ -73,6 +102,7 @@ sequenceDiagram
 | `connector_accounts` | provider, id esterno, credenziali + identità sigillate | finché non scolleghi o cancelli i dati |
 | `triage_decisions` | chiave della carta (`provider:account:tipo:id`), decisione, rinvio | 30 giorni |
 | `connector_actions` | audit delle scritture sul provider (azione, esito, ora) | 180 giorni |
+| `user_settings` | impostazioni della configurazione guidata e deleghe, sigillate | finché non cancelli i dati |
 
 Tutte con FORCE RLS per tenant e utente, incluse in export e cancellazione.
 
@@ -86,13 +116,19 @@ Tutte con FORCE RLS per tenant e utente, incluse in export e cancellazione.
 | DELETE | `/api/v1/connectors/accounts/{id}` | 204 / 404 |
 | GET | `/api/v1/today?from&to` | finestra massima 72 h; carte ordinate + stato per account |
 | POST | `/api/v1/today/decisions` | `{ key, decision: done\|not_done\|later\|dismissed, snoozeMinutes?, applyToSource }` |
+| GET | `/api/v1/today/recap?days&timeZone` | conteggi delle decisioni degli ultimi 1–7 giorni (spunti della chat) |
+| GET | `/api/v1/settings` | `{ settings \| null, providers, accounts }` |
+| PUT | `/api/v1/settings` | impostazioni complete (nome, orari, strumenti, account con deleghe, `agentMode`, `completeOnboarding`) |
 
 Errori (`{ "error": "<codice>" }`): `connector_not_configured` (409), `reconnect_required` (409),
 `unknown_state` / `expired_state` / `invalid_request` (400), `authorization_failed`,
 `provider_error`, `rate_limited`, `apply_failed` (502), `apply_not_supported`, `invalid_item`,
-`invalid_decision`, `invalid_snooze`, `invalid_window` (400), `not_found` (404).
+`invalid_decision`, `invalid_snooze`, `invalid_window` (400), `not_found` (404),
+`delegation_required` (403: completamento senza delega `tasks.complete` o in modalità sola lettura),
+`invalid_settings` (400, con `field`).
 Un permesso mancante su una categoria (es. chat) nasconde solo quella categoria; un account non
-raggiungibile appare come `unavailable` senza bloccare gli altri.
+raggiungibile appare come `unavailable` senza bloccare gli altri; un account senza deleghe di
+lettura appare come `paused`.
 
 ## Priorità delle carte (deterministica)
 

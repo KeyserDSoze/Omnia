@@ -1,4 +1,4 @@
-# Tao — Product Requirements (v0.3)
+# Tao — Product Requirements (v0.4)
 
 ## Tesi
 
@@ -28,13 +28,19 @@ aperti anche in movimento (es. mentre corre con le cuffie).
 
 ## Journey R1
 
-1. L'operatore installa Tao (`docker/setup.sh`, compose, tunnel) e crea l'utente in Keycloak.
-2. L'utente accede, collega Microsoft 365 e/o Google dal pannello Connessioni (popup OAuth).
-3. Al mattino apre "Oggi": vede una carta alla volta, la smista con swipe o pulsanti; per le
-   attività può spuntare "segna completata anche su To Do/Tasks".
+1. L'operatore installa Tao (`docker/setup.sh`, compose, tunnel) e crea l'utente in Keycloak;
+   se vuole abilita l'accesso con Google/Microsoft (`TAO_SOCIAL_LOGIN`).
+2. L'utente accede e trova una chat. Il bottone ✨ *Configura Tao* fa domande fisse, senza AI:
+   account Microsoft e Google (lavoro o personale), Outlook, Teams, To Do, Gmail, Calendar, Tasks,
+   altri account, CRM, orari, modalità dell'agente (sola lettura o azioni con conferma).
+   Le risposte diventano impostazioni e deleghe salvate su PostgreSQL. Poi Tao propone di collegare
+   ogni account (popup OAuth). Le deleghe si cambiano in ogni momento dalle impostazioni in alto a destra.
+3. Al mattino la chat saluta con gli spunti dei giorni prima; «cosa devo fare oggi?» apre il deck:
+   una carta alla volta, smistata con swipe o pulsanti; per le attività, se delegato, può spuntare
+   "segna completata anche su To Do/Tasks".
 4. Se vuole, attiva l'assistente (consenso dedicato) e genera il piano del giorno: le pre-azioni
    compaiono sulle carte.
-5. Può esportare o cancellare tutto dal pannello dati.
+5. Può esportare o cancellare tutto dalla vista *Note e privacy*.
 
 ## Requisiti non funzionali
 

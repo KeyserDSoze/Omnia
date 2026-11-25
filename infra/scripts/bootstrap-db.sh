@@ -18,10 +18,16 @@ admin=$(az postgres flexible-server show -g "$group" -n "$server" --query admini
 # The machine running this script needs the firewall open for the duration of the call only.
 my_ip=$(curl -fsS https://api.ipify.org)
 rule=tao-bootstrap
-az postgres flexible-server firewall-rule create -g "$group" -n "$server" --rule-name "$rule" \
-  --start-ip-address "$my_ip" --end-ip-address "$my_ip" -o none
-cleanup() { az postgres flexible-server firewall-rule delete -g "$group" -n "$server" --rule-name "$rule" --yes -o none || true; }
+# The ARM call is the same on every az version (the firewall-rule flags changed between releases).
+rule_url="https://management.azure.com/subscriptions/$(az account show --query id -o tsv)/resourceGroups/$group/providers/Microsoft.DBforPostgreSQL/flexibleServers/$server/firewallRules/$rule?api-version=2024-08-01"
+az rest --method put --url "$rule_url" -o none \
+  --body "{\"properties\":{\"startIpAddress\":\"$my_ip\",\"endIpAddress\":\"$my_ip\"}}"
+cleanup() { az rest --method delete --url "$rule_url" -o none || true; }
 trap cleanup EXIT
+for _ in $(seq 1 30); do
+  [[ $(az rest --method get --url "$rule_url" --query properties.startIpAddress -o tsv 2>/dev/null) == "$my_ip" ]] && break
+  sleep 5
+done
 
 run_sql() { # <database> reads SQL from stdin
   docker run --rm -i -e PGPASSWORD="$admin_password" -e PGSSLMODE=require postgres:17 \

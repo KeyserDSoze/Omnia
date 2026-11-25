@@ -34,9 +34,17 @@ public sealed class EnvelopeKeyRing : IDisposable
         if (!file.Exists || file.Length is < 1 or > 16384)
             throw new InvalidOperationException("Key-ring file is missing or exceeds the allowed size.");
         // Never include the file content or filesystem path in exception messages/logs.
+        return FromJson(File.ReadAllText(absoluteFilePath));
+    }
+
+    /// <summary>The same ring as a JSON string, e.g. an app setting resolved from a secret store.</summary>
+    public static EnvelopeKeyRing FromJson(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.Length > 16384)
+            throw new ArgumentException("Key-ring JSON is missing or exceeds the allowed size.");
         try
         {
-            using var json = JsonDocument.Parse(File.ReadAllText(absoluteFilePath));
+            using var json = JsonDocument.Parse(text);
             var obj = json.RootElement;
             if (obj.ValueKind != JsonValueKind.Object ||
                 !obj.TryGetProperty("activeKeyId", out var active) ||

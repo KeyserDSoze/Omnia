@@ -2,13 +2,25 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Tao.Api;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Trace;
 using Tao.Application;
 using Tao.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+// Application Insights only when the operator supplies a connection string. The privacy processor is
+// registered first so it runs before the exporter; logs below Warning stay local.
+var insightsConnection = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrWhiteSpace(insightsConnection))
+{
+    builder.Services.ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddProcessor(new TelemetryPrivacyProcessor()));
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(options => options.ConnectionString = insightsConnection);
+    builder.Logging.AddFilter<OpenTelemetryLoggerProvider>(null, LogLevel.Warning);
+}
 var connection = builder.Configuration["Database:ConnectionString"];
 if (string.IsNullOrWhiteSpace(connection))
     throw new InvalidOperationException("Database:ConnectionString is required (no in-memory production fallback).");
@@ -137,11 +149,14 @@ builder.Services.AddHostedService(sp => new RetentionSweepService(
     sp.GetRequiredKeyedService<NpgsqlDataSource>("retention"),
     sp.GetRequiredService<ILogger<RetentionSweepService>>()));
 var keyRingPath = builder.Configuration["Crypto:KeyRingPath"];
-if (string.IsNullOrWhiteSpace(keyRingPath))
-    throw new InvalidOperationException("Crypto:KeyRingPath is required; unsealed memory writes are forbidden.");
-// The key ring is loaded at startup and is NEVER exposed by an HTTP endpoint.
-// This filesystem adapter is for development only; production needs Key Vault/OpenBao.
-builder.Services.AddSingleton(EnvelopeKeyRing.FromFile(keyRingPath));
+var keyRingJson = builder.Configuration["Crypto:KeyRingJson"];
+if (string.IsNullOrWhiteSpace(keyRingPath) && string.IsNullOrWhiteSpace(keyRingJson))
+    throw new InvalidOperationException(
+        "Crypto:KeyRingPath or Crypto:KeyRingJson is required; unsealed memory writes are forbidden.");
+// The key ring is loaded at startup and is NEVER exposed by an HTTP endpoint. A file (on-prem, mounted
+// secret) or a JSON app setting (Azure Key Vault reference); an HSM-backed adapter is still future work.
+builder.Services.AddSingleton(string.IsNullOrWhiteSpace(keyRingPath)
+    ? EnvelopeKeyRing.FromJson(keyRingJson!) : EnvelopeKeyRing.FromFile(keyRingPath));
 builder.Services.AddSingleton<IEnvelopeEncryption>(sp =>
     new AesGcmEnvelopeEncryption(sp.GetRequiredService<EnvelopeKeyRing>()));
 builder.Services.AddScoped<PostgresMemoryRepository>();

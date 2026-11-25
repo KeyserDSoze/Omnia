@@ -103,6 +103,22 @@ public sealed class EnvelopeEncryptionTests
     }
 
     [Fact]
+    public void KeyRingJsonFromTheEnvironmentWorksLikeTheFileAndNeverEchoesItsContent()
+    {
+        var key = FreshKey();
+        var json = JsonSerializer.Serialize(new { activeKeyId = "v1", keys = new Dictionary<string, string> { ["v1"] = key } });
+        IEnvelopeEncryption encryption = new AesGcmEnvelopeEncryption(EnvelopeKeyRing.FromJson(json));
+        var plaintext = Encoding.UTF8.GetBytes("synthetic private");
+        Assert.Equal(plaintext, encryption.Open(encryption.Seal(plaintext, Scope()), Scope()));
+
+        foreach (var bad in new[] { "", "{invalid", "[]", "{\"activeKeyId\":\"v1\",\"keys\":{\"v1\":\"c2hvcnQ=\"}}" })
+        {
+            var error = Assert.ThrowsAny<Exception>(() => EnvelopeKeyRing.FromJson(bad));
+            Assert.DoesNotContain("c2hvcnQ", error.ToString());
+        }
+    }
+
+    [Fact]
     public void KeyFileRejectsMissingMalformedShortAndUnrecognizedKeys()
     {
         var path = Path.Combine(Path.GetTempPath(), "tao-crypto-" + Guid.NewGuid() + ".json");

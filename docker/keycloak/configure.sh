@@ -18,6 +18,9 @@ json() { local s=${1//\\/\\\\}; printf '%s' "${s//\"/\\\"}"; }
 kc config credentials --server "$server" --realm master \
   --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD" >/dev/null
 
+# Keycloak's own administration is a login too: lock out guessing, whether or not it is public.
+kc update realms/master -s bruteForceProtected=true -s failureFactor=5
+
 if enabled google || enabled microsoft; then
   if ! kc get authentication/flows -r "$realm" --fields alias --format csv --noquotes | grep -qx "$social_flow"; then
     kc create authentication/flows -r "$realm" -s alias="$social_flow" -s providerId=basic-flow \

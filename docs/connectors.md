@@ -114,8 +114,9 @@ Tutte con FORCE RLS per tenant e utente, incluse in export e cancellazione.
 | POST | `/api/v1/connectors/{microsoft\|google}/authorize` | body `{}` → `{ authorizationUrl }` |
 | POST | `/api/v1/connectors/complete` | `{ state, code }` → account |
 | DELETE | `/api/v1/connectors/accounts/{id}` | 204 / 404 |
-| GET | `/api/v1/today?from&to` | finestra massima 72 h; carte ordinate + stato per account |
-| POST | `/api/v1/today/decisions` | `{ key, decision: done\|not_done\|later\|dismissed, snoozeMinutes?, applyToSource }` |
+| GET | `/api/v1/today?from&to` | finestra massima 96 h; carte ordinate + stato per account |
+| POST | `/api/v1/today/decisions` | `{ key, decision: done\|not_done\|later\|dismissed, snoozeMinutes? (15–2880), applyToSource }` |
+| DELETE | `/api/v1/today/decisions?key=` | annulla la decisione: 204 / 404 / 409 `applied_to_source` |
 | GET | `/api/v1/today/recap?days&timeZone` | conteggi delle decisioni degli ultimi 1–7 giorni (spunti della chat) |
 | GET | `/api/v1/settings` | `{ settings \| null, providers, accounts }` |
 | PUT | `/api/v1/settings` | impostazioni complete (nome, orari, strumenti, account con deleghe, `agentMode`, `completeOnboarding`) |
@@ -124,6 +125,7 @@ Errori (`{ "error": "<codice>" }`): `connector_not_configured` (409), `reconnect
 `unknown_state` / `expired_state` / `invalid_request` (400), `authorization_failed`,
 `provider_error`, `rate_limited`, `apply_failed` (502), `apply_not_supported`, `invalid_item`,
 `invalid_decision`, `invalid_snooze`, `invalid_window` (400), `not_found` (404),
+`applied_to_source` (409: la decisione ha già completato il task nell'app, non si annulla da Tao),
 `delegation_required` (403: completamento senza delega `tasks.complete` o in modalità sola lettura),
 `invalid_settings` (400, con `field`).
 Un permesso mancante su una categoria (es. chat) nasconde solo quella categoria; un account non

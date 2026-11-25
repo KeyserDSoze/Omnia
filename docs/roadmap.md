@@ -10,7 +10,7 @@ Obiettivo: usare Tao ogni mattina sul proprio server per smistare la giornata di
 |---|---|
 | #221 Installazione on-prem: gateway, Keycloak, Cloudflare Tunnel, backup | gateway, setup, accesso Google/Microsoft (ADR 0104, 0105), backup, ripristino e aggiornamento fatti (prova su PostgreSQL reale) |
 | #222 Connettori Microsoft 365 e Google Workspace | lettura, completamento task, account multipli e deleghe per account fatti; delta/webhook, contatti, CRM da fare |
-| #223 Deck "Oggi" | fatto, dentro la chat iniziale con configurazione guidata; undo, scorciatoie, coda per domani da fare |
+| #223 Deck "Oggi" | fatto, dentro la chat iniziale con configurazione guidata; annulla, scorciatoie da tastiera e coda per domani fatti (ADR 0106) |
 | #224 Piano del giorno (AI) | prima versione fatta; valutazione e budget da fare |
 
 Criterio di uscita: una settimana d'uso reale con almeno un account collegato, backup provato,

@@ -29,6 +29,7 @@ GitHub non girano).
 | #227 Memoria giornaliera | diario da mail, chat, Teams, transcript, CRM con consenso e retention |
 | #228 Flussi di business | logiche spiegate dall'utente che generano pre-azioni e azioni confermate |
 | #229 Stile comunicativo | profilo opt-in, modificabile, per bozze nel tuo tono (mai diagnosi) |
+| #239 Integrazioni | catalogo, server MCP (senza autenticazione, chiave, OAuth), API dirette e WhatsApp; «cosa posso allacciare?» in chat (ADR 0111, [studio](integrations.md)) |
 
 ## R3 — Ovunque
 

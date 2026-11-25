@@ -14,6 +14,7 @@ Fonte di verità: le issue GitHub. Gli epic della nuova fase Tao sono:
 | [#228](https://github.com/KeyserDSoze/Tao/issues/228) | Flussi di business e pre-azioni definiti dall'utente | R2 |
 | [#229](https://github.com/KeyserDSoze/Tao/issues/229) | Profilo di stile comunicativo opt-in | R2 |
 | [#230](https://github.com/KeyserDSoze/Tao/issues/230) | Client desktop Mac/Windows e dashboard | R3 |
+| [#239](https://github.com/KeyserDSoze/Tao/issues/239) | Integrazioni: catalogo, server MCP, API dirette e WhatsApp ([ADR 0111](../adr/0111-integration-catalog-mcp-api-whatsapp.md), [studio](integrations.md)) | R2 |
 
 Le issue della fase precedente ancora aperte (#1–#131) descrivono una piattaforma SaaS più ampia:
 restano come riferimento e vanno ricollegate a un epic Tao quando entrano in lavorazione. Quelle del

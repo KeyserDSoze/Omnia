@@ -9,7 +9,7 @@
 
 ## Context
 
-Omnia already returns canonical occurredAt instants and page cursors
+Tao already returns canonical occurredAt instants and page cursors
 ordered by (occurred_at DESC, id DESC) from the authenticated,
 FORCE-RLS PostgreSQL actor scope. Its Web timeline only showed the
 per-row clock, and an explicit source selector filters rows already
@@ -51,7 +51,7 @@ would mislabel the user's calendar day around local midnight and DST.
   scenarios including 13 synthetic captures across two days,
   page boundary merging, source filter and logout wipe;
   test suite/Pages/PITR checks required on the same final SHA.
-- These are **device-local display dates**. Omnia does not
+- These are **device-local display dates**. Tao does not
   preserve an original source timezone or calendar confidence
   per event yet. Two devices in different timezones may assign
   the same instant to different calendar days; this does not

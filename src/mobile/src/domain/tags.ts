@@ -32,7 +32,7 @@ export function normalizeMemo(content: string, occurredAt: string, requireSecure
     // Never silently downgrade the authenticated Web cloud path.
   }
   if (requireSecureId && !uuid)
-    throw new Error('Identificativi sicuri non disponibili: apri Omnia con HTTPS e Web Crypto.');
+    throw new Error('Identificativi sicuri non disponibili: apri Tao con HTTPS e Web Crypto.');
   const externalId = uuid ? 'local-' + uuid :
     'demo-' + occurredAt + '-' + (++demoCaptureSequence).toString(36);
   return {

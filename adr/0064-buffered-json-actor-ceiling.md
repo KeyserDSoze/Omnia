@@ -61,15 +61,15 @@ resource lifetimes.
 
 ## TDD and verification
 
-Behavior-first [test-only commit 8cdda406](https://github.com/KeyserDSoze/Omnia/commit/8cdda406a8eb76e2b403561ae3a6294d4677c525)
-produced [RED CI 44960870525](https://github.com/KeyserDSoze/Omnia/actions/runs/44960870525):
+Behavior-first [test-only commit 8cdda406](https://github.com/KeyserDSoze/Tao/commit/8cdda406a8eb76e2b403561ae3a6294d4677c525)
+produced [RED CI 44960870525](https://github.com/KeyserDSoze/Tao/actions/runs/44960870525):
 132 of 133 Integration xUnit tests passed, and the new
 slow-handler actor test failed exactly at Assert.False
 because the fifth same-actor request reached the handler.
 Mobile succeeded.
 
 Implementation candidate
-[11a6595d](https://github.com/KeyserDSoze/Omnia/commit/11a6595df792da62dbcceb85f8ea350fe6b07929)
+[11a6595d](https://github.com/KeyserDSoze/Tao/commit/11a6595df792da62dbcceb85f8ea350fe6b07929)
 introduces the atomic third buffered counter, startup
 validation and no idle actor keys. Further synthetic tests
 cover 128 simultaneous acquisitions, 8/6/2 global/tenant/
@@ -100,4 +100,4 @@ Keep parent #37 and epic #2 OPEN.
 - .NET Dictionary thread safety:
   https://learn.microsoft.com/en-us/dotnet/api/system.collections.generic.dictionary-2?view=net-10.0
 - ADR 0063 prior tenant buffered ceiling:
-  https://github.com/KeyserDSoze/Omnia/blob/main/adr/0063-buffered-json-tenant-ceiling.md
+  https://github.com/KeyserDSoze/Tao/blob/main/adr/0063-buffered-json-tenant-ceiling.md

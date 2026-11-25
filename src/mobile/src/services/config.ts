@@ -42,9 +42,9 @@ export function configuredWebMode(): WebMode {
   // Expo replaces static process.env.EXPO_PUBLIC_* references at build time.
   // These are public client settings, never OAuth client secrets.
   return resolveWebMode({
-    issuer: process.env.EXPO_PUBLIC_OMNIA_OIDC_ISSUER,
-    clientId: process.env.EXPO_PUBLIC_OMNIA_OIDC_CLIENT_ID,
-    apiBaseUrl: process.env.EXPO_PUBLIC_OMNIA_API_URL
+    issuer: process.env.EXPO_PUBLIC_TAO_OIDC_ISSUER,
+    clientId: process.env.EXPO_PUBLIC_TAO_OIDC_CLIENT_ID,
+    apiBaseUrl: process.env.EXPO_PUBLIC_TAO_API_URL
   });
 }
 

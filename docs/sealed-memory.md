@@ -12,7 +12,7 @@ La normale timeline decifra summary+tags in memoria *soltanto* tramite PostgresA
 
 ## Sviluppo e segreti
 
-La API **richiede** `Crypto:KeyRingPath` come percorso file assoluto leggibile a boot. Usare il formato di [docs/envelope-encryption.md](envelope-encryption.md): `activeKeyId`, `keys` con KEK base64 casuale 32 byte; non aggiungerlo a Git, al browser o a immagini Docker. In Docker locale il mount atteso è `docker/secrets/envelope.keyring.json` → `/run/secrets/omnia-envelope.keyring.json`. Poiché il container usa `USER $APP_UID`, il file deve essere **leggibile solo dall'UID del container**: creare il file con proprietà/permessi stretti (0400/0440) sul host; se non leggibile API fallisce. Non rendere pubblica la KEK con chmod 644. Azioni CI generano key ring test ephemeral dentro RUNNER_TEMP con permessi 0600. L'adapter JSON da file è soltanto un meccanismo per sviluppo; in produzione servono Key Vault/OpenBao con identità di workload, backup delle chiavi, rotation e audit.
+La API **richiede** `Crypto:KeyRingPath` come percorso file assoluto leggibile a boot. Usare il formato di [docs/envelope-encryption.md](envelope-encryption.md): `activeKeyId`, `keys` con KEK base64 casuale 32 byte; non aggiungerlo a Git, al browser o a immagini Docker. In Docker locale il mount atteso è `docker/secrets/envelope.keyring.json` → `/run/secrets/tao-envelope.keyring.json`. Poiché il container usa `USER $APP_UID`, il file deve essere **leggibile solo dall'UID del container**: creare il file con proprietà/permessi stretti (0400/0440) sul host; se non leggibile API fallisce. Non rendere pubblica la KEK con chmod 644. Azioni CI generano key ring test ephemeral dentro RUNNER_TEMP con permessi 0600. L'adapter JSON da file è soltanto un meccanismo per sviluppo; in produzione servono Key Vault/OpenBao con identità di workload, backup delle chiavi, rotation e audit.
 
 ## Strategia di migrazione e gap
 
@@ -36,10 +36,10 @@ La API **richiede** `Crypto:KeyRingPath` come percorso file assoluto leggibile a
 
 ## #140 — Backfill offline per singolo attore (prima slice, non cutover globale)
 
-Un'utility separata da Omnia.Api è disponibile in src/backend/Omnia.Backfill.
+Un'utility separata da Tao.Api è disponibile in src/backend/Tao.Backfill.
 Non espone endpoint HTTP: accetta solo configurazione tramite environment e
 secret mounts protetti, mai dal client browser. Il ruolo PostgreSQL opzionale
-omnia_backfill è separato da API, migrazioni e retention, senza BYPASSRLS/
+tao_backfill è separato da API, migrazioni e retention, senza BYPASSRLS/
 ownership, con SELECT/UPDATE sulla sola tabella memory_entries. L'utility
 verifica FORCE RLS, seleziona un tenant e subject esplicitamente autorizzati,
 acquisisce PostgresActorLock prima di FOR UPDATE SKIP LOCKED, elabora batch
@@ -49,19 +49,19 @@ fino a 500 righe e fa commit solo dopo sealing AES-GCM e redazione atomica.
 
 Nel file gitignored docker/.env generare una password casuale distinta per
 BACKFILL_DB_PASSWORD, avviare db-bootstrap e poi impostare
-OMNIA_BACKFILL_ROLE=omnia_backfill prima di avviare la API/migrator che
+TAO_BACKFILL_ROLE=tao_backfill prima di avviare la API/migrator che
 concede i privilegi minimali. NON inserire il valore della password in Git.
 In staging e produzione provisionare il ruolo con DBA e secret vault;
 non usare il login API o owner per l'utility.
 
-Nel terminale amministrativo isolato esportare OMNIA_BACKFILL_DB come stringa
-Npgsql dell'identità omnia_backfill, OMNIA_BACKFILL_KEYRING_PATH come percorso
-assoluto alla keyring esistente (incluso vecchio key ID), OMNIA_BACKFILL_TENANT,
-OMNIA_BACKFILL_SUBJECT, e facoltativamente OMNIA_BACKFILL_BATCH_SIZE (1–500,
+Nel terminale amministrativo isolato esportare TAO_BACKFILL_DB come stringa
+Npgsql dell'identità tao_backfill, TAO_BACKFILL_KEYRING_PATH come percorso
+assoluto alla keyring esistente (incluso vecchio key ID), TAO_BACKFILL_TENANT,
+TAO_BACKFILL_SUBJECT, e facoltativamente TAO_BACKFILL_BATCH_SIZE (1–500,
 default 100). Poi eseguire:
 
 ```sh
-dotnet run --project src/backend/Omnia.Backfill/Omnia.Backfill.csproj -c Release
+dotnet run --project src/backend/Tao.Backfill/Tao.Backfill.csproj -c Release
 ```
 
 Output: solo numero di righe sigillate e rimanenti per l'attore.
@@ -89,19 +89,19 @@ primario, incluse quelle scadute non ancora eliminate dalla retention.
 La funzione non restituisce ID di utenti, tenant né contenuti. Non è un
 endpoint API e non espone la lista di soggetti da migrare.
 
-L'account `omnia_backfill_audit` deve essere provisionato separatamente
+L'account `tao_backfill_audit` deve essere provisionato separatamente
 dalle identità API, schema owner, retention e backfill. La grant `EXECUTE`
 è opt-in da `PostgresMigrator`; nessuna credenziale o chiave in Git.
 Per Docker locale impostare password casuale in
 `BACKFILL_AUDIT_DB_PASSWORD` dentro `docker/.env`, eseguire `db-bootstrap`,
-quindi impostare `OMNIA_BACKFILL_AUDIT_ROLE=omnia_backfill_audit` prima
+quindi impostare `TAO_BACKFILL_AUDIT_ROLE=tao_backfill_audit` prima
 del migrator. In Azure il provisioning e la prova con owner non-superuser
 devono essere verificati separatamente.
 
-Con sola credenziale audit in `OMNIA_BACKFILL_AUDIT_DB` eseguire offline:
+Con sola credenziale audit in `TAO_BACKFILL_AUDIT_DB` eseguire offline:
 
 ```sh
-dotnet run --project src/backend/Omnia.BackfillAudit/Omnia.BackfillAudit.csproj -c Release
+dotnet run --project src/backend/Tao.BackfillAudit/Tao.BackfillAudit.csproj -c Release
 ```
 
 Exit code 0 = zero legacy nella fotografia transazionale del conteggio;
@@ -115,10 +115,10 @@ il proprietario di schema, che rimane un'identità DDL privilegiata.
 Decisione: [ADR 0013](../adr/0013-global-legacy-count-audit.md).
 ## #140 — Inventario attori per backfill offline (ADR 0014)
 
-La CLI `src/backend/Omnia.Backfill` supporta ora **due modalità alternative**.
-La modalità per singolo attore conserva `OMNIA_BACKFILL_TENANT` e
-`OMNIA_BACKFILL_SUBJECT`. La nuova modalità multi-attore richiede invece
-`OMNIA_BACKFILL_INVENTORY_PATH`, percorso **assoluto** di un file JSON
+La CLI `src/backend/Tao.Backfill` supporta ora **due modalità alternative**.
+La modalità per singolo attore conserva `TAO_BACKFILL_TENANT` e
+`TAO_BACKFILL_SUBJECT`. La nuova modalità multi-attore richiede invece
+`TAO_BACKFILL_INVENTORY_PATH`, percorso **assoluto** di un file JSON
 locale approvato dall'operatore. Non impostare i selettori singoli quando
 si utilizza l'inventario. Il file deve essere privato (Unix `chmod 600`
 o `chmod 400`, no symlink) e NON va committato, allegato ad issue o
@@ -139,12 +139,12 @@ Questo flag è soltanto un'attestazione operativa **non verificata**; l'operator
 deve assicurare fuori banda la legittimità e completezza dell'inventario e
 l'autorizzazione alla manutenzione. L'utility rifiuta manifest non conformi,
 duplicati, proprietà impreviste, più di 1000 attori e file oltre 256 KiB.
-La connessione `OMNIA_BACKFILL_DB` resta quella del ruolo dedicato
-`omnia_backfill`, con key ring in `OMNIA_BACKFILL_KEYRING_PATH`.
+La connessione `TAO_BACKFILL_DB` resta quella del ruolo dedicato
+`tao_backfill`, con key ring in `TAO_BACKFILL_KEYRING_PATH`.
 Non usare le credenziali API, audit o schema-owner: il nuovo
 `PostgresBackfillRoleGuard` rifiuta quei privilegi.
 
-In ambiente isolato impostare la variabile `OMNIA_BACKFILL_INVENTORY_PATH`
+In ambiente isolato impostare la variabile `TAO_BACKFILL_INVENTORY_PATH`
 e lanciare la stessa CLI offline documentata sopra. Il processo esegue per
 ogni attore al massimo 100 batch (1–500 righe per batch), nel rispetto di
 RLS e dei lock condivisi con ingest/erasure. Stampa solo le somme aggregate.
@@ -154,7 +154,7 @@ un errore, con rollback del batch corrente. Ripetere in sicurezza dopo
 un arresto, mantenendo tutte le versioni KEK necessarie.
 
 **Non** interpretare exit 0 come completamento globale del backfill:
-occorre controllare separatamente `Omnia.BackfillAudit` con ruolo count-only,
+occorre controllare separatamente `Tao.BackfillAudit` con ruolo count-only,
 completare restore drill, verificare backup, WAL, metadata e embeddings.
 La utility non elenca automaticamente soggetti e non attiva il cutover.
 

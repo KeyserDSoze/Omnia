@@ -1,17 +1,17 @@
-name: omnia
+name: tao
 services:
   db:
     image: pgvector/pgvector:pg17
     environment:
-      POSTGRES_DB: omnia
-      POSTGRES_USER: omnia
+      POSTGRES_DB: tao
+      POSTGRES_USER: tao
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env file}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U omnia -d omnia"]
+      test: ["CMD-SHELL", "pg_isready -U tao -d tao"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -20,16 +20,16 @@ services:
     environment:
       PGHOST: db
       PGPORT: "5432"
-      PGDATABASE: omnia
-      PGUSER: omnia
+      PGDATABASE: tao
+      PGUSER: tao
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
       RETENTION_DB_PASSWORD: ${RETENTION_DB_PASSWORD:?Set RETENTION_DB_PASSWORD in .env}
       BACKFILL_DB_PASSWORD: ${BACKFILL_DB_PASSWORD:-}
       BACKFILL_AUDIT_DB_PASSWORD: ${BACKFILL_AUDIT_DB_PASSWORD:-}
     volumes:
-      - ./db/bootstrap.sh:/opt/omnia/bootstrap.sh:ro
-    entrypoint: ["bash", "/opt/omnia/bootstrap.sh"]
+      - ./db/bootstrap.sh:/opt/tao/bootstrap.sh:ro
+    entrypoint: ["bash", "/opt/tao/bootstrap.sh"]
     depends_on:
       db: { condition: service_healthy }
     restart: "no"
@@ -56,22 +56,22 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
-      Database__ConnectionString: Host=db;Port=5432;Database=omnia;Username=omnia_app;Password=${APP_DB_PASSWORD}
-      Database__MigrationConnectionString: Host=db;Port=5432;Database=omnia;Username=omnia;Password=${POSTGRES_PASSWORD}
-      Database__RetentionConnectionString: Host=db;Port=5432;Database=omnia;Username=omnia_retention;Password=${RETENTION_DB_PASSWORD}
-      Database__BackfillRole: ${OMNIA_BACKFILL_ROLE:-}
-      Database__BackfillAuditRole: ${OMNIA_BACKFILL_AUDIT_ROLE:-}
-      Crypto__KeyRingPath: /run/secrets/omnia-envelope.keyring.json
-      Auth__Issuer: http://localhost:8081/realms/omnia
-      Auth__MetadataAddress: http://keycloak:8080/realms/omnia/.well-known/openid-configuration
-      Auth__Audience: omnia-api
+      Database__ConnectionString: Host=db;Port=5432;Database=tao;Username=tao_app;Password=${APP_DB_PASSWORD}
+      Database__MigrationConnectionString: Host=db;Port=5432;Database=tao;Username=tao;Password=${POSTGRES_PASSWORD}
+      Database__RetentionConnectionString: Host=db;Port=5432;Database=tao;Username=tao_retention;Password=${RETENTION_DB_PASSWORD}
+      Database__BackfillRole: ${TAO_BACKFILL_ROLE:-}
+      Database__BackfillAuditRole: ${TAO_BACKFILL_AUDIT_ROLE:-}
+      Crypto__KeyRingPath: /run/secrets/tao-envelope.keyring.json
+      Auth__Issuer: http://localhost:8081/realms/tao
+      Auth__MetadataAddress: http://keycloak:8080/realms/tao/.well-known/openid-configuration
+      Auth__Audience: tao-api
       Embeddings__Provider: ${EMBEDDINGS_PROVIDER:-none}
       Embeddings__Endpoint: http://ollama:11434/
       Embeddings__Model: nomic-embed-text
       Cors__Origins__0: http://localhost:19006
       Cors__Origins__1: http://127.0.0.1:19006
     volumes:
-      - ./secrets/envelope.keyring.json:/run/secrets/omnia-envelope.keyring.json:ro
+      - ./secrets/envelope.keyring.json:/run/secrets/tao-envelope.keyring.json:ro
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:

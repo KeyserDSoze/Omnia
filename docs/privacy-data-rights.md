@@ -2,15 +2,15 @@
 
 ## Stato e perimetro
 
-**Implementato:** download dei dati conservati oggi dal **database PostgreSQL primario** di Omnia e cancellazione delle righe personali in `memory_entries` e `consent_grants`. **Non implementato:** servizio completo per diritti GDPR e deletion propagation su archivi esterni/backups.
+**Implementato:** download dei dati conservati oggi dal **database PostgreSQL primario** di Tao e cancellazione delle righe personali in `memory_entries` e `consent_grants`. **Non implementato:** servizio completo per diritti GDPR e deletion propagation su archivi esterni/backups.
 
 Le API non permettono a un chiamante di scegliere il tenant o l'owner: sono sempre derivati dai claim `tenant_id` e `sub` di un access token validato via OIDC/JWKS, e RLS è imposta anche a livello PostgreSQL.
 
 ## GET /api/v1/privacy/export
 
 - JWT valido obbligatorio; rate limit per tenant+subject.
-- Stream attachment `application/json`, `Cache-Control: no-store`, `Content-Disposition: attachment; filename=omnia-personal-data.json`.
-- `schemaVersion=1`, `scope=omnia-postgresql-primary`, `exportedAt`, `tenantId`, `subject`, `memoryEntries[]` e `consentGrants[]`.
+- Stream attachment `application/json`, `Cache-Control: no-store`, `Content-Disposition: attachment; filename=tao-personal-data.json`.
+- `schemaVersion=1`, `scope=tao-postgresql-primary`, `exportedAt`, `tenantId`, `subject`, `memoryEntries[]` e `consentGrants[]`.
 - Ogni memoria riporta id, source/externalId, contentType, rawContent, normalized JSON, summary, tags, occurredAt, receivedAt, embedding array (o null), embeddingModel (o null). Ogni consenso include id, source, purpose, policyVersion, grantedAt, expiresAt, revokedAt.
 - Tutte le righe dell'attore corrente, senza limiti di pagina. `PostgresActorLock` mantiene il snapshot operativo rispetto alle scritture dell'API; `Utf8JsonWriter` limita il buffering server-side, ma il client Web costruisce un Blob intero prima del download (ottimizzazione successiva per archivi grandi).
 - Il file contiene dati privati in chiaro: custodirlo, non condividerlo né caricarlo su tracker/issue/CI.
@@ -23,7 +23,7 @@ Le API non permettono a un chiamante di scegliere il tenant o l'owner: sono semp
 
 - Un'altra stringa oppure valore assente viene respinto (400); senza bearer valido (401), con token privo di subject/tenant univoco (403). La UI prevede una spunta esplicita e la parola `ELIMINA` prima di inviare la richiesta.
 - Sotto unica transazione RLS, con advisory lock del tenant+subject condiviso con grant/revoca/ingest/export, il server elimina **prima tutti i consensi e poi tutte le memorie** del soggetto, inclusi embeddings e campi derivati inline.
-- Risposta 200 con `deletedMemories`, `deletedConsents`, `completedAt`, `scope=omnia-postgresql-primary` e `backupAndExternalPropagation=not_included`. Seconda chiamata produce conteggi zero; non si cancella l'account OIDC e si può, con un nuovo grant esplicito, ricominciare a salvare.
+- Risposta 200 con `deletedMemories`, `deletedConsents`, `completedAt`, `scope=tao-postgresql-primary` e `backupAndExternalPropagation=not_included`. Seconda chiamata produce conteggi zero; non si cancella l'account OIDC e si può, con un nuovo grant esplicito, ricominciare a salvare.
 - Nessuna ricevuta duratura GDPR o audit immutabile è ancora disponibile; non interpretare la risposta come prova di erasure da sistemi non inclusi.
 
 ## Concorrenza e sicurezza
@@ -41,7 +41,7 @@ Riferimenti ufficiali: Regolamento UE 2016/679 artt. 15, 17, 19, 20, https://eur
 
 ## Test
 
-- `tests/Omnia.Integration.Tests/PersonalDataTests.cs`: pgvector PostgreSQL reale con runtime non owner, export con embedding e grant history, isolamento same-tenant/cross-tenant, erasure idempotente, nessuna riacquisizione senza nuovo grant.
+- `tests/Tao.Integration.Tests/PersonalDataTests.cs`: pgvector PostgreSQL reale con runtime non owner, export con embedding e grant history, isolamento same-tenant/cross-tenant, erasure idempotente, nessuna riacquisizione senza nuovo grant.
 - `src/mobile/e2e/auth-sync.spec.ts`: provider Keycloak reale, JWT autentico, UI conferma e download, verifica di cancellazione e persistenza delle note dell'altro utente.
 - `tests/mobile-unit/web-cloud.test.ts`: no cookies/redirects nella fetch, error handling e body di conferma.
 

@@ -40,8 +40,8 @@ The runtime coordinator lock is short and held only for in-RAM rate-window
 dictionary reads and writes, never around async HTTP/SQL/AI work.
 
 ## Evidence and TDD
-[RED commit 717e3de](https://github.com/KeyserDSoze/Omnia/commit/717e3de4145b667699a778f6d29a00cc001017ce)
-on [Omnia CI 45004920213](https://github.com/KeyserDSoze/Omnia/actions/runs/45004920213):
+[RED commit 717e3de](https://github.com/KeyserDSoze/Tao/commit/717e3de4145b667699a778f6d29a00cc001017ce)
+on [Tao CI 45004920213](https://github.com/KeyserDSoze/Tao/actions/runs/45004920213):
 153/154 real PostgreSQL xUnit integration tests passed; only
 Tenant429MustNotAllocateActorPartitionBeforeAnotherTenantArrives failed
 (expected 200, actual 429 for independent tenant). Domain 19/19,

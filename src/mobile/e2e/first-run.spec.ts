@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 
-test('la pagina web Omnia mostra cattura, privacy e roadmap', async ({ page }) => {
-  await page.goto('/Omnia');
+test('la pagina web Tao mostra cattura, privacy e roadmap', async ({ page }) => {
+  await page.goto('/Tao');
   await expect(page.getByText('La tua giornata.', { exact: false })).toBeVisible();
   await expect(page.getByTestId('memo-input')).toBeVisible();
   await expect(page.getByText('NESSUNA AUTOMAZIONE ATTIVA', { exact: false })).toBeVisible();
 });
 
 test('tema e nota rapida funzionano senza simulare sincronizzazione', async ({ page }) => {
-  await page.goto('/Omnia');
+  await page.goto('/Tao');
   const toggle = page.getByTestId('theme-toggle');
   await toggle.click();
   await page.getByTestId('memo-input').fill('Riunione con il cliente');

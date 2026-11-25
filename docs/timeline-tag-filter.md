@@ -26,7 +26,7 @@ giornaliero (#183). Le due selezioni sono un'intersezione
   filtro tag, filtro sorgente, note e gruppi; nessun filtro
   è salvato in URL, browser storage o app native.
 
-Evidenza RED/GREEN e test real Keycloak: [#184](https://github.com/KeyserDSoze/Omnia/issues/184).
+Evidenza RED/GREEN e test real Keycloak: [#184](https://github.com/KeyserDSoze/Tao/issues/184).
 Decisione: [ADR 0082](../adr/0082-loaded-web-timeline-tag-source-intersection.md).
 **Non implementati:** tag modificabili dall'utente, filtri
 persona/thread, query globali, sync nativo/offline e

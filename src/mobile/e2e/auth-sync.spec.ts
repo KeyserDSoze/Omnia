@@ -3,11 +3,11 @@ import { readFile } from 'node:fs/promises';
 
 // This suite must only run against the real OIDC provider, ASP.NET Core API and
 // disposable pgvector PostgreSQL, never mocked network routes or test-only JWTs.
-test.skip(process.env.OMNIA_REAL_OIDC_E2E !== '1', 'Run via the real OIDC CI job.');
-const user1 = process.env.OMNIA_E2E_USER1 ?? '';
-const user2 = process.env.OMNIA_E2E_USER2 ?? '';
-const user3 = process.env.OMNIA_E2E_USER3 ?? '';
-const password = process.env.OMNIA_E2E_PASSWORD ?? '';
+test.skip(process.env.TAO_REAL_OIDC_E2E !== '1', 'Run via the real OIDC CI job.');
+const user1 = process.env.TAO_E2E_USER1 ?? '';
+const user2 = process.env.TAO_E2E_USER2 ?? '';
+const user3 = process.env.TAO_E2E_USER3 ?? '';
+const password = process.env.TAO_E2E_PASSWORD ?? '';
 
 async function browserLogin(page: import('@playwright/test').Page, username: string) {
   await expect(page.getByTestId('auth-login')).toBeVisible({ timeout: 30_000 });
@@ -18,7 +18,7 @@ async function browserLogin(page: import('@playwright/test').Page, username: str
   expect(request.searchParams.get('response_type')).toBe('code');
   expect(request.searchParams.get('code_challenge_method')).toBe('S256');
   expect(request.searchParams.get('code_challenge')?.length).toBeGreaterThan(30);
-  expect(request.searchParams.get('client_id')).toBe('omnia-web');
+  expect(request.searchParams.get('client_id')).toBe('tao-web');
   // After the first sign-in Keycloak may reuse the IdP SSO cookie and skip the form.
   const usernameInput = page.locator('input[name="username"]');
   let loginFormVisible = false;
@@ -61,7 +61,7 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
   expect((await request.post('http://127.0.0.1:8080/api/v1/privacy/erase',
     { data: { confirmation: 'ERASE_MY_DATA' } })).status()).toBe(401);
 
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user1);
 
   // Consent default-deny: no implicit grants at login.
@@ -102,7 +102,7 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
       if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
         otherBearer = req.headers()['authorization'] ?? '';
     });
-    await other.goto('http://127.0.0.1:19006/Omnia/');
+    await other.goto('http://127.0.0.1:19006/Tao/');
     await browserLogin(other, user2);
     await expect.poll(() => otherBearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
     await expect(other.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
@@ -163,9 +163,9 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
     page.waitForEvent('download', { timeout: 20_000 }),
     page.getByTestId('export-data').click()
   ]);
-  expect(firstDownload.suggestedFilename()).toBe('omnia-personal-data.json');
+  expect(firstDownload.suggestedFilename()).toBe('tao-personal-data.json');
   const firstExport = JSON.parse(await readFile(await firstDownload.path(), 'utf8'));
-  expect(firstExport.scope).toBe('omnia-postgresql-primary');
+  expect(firstExport.scope).toBe('tao-postgresql-primary');
   expect(firstExport.memoryEntries.some((row: { rawContent: string }) =>
     row.rawContent === memoText)).toBe(true);
   expect(firstExport.memoryEntries.some((row: { rawContent: string }) =>
@@ -203,7 +203,7 @@ test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', a
   const after = await browser.newContext();
   try {
     const other = await after.newPage();
-    await other.goto('http://127.0.0.1:19006/Omnia/');
+    await other.goto('http://127.0.0.1:19006/Tao/');
     await browserLogin(other, user2);
     await expect(other.getByTestId('memory-timeline').getByText(otherMemo)).toBeVisible();
   } finally {
@@ -218,7 +218,7 @@ test('logout does not re-display a real PostgreSQL note from an in-flight refres
   test.setTimeout(120_000);
   if (!user1 || !password) throw new Error('Missing ephemeral OIDC test account');
 
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user1);
   await page.getByTestId('consent-accept').click();
   await page.getByTestId('grant-consent').click();
@@ -269,7 +269,7 @@ test('real API 401 clears the signed-in browser timeline and consent', async ({ 
   test.setTimeout(120_000);
   if (!user1 || !password) throw new Error('Missing ephemeral OIDC test account');
 
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user1);
   // Earlier real-browser scenarios may have left this synthetic user's
   // consent active in the same disposable PostgreSQL test instance.
@@ -314,7 +314,7 @@ test('real API 401 clears the signed-in browser timeline and consent', async ({ 
 test('logout while real PostgreSQL capture POST is awaiting its response', async ({ page }) => {
   test.setTimeout(120_000);
   if (!user1 || !password) throw new Error('Missing ephemeral OIDC test account');
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user1);
   // The real synthetic account can retain consent across preceding E2E cases.
   if (await page.getByTestId('consent-accept').count() > 0) {
@@ -339,7 +339,7 @@ test('logout while real PostgreSQL capture POST is awaiting its response', async
     // Real signed OIDC bearer, real endpoint and PostgreSQL commit. Only
     // delivery of the genuine accepted response is deferred, never faked.
     const server = await route.fetch();
-    // Omnia's capture contract returns 200 OK with canonical row identity.
+    // Tao's capture contract returns 200 OK with canonical row identity.
     expect(server.status()).toBe(200);
     received();
     await hold;
@@ -378,7 +378,7 @@ test('logout while real PostgreSQL capture POST is awaiting its response', async
 test('logout while genuine private export is in flight prevents later download', async ({ page }) => {
   test.setTimeout(120_000);
   if (!user1 || !password) throw new Error('Missing ephemeral OIDC test account');
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user1);
 
   let release!: () => void;
@@ -417,7 +417,7 @@ test('real OIDC private API responses are never HTTP cacheable', async ({ page }
   test.setTimeout(120_000);
   if (!user1 || !password) throw new Error('Missing ephemeral Keycloak E2E account');
 
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user1);
   const privateRead = page.waitForResponse(response =>
     response.url().includes('/api/v1/memories/page?') && response.status() === 200);
@@ -440,7 +440,7 @@ test('real OIDC private API responses are never HTTP cacheable', async ({ page }
 test('real owner can load older encrypted PostgreSQL notes beyond the first timeline page', async ({ page }) => {
   test.setTimeout(150_000);
   if (!user1 || !password) throw new Error('Missing ephemeral OIDC test account');
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user1);
   if (await page.getByTestId('consent-accept').count() > 0) {
     await page.getByTestId('consent-accept').click();
@@ -494,7 +494,7 @@ test('real owner can load older encrypted PostgreSQL notes beyond the first time
 test('real signed capture idempotency rejects a different body with the same external key', async ({ page }) => {
   test.setTimeout(120_000);
   if (!user1 || !password) throw new Error('Missing synthetic Keycloak browser credentials');
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user1);
   if (await page.getByTestId('consent-accept').count() > 0) {
     await page.getByTestId('consent-accept').click();
@@ -547,7 +547,7 @@ test('real signed capture idempotency rejects a different body with the same ext
 test('real Keycloak stale-device withdrawal revokes the newer same-scope consent', async ({ page }) => {
   test.setTimeout(120_000);
   if (!user1 || !password) throw new Error('Missing ephemeral real OIDC account');
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user1);
 
   // Independent of preceding E2E cases: start from an explicitly revoked
@@ -621,7 +621,7 @@ test('real Keycloak stale-device withdrawal revokes the newer same-scope consent
 test('real Keycloak captures at the same clock instant must not collide (#177)', async ({ page }) => {
   test.setTimeout(120_000);
   if (!user1 || !password) throw new Error('Missing ephemeral real OIDC account');
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user1);
   if (await page.getByTestId('consent-accept').count() > 0) {
     await page.getByTestId('consent-accept').click();
@@ -682,7 +682,7 @@ test('real Keycloak JWT can read bounded consent history and rejects invalid cur
         request.url().endsWith('/api/v1/consents'))
       bearer = request.headers()['authorization'] ?? '';
   });
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user2);
   // The UI becomes signed-in before refreshCloud's GET necessarily fires.
   await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
@@ -731,7 +731,7 @@ test('real signed Web user can page all first-party grants and revoke an older s
     if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
       bearer = req.headers()['authorization'] ?? '';
   });
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user2);
   await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
   await expect(page.getByTestId('consent-ledger-open')).toBeVisible();
@@ -811,7 +811,7 @@ test('real Keycloak signed Web filters loaded notes without misrepresenting olde
     if (request.method() === 'GET' && request.url().endsWith('/api/v1/consents'))
       bearer = request.headers()['authorization'] ?? '';
   });
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user2);
   await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
 
@@ -890,7 +890,7 @@ test('real Keycloak timeline groups local calendar days across pagination and so
     if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
       bearer = req.headers()['authorization'] ?? '';
   });
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user2);
   await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
 
@@ -954,7 +954,7 @@ test('real Keycloak combines tag + source over loaded pages and local day groups
     if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
       bearer = req.headers()['authorization'] ?? '';
   });
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user2);
   await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
   const stamp = Date.now();
@@ -1033,7 +1033,7 @@ test('real Keycloak picks loaded calendar days with source/tag AND and explicit 
     if (req.method() === 'GET' && req.url().endsWith('/api/v1/consents'))
       bearer = req.headers()['authorization'] ?? '';
   });
-  await page.goto('/Omnia/');
+  await page.goto('/Tao/');
   await browserLogin(page, user3);
   await expect.poll(() => bearer, { timeout: 15_000 }).toMatch(/^Bearer .{20,}$/);
 

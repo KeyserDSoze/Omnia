@@ -53,8 +53,8 @@ still release *before* downstream handler execution.
 
 ## TDD and test scope
 
-Test-only RED [c6b0abed](https://github.com/KeyserDSoze/Omnia/commit/c6b0abedc74044dacd3856f3982e4731eea71455)
-on [CI 44957612052](https://github.com/KeyserDSoze/Omnia/actions/runs/44957612052)
+Test-only RED [c6b0abed](https://github.com/KeyserDSoze/Tao/commit/c6b0abedc74044dacd3856f3982e4731eea71455)
+on [CI 44957612052](https://github.com/KeyserDSoze/Tao/actions/runs/44957612052)
 exercises sixteen already-buffered synthetic JSON bodies,
 each from distinct actor tenant A held in the handler. A
 seventeenth tenant A request unexpectedly attempted ReadAsync
@@ -89,4 +89,4 @@ erasure or recovery gate. Keep #37/#2 OPEN.
 - .NET 10 Dictionary read/write synchronization:
   https://learn.microsoft.com/en-us/dotnet/api/system.collections.generic.dictionary-2?view=net-10.0
 - Earlier retained-buffer lifetime ADR 0062:
-  https://github.com/KeyserDSoze/Omnia/blob/main/adr/0062-bounded-json-buffer-lifetime.md
+  https://github.com/KeyserDSoze/Tao/blob/main/adr/0062-bounded-json-buffer-lifetime.md

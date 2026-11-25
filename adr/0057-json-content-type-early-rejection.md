@@ -39,9 +39,9 @@ nor is it a distributed quota. OIDC+RLS and consent remain independent.
 ## TDD acceptance
 
 - Test-first RED commit:
-  https://github.com/KeyserDSoze/Omnia/commit/ad5f9d0f8944b225cf1589995f17c0d7434222ff
+  https://github.com/KeyserDSoze/Tao/commit/ad5f9d0f8944b225cf1589995f17c0d7434222ff
 - Implementation:
-  https://github.com/KeyserDSoze/Omnia/commit/ee7c598d75acec8c1591d6b0ac18f89499777f58
+  https://github.com/KeyserDSoze/Tao/commit/ee7c598d75acec8c1591d6b0ac18f89499777f58
 - `ApiJsonContentTypeTests`: fail-on-read stream rejects missing,
   `text/plain`, XML, ISO-8859-1, UTF-16, duplicate charset and
   malformed Content-Type before handler; accepted JSON and vendor +json

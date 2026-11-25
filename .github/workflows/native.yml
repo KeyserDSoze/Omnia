@@ -1,11 +1,11 @@
-name: Omnia native build (manual, credentials required)
+name: Tao native build (manual, credentials required)
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   native:
-    if: ${{ vars.OMNIA_NATIVE_BUILDS_ENABLED == 'true' }}
+    if: ${{ vars.TAO_NATIVE_BUILDS_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

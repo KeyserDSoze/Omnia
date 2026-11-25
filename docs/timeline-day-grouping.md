@@ -30,7 +30,7 @@ non la data di acquisizione o di scadenza retention; nessuna
 intelligenza o classificazione temporale è stata dedotta.
 Il backend non salva ancora la timezone originale di ogni
 sorgente. Gli scenari TDD Vitest e browser Keycloak reali
-sono nella [issue #183](https://github.com/KeyserDSoze/Omnia/issues/183).
+sono nella [issue #183](https://github.com/KeyserDSoze/Tao/issues/183).
 La #79 resta aperta per thread, tag, persone e parità native.
 
 

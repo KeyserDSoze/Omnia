@@ -1,4 +1,4 @@
-# Omnia — conservazione dati e pulizia automatica (prima slice #136)
+# Tao — conservazione dati e pulizia automatica (prima slice #136)
 
 ## Stato e criterio legale
 
@@ -12,7 +12,7 @@
 
 ## Worker: permessi e periodicità
 
-`Database:RetentionConnectionString` è obbligatorio e utilizza `omnia_retention`, ruolo **distinto da `omnia_app` e dall'amministratore di migrazione**, senza accesso diretto a note/consensi, senza privilegi SUPERUSER, BYPASSRLS o ownership. Il solo grant DB è EXECUTE su `public.omnia_purge_expired_memories(integer)`, funzione `SECURITY DEFINER` con corpo SQL fisso, `search_path` trusted, limiti 1..500 e locking `FOR UPDATE SKIP LOCKED`. Un controllo automatico allo startup rifiuta ruoli non conformi. La funzione non è invocabile tramite connessione API.
+`Database:RetentionConnectionString` è obbligatorio e utilizza `tao_retention`, ruolo **distinto da `tao_app` e dall'amministratore di migrazione**, senza accesso diretto a note/consensi, senza privilegi SUPERUSER, BYPASSRLS o ownership. Il solo grant DB è EXECUTE su `public.tao_purge_expired_memories(integer)`, funzione `SECURITY DEFINER` con corpo SQL fisso, `search_path` trusted, limiti 1..500 e locking `FOR UPDATE SKIP LOCKED`. Un controllo automatico allo startup rifiuta ruoli non conformi. La funzione non è invocabile tramite connessione API.
 
 `RetentionSweepService` viene avviato nel processo API, esegue un sweep immediato poi ogni 15 minuti. Il ciclo cancella fino a 5.000 righe per esecuzione (batch 500), limitando l'impatto sui tenant; due istanze possono lavorare in parallelo. Nel log compaiono **solo numeri aggregati**, non note, identità o query. Dopo errori il ciclo successivo ritenta. Il worker non ha una garanzia di esecuzione se l'API è spenta e non è ancora un job autonomo durevole.
 
@@ -30,7 +30,7 @@ NON sono ancora implementati: policy per fonte, finalità, categoria, età, tena
 
 ## Test di accettazione
 
-`tests/Omnia.Integration.Tests/RetentionTests.cs` con PostgreSQL reale, ruolo owner/test-fixture, app RLS e retention-only; `.github/workflows/ci.yml` esegue xUnit. `.github/workflows/oidc-e2e.yml` continua a verificare il browser Keycloak→API con worker avviato. Documentare URL e commit verdi nella sotto-issue #136; il parent #32 rimane aperto.
+`tests/Tao.Integration.Tests/RetentionTests.cs` con PostgreSQL reale, ruolo owner/test-fixture, app RLS e retention-only; `.github/workflows/ci.yml` esegue xUnit. `.github/workflows/oidc-e2e.yml` continua a verificare il browser Keycloak→API con worker avviato. Documentare URL e commit verdi nella sotto-issue #136; il parent #32 rimane aperto.
 
 
 ## Retention note sealed (#139)

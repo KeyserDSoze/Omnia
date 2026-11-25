@@ -52,10 +52,10 @@ at the global slots. No persistent tracking of identities is added.
 ## TDD and evidence
 
 A behavior-first integration test on RED commit
-[2765bcae](https://github.com/KeyserDSoze/Omnia/commit/2765bcae0fbfc8b62cd1064b8da15ca6cb70d6ce)
+[2765bcae](https://github.com/KeyserDSoze/Tao/commit/2765bcae0fbfc8b62cd1064b8da15ca6cb70d6ce)
 held 16 slow JSON streams for four actors from one tenant against
 global32/actor4. The next actor of the same tenant incorrectly
-reached a handler. [RED CI 44954479076](https://github.com/KeyserDSoze/Omnia/actions/runs/44954479076)
+reached a handler. [RED CI 44954479076](https://github.com/KeyserDSoze/Tao/actions/runs/44954479076)
 failed exactly 1/121 xUnit Integration tests (120 passed),
 while mobile passed. Additional regression tests cover 128 parallel
 admissions, explicit/global/tenant/actor configuration, eviction
@@ -83,4 +83,4 @@ DR gate is completed by this code. Keep parent #37 and epic #2 OPEN.
 - Microsoft .NET — Dictionary thread safety:
   https://learn.microsoft.com/en-us/dotnet/api/system.collections.generic.dictionary-2?view=net-10.0
 - Prior ADR 0060:
-  https://github.com/KeyserDSoze/Omnia/blob/main/adr/0060-actor-scoped-json-receive-concurrency.md
+  https://github.com/KeyserDSoze/Tao/blob/main/adr/0060-actor-scoped-json-receive-concurrency.md

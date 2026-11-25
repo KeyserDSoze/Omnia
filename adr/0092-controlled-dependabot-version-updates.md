@@ -6,7 +6,7 @@
 
 ## Context
 
-Omnia already has deterministic npm/NuGet locks, lock-derived SBOMs, live fail-closed SCA and pinned .NET API OCI manifest indexes (ADRs 0085–0091). There was no unattended discovery workflow to *propose* upstream dependency changes. Unreviewed upgrades are risky: Expo SDK/Router and React Native ABI must be coordinated (#195), while changing pinned Docker tags without digest/architecture validation breaks the supply-chain contract.
+Tao already has deterministic npm/NuGet locks, lock-derived SBOMs, live fail-closed SCA and pinned .NET API OCI manifest indexes (ADRs 0085–0091). There was no unattended discovery workflow to *propose* upstream dependency changes. Unreviewed upgrades are risky: Expo SDK/Router and React Native ABI must be coordinated (#195), while changing pinned Docker tags without digest/architecture validation breaks the supply-chain contract.
 
 ## Decision
 

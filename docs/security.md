@@ -1,4 +1,4 @@
-# Omnia — threat model / privacy gates (draft)
+# Tao — threat model / privacy gates (draft)
 
 ## Dependency vulnerability advisory gate — still not production-ready (2026-11-23)
 
@@ -13,9 +13,9 @@ Initial audit: 2 CRITICAL (Vitest/tinypool), 3 HIGH (Expo
 Router57/query-string7/decode-uri-component0.2.2), 4 MODERATE.
 After the reviewed Vitest5 and official Expo58/Router58/RN0.88 upgrade,
 the [isolated
-trial](https://github.com/KeyserDSoze/Omnia/actions/runs/45217840306)
+trial](https://github.com/KeyserDSoze/Tao/actions/runs/45217840306)
 reported npm all/prod **0 HIGH, 0 CRITICAL, 3 MODERATE**;
-the [live security gate on updated main](https://github.com/KeyserDSoze/Omnia/actions/runs/45220400873)
+the [live security gate on updated main](https://github.com/KeyserDSoze/Tao/actions/runs/45220400873)
 returned **SUCCESS** after checking all 20 NuGet projects.
 The result is point-in-time, not a guarantee of no future CVEs.
 [ADR 0090](../adr/0090-fail-closed-npm-nuget-advisory-gate.md)
@@ -72,8 +72,8 @@ Limiti: non ancora certificata la user experience del rinnovo token/SSO e logout
 
 ## PostgreSQL Row-Level Security (feature #30, 2026-11-17)
 
-- `0003_rls_scope.sql` abilita `ENABLE ROW LEVEL SECURITY` **e** `FORCE ROW LEVEL SECURITY` su `memory_entries` e `consent_grants` con policy su ogni operazione `USING`/`WITH CHECK`. Senza `omnia.tenant_id` e `omnia.owner_sub` (o con stringhe vuote) non è visibile nessuna riga e INSERT fuori scope è rifiutato.
-- Ruolo runtime `omnia_app`: non è table owner, superuser, BYPASSRLS o membro del ruolo owner; possiede unicamente i grant DML richiesti. Ruolo distinto di migrazione owner/admin. `PostgresRuntimeGuard` blocca l'avvio se l'account runtime può bypassare la policy o se non è forzata.
+- `0003_rls_scope.sql` abilita `ENABLE ROW LEVEL SECURITY` **e** `FORCE ROW LEVEL SECURITY` su `memory_entries` e `consent_grants` con policy su ogni operazione `USING`/`WITH CHECK`. Senza `tao.tenant_id` e `tao.owner_sub` (o con stringhe vuote) non è visibile nessuna riga e INSERT fuori scope è rifiutato.
+- Ruolo runtime `tao_app`: non è table owner, superuser, BYPASSRLS o membro del ruolo owner; possiede unicamente i grant DML richiesti. Ruolo distinto di migrazione owner/admin. `PostgresRuntimeGuard` blocca l'avvio se l'account runtime può bypassare la policy o se non è forzata.
 - Nessuna query personal-data senza `PostgresActorScope.OpenAsync`: il contesto tenant+subject deriva esclusivamente dal JWT verificato dall'API, viene impostato con `set_config(..., true)` **all'interno** della transazione e sparisce a COMMIT/ROLLBACK. I repository continuano ad applicare WHERE espliciti: difesa a strati.
 - Tests: `RlsIsolationTests` usa PostgreSQL reale, connessione senza WHERE, ruolo diverso per query amministrative, due owner nello stesso tenant, un altro tenant, tentativi INSERT/UPDATE cross-owner, `row_security=off` e riutilizzo del pool con MaxPoolSize=1.
 - **Limitazioni:** la policy basata su GUC custom non è una barriera a SQL arbitrario controllato da un attaccante (tali parametri possono essere modificati dalla stessa sessione SQL); rimangono necessari comandi parametrizzati e controllo delle query/injection. Superuser e BYPASSRLS *bypassano anche FORCE RLS*, quindi l'API non può usarli. Il ruolo schema-owner è riservato alla procedura di migrazione; in produzione isolarlo operativamente fuori dal processo API, gestire le credenziali con Key Vault ed evitare logging di connection string. Una migrazione malevola/compromessa rimane privilegiata.
@@ -88,7 +88,7 @@ Legal analysis: GDPR art. 15 (accesso/copia), 17 (cancellazione ed eccezioni), 2
 
 ## Retention e ruolo minimo di pulizia (#136, 2026-11-18)
 
-La migrazione `0004_memory_retention.sql` registra `expires_at` per ciascuna nota (30 giorni da `received_at`, tempo del DB), includendo le righe storiche in modo da non estenderne la conservazione al momento della migrazione. `RecentAsync` nega la lettura via API delle righe scadute prima del purge. La cancellazione fisica è affidata a una stored function `public.omnia_purge_expired_memories(integer)` con testo SQL statico, `SECURITY DEFINER`, ricerca funzioni solo su schema trusted, limite 1..500 e `FOR UPDATE SKIP LOCKED`. È revocato `EXECUTE` da PUBLIC, `omnia_app` non lo possiede; il solo ruolo `omnia_retention` ha `EXECUTE` e **nessun SELECT/DELETE sui dati**. Il worker ha credenziale autonoma distinta da API e migratore, verificata a startup con fail-closed. L'API background service elimina fino a 5.000 note/ciclo, prima all'avvio e poi ogni 15 minuti; logga soltanto conteggi e tipi di errori, mai testo o identificativi di utente. Test SQL reali verificano permessi, scadenza, batch e altri tenant.
+La migrazione `0004_memory_retention.sql` registra `expires_at` per ciascuna nota (30 giorni da `received_at`, tempo del DB), includendo le righe storiche in modo da non estenderne la conservazione al momento della migrazione. `RecentAsync` nega la lettura via API delle righe scadute prima del purge. La cancellazione fisica è affidata a una stored function `public.tao_purge_expired_memories(integer)` con testo SQL statico, `SECURITY DEFINER`, ricerca funzioni solo su schema trusted, limite 1..500 e `FOR UPDATE SKIP LOCKED`. È revocato `EXECUTE` da PUBLIC, `tao_app` non lo possiede; il solo ruolo `tao_retention` ha `EXECUTE` e **nessun SELECT/DELETE sui dati**. Il worker ha credenziale autonoma distinta da API e migratore, verificata a startup con fail-closed. L'API background service elimina fino a 5.000 note/ciclo, prima all'avvio e poi ogni 15 minuti; logga soltanto conteggi e tipi di errori, mai testo o identificativi di utente. Test SQL reali verificano permessi, scadenza, batch e altri tenant.
 
 **Rischio residuo:** la funzione SECURITY DEFINER opera con privilegio di schema-owner, quindi la sua definizione, migration pipeline e i ruoli che possono alterarla sono codice ad alta fiducia. Le tre credenziali restano nello stesso processo API: separare il worker in workload/identità isolata su Azure. La pulizia da backup/WAL, le copie AI, i consensi, l'audit, il logging e le regole per finalità sono ancora non implementati. La scelta provvisoria di 30 giorni richiede una giustificazione documentata specifica (GDPR art. 5(1)(e)) e non implica che ogni tipo di dato debba avere lo stesso periodo.
 
@@ -109,7 +109,7 @@ References: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage
 
 ## Global legacy backfill audit boundary (#140 / ADR 0013)
 
-`omnia_count_legacy_memories()` is an exact, count-only SECURITY DEFINER
+`tao_count_legacy_memories()` is an exact, count-only SECURITY DEFINER
 function with a controlled search path and revoked public EXECUTE.
 Only a dedicated, non-owner, no-table-permission auditor can invoke it;
 the API and data backfill worker are denied. The schema owner is
@@ -452,7 +452,7 @@ missing, duplicated, overflowing, unknown or actor/type-conflicting
 events. A known-event audit can be performed without mutating either
 store; no source ACK/cursor exists or is moved.
 
-The test-only `Omnia.ErasureDeliveryAudit --all` is disconnected
+The test-only `Tao.ErasureDeliveryAudit --all` is disconnected
 from API traffic/recovery readiness, accepts only fixed 127.0.0.1
 CI connection roles, fails closed on missing opt-in or mismatch and
 does not log SQL details or actor metadata. Post-publish CI verifies
@@ -478,7 +478,7 @@ witness receipt proven ABSENT. Named-WAL-point recovery resurrects
 that actor's ciphertext and consent but removes the primary UUID;
 the witness still has no matching event.
 
-The new isolated `Omnia.UnwitnessedPitrRehearsal` test CLI
+The new isolated `Tao.UnwitnessedPitrRehearsal` test CLI
 keeps only the synthetic UUID in a private ephemeral runner file,
 requires CI and exact restricted 127.0.0.1 SQL reader identities,
 and performs NO writes or release operations. It shows how the
@@ -568,8 +568,8 @@ fencing and complete provider/device erasure remain open.
 ## Three-way correlated erasure evidence classifier (ADR 0035)
 
 A CI-only read-only inspector independently verifies the SQL capability
-of the source `omnia_dispatcher`, remote `omnia_witness_intent_reader`,
-and remote `omnia_witness_reader`. Intent UUID and scope MUST match both
+of the source `tao_dispatcher`, remote `tao_witness_intent_reader`,
+and remote `tao_witness_reader`. Intent UUID and scope MUST match both
 the source outbox event and the witness completed receipt when visible.
 Malformed intent, missing authorization to read, inconsistent actor/type,
 privileged connections, or source scan overflow are denied. The source
@@ -951,7 +951,7 @@ compliance from this change.
 
 ## Concurrent JSON body receive admission (#159 / ADR 0058)
 
-In addition to the body-size / timeout / media-type controls, Omnia.Api
+In addition to the body-size / timeout / media-type controls, Tao.Api
 limits the number of *simultaneously receiving* authenticated JSON
 request bodies per API process. Config:
 RequestBody:MaxConcurrentReads = 32 by default (1..256, fail startup
@@ -1207,7 +1207,7 @@ signed identities while staying within the #166 aggregate
 tenant rate budget. Actor partition memory must not grow
 without a configured ceiling.
 
-Omnia now uses ApiActorRequestWindowLimiter, default
+Tao now uses ApiActorRequestWindowLimiter, default
 RateLimit:RequestsPerMinute=120 requests per 60s per
 validated signed tenant+sub (unchanged quota), plus new
 RateLimit:MaxTrackedActors=8192 per API instance (1..32768).

@@ -1,6 +1,6 @@
 # Web timeline: source filter over loaded pages (ADR 0080)
 
-Omnia's authenticated Web client reads only the actor-scoped
+Tao's authenticated Web client reads only the actor-scoped
 \`GET /api/v1/memories/page?limit=10\` keyset pages. The Web timeline
 now offers **Tutte** plus each distinct source **already present in
 the loaded rows**, with an exact source filter. Counts explicitly
@@ -20,12 +20,12 @@ login and does not remember the previous selection.
 This is a #79/#41 *partial UX* slice, not daily grouping,
 semantic/person/tag search, cross-device sync or a GDPR claim.
 See [ADR 0080](../adr/0080-web-loaded-timeline-source-filter.md) and
-[#182](https://github.com/KeyserDSoze/Omnia/issues/182).
+[#182](https://github.com/KeyserDSoze/Tao/issues/182).
 
 
 ## Intestazioni giornaliere (#183)
 
-Dopo il filtro delle righe già caricate, Omnia raggruppa le note
+Dopo il filtro delle righe già caricate, Tao raggruppa le note
 visibili in giornate del fuso del dispositivo, ricavate dal campo
 `occurredAt` senza modificare il tempo canonico. Le pagine successive
 possono estendere lo stesso gruppo senza creare due intestazioni.

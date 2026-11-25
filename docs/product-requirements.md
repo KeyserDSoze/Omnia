@@ -1,6 +1,6 @@
-# Omnia — Product Requirements Document v0.1
+# Tao — Product Requirements Document v0.1
 
-**Product thesis:** Omnia è una *personal intelligence layer* data-owned: registra, integra e contestualizza **solo** informazioni autorizzate; rende la memoria ricercabile, mostra insight con fonti e permette di delegare azioni revocabili. Non è un sistema per sorvegliare terzi o impersonarli senza consenso.
+**Product thesis:** Tao è una *personal intelligence layer* data-owned: registra, integra e contestualizza **solo** informazioni autorizzate; rende la memoria ricercabile, mostra insight con fonti e permette di delegare azioni revocabili. Non è un sistema per sorvegliare terzi o impersonarli senza consenso.
 
 ## Persona e jobs-to-be-done
 
@@ -18,8 +18,8 @@ Con un primo login sicuro e due device, l'utente salva una nota in un tap, vede 
 1. **Onboard:** apri Pages/app → login OIDC PKCE → account personale e privacy choices → nota demo sintetica → timeline.
 2. **Capture:** tasto uno-tap → testo o memo microfono consentito → sorgente, timestamp, contentType, hash → uploaded/pending/failed → normalizzato/taggato → indicizzato.
 3. **Connect:** catalogo/provider ufficiale → visualizza accesso richiesto, duration/scopes → OAuth → import incremental → thread e provenance → revoca/cancellazione fonte.
-4. **Understand:** scegli giorno/persona/topic → summary con citazioni ai source events → insight opt-in non diagnostico → utente corregge e Omnia versiona la correzione.
-5. **Act:** Omnia propone bozza/azione → mostra destinatario, scope, effetti → edit/approve → execute once → receipt e audit → stop/revoke.
+4. **Understand:** scegli giorno/persona/topic → summary con citazioni ai source events → insight opt-in non diagnostico → utente corregge e Tao versiona la correzione.
+5. **Act:** Tao propone bozza/azione → mostra destinatario, scope, effetti → edit/approve → execute once → receipt e audit → stop/revoke.
 6. **Exit:** export dei dati + correzioni + derivati; cancellazione con tracking stato in storage, indici e provider downstream e retention legale documentata.
 
 ## Canonical memory contract (target, non interamente implementato)
@@ -67,6 +67,6 @@ Accesso illimitato alle chat personali WhatsApp, intercettazione audio di qualsi
 
 ## Roadmap e feature
 
-Fonte di verità per pianificazione: [backlog](backlog.md) e [GitHub Issues](https://github.com/KeyserDSoze/Omnia/issues). La validazione business richiede review di utenti e consulenza GDPR; il PRD è una specifica di progetto, non evidenza che ogni servizio esista.
+Fonte di verità per pianificazione: [backlog](backlog.md) e [GitHub Issues](https://github.com/KeyserDSoze/Tao/issues). La validazione business richiede review di utenti e consulenza GDPR; il PRD è una specifica di progetto, non evidenza che ogni servizio esista.
 
 **Provider parity gate:** i servizi opzionali non vanno introdotti prima di un reale caso d'uso e di una suite di contract test Azure↔Docker. Il codice di dominio deve restare indipendente dai servizi cloud. OpenBao, Valkey e SignalR sono **proposte architetturali**, non componenti già configurati.

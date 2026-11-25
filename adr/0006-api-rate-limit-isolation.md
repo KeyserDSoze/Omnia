@@ -6,7 +6,7 @@
 
 ## Context
 
-Omnia's data endpoints need predictable resource bounds. A single tenant should not monopolize a process, and untrusted identity headers must not bypass quotas. In a future Azure Container Apps deployment multiple replicas require coordinated budgets.
+Tao's data endpoints need predictable resource bounds. A single tenant should not monopolize a process, and untrusted identity headers must not bypass quotas. In a future Azure Container Apps deployment multiple replicas require coordinated budgets.
 
 ## Decision
 

@@ -1,4 +1,4 @@
-// Production-like local static server for the actual GitHub Pages /Omnia/ base path.
+// Production-like local static server for the actual GitHub Pages /Tao/ base path.
 // Used only by the Playwright test runner. No dependency on Expo dev server.
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -18,11 +18,11 @@ const mime = {
 const server = createServer(async (req, res) => {
   try {
     const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
-    if (!/^\/Omnia(?:\/|$)/.test(pathname)) {
+    if (!/^\/Tao(?:\/|$)/.test(pathname)) {
       res.writeHead(404).end('Not found');
       return;
     }
-    const relative = decodeURIComponent(pathname.slice('/Omnia'.length)).replace(/^\/+/, '') || 'index.html';
+    const relative = decodeURIComponent(pathname.slice('/Tao'.length)).replace(/^\/+/, '') || 'index.html';
     let file = path.resolve(root, relative);
     if (file !== root && !file.startsWith(root + path.sep)) {
       res.writeHead(403).end('Forbidden');
@@ -37,4 +37,4 @@ const server = createServer(async (req, res) => {
     res.writeHead(404).end('Not found');
   }
 });
-server.listen(19006, '127.0.0.1', () => console.log('Omnia static web: http://127.0.0.1:19006/Omnia/'));
+server.listen(19006, '127.0.0.1', () => console.log('Tao static web: http://127.0.0.1:19006/Tao/'));

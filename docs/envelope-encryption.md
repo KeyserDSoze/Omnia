@@ -1,11 +1,11 @@
-# Omnia — Envelope encryption v1 (base crittografica #137)
+# Tao — Envelope encryption v1 (base crittografica #137)
 
 **Stato aggiornato al 2026-11-18:** codec testato e integrato per i **nuovi raw/normalized/summary/tags** su PostgreSQL (#139); il backfill per attori approvati è disponibile ma **non è stato eseguito sull'intero database** (#140). Restano scoperti vettori, metadati sensibili, media, token, backup/WAL e vault. La parent #33 è aperta e l'uso di dati veri resta vietato fino ai gate privacy e security.
 
 ## Contratto di libreria
 
-- `Omnia.Application.IEnvelopeEncryption`: `Seal`, `Open` e `Rewrap`, con `EncryptionScope(TenantId,OwnerSubject,Purpose,RecordId)`.
-- `Omnia.Infrastructure.AesGcmEnvelopeEncryption`: AES-256-GCM con chiave casuale DEK **diversa per payload**, nonce 96 bit per DEK wrapping e payload (generati con `RandomNumberGenerator`), tag autenticazione 128 bit, KEK esterna per ID/versione.
+- `Tao.Application.IEnvelopeEncryption`: `Seal`, `Open` e `Rewrap`, con `EncryptionScope(TenantId,OwnerSubject,Purpose,RecordId)`.
+- `Tao.Infrastructure.AesGcmEnvelopeEncryption`: AES-256-GCM con chiave casuale DEK **diversa per payload**, nonce 96 bit per DEK wrapping e payload (generati con `RandomNumberGenerator`), tag autenticazione 128 bit, KEK esterna per ID/versione.
 - La associated data (`AAD`) è composta da tuple lunghezza+UTF-8 di tenant, subject, purpose e record (più domain separation tra cifratura e wrapping; ID KEK autentificato nel wrapping). In presenza di subject o scope errato o di qualsiasi modifica a tag/ciphertext l'operazione fallisce.
 - Formato `OMN1`: 4 byte magic/version; 1 byte lunghezza ID; ID ASCII; 12 byte nonce wrapping; 16 byte tag wrapping; 32 byte DEK cifrata; 12 byte nonce dati; 16 byte tag dati; ciphertext. `Rewrap` prima convalida il dato, poi cambia solo KEK ID e blocco di wrapping; il ciphertext rimane inalterato. La KEK nuova non rende subito inutilizzabile quella vecchia: conservarla fino alla verifica di **tutti** i record persistiti e backup.
 - Limiti v1: al massimo 1 MiB per `Seal` in memoria e 16 chiavi in un ring; **non** usarlo per media streaming o big data. AES-GCM richiede attenta gestione collisioni dei nonce e rotazione secondo il volume d'uso; valutare il protocollo prima di scala elevata. I buffer DEK e le copie temporanee KEK sono azzerati dopo l'uso (best effort in managed memory).

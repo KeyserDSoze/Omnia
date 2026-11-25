@@ -1,20 +1,20 @@
 {
   "expo": {
-    "name": "Omnia",
-    "slug": "omnia",
-    "scheme": "omnia",
+    "name": "Tao",
+    "slug": "tao",
+    "scheme": "tao",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.omnia.personalintelligence",
+      "bundleIdentifier": "com.tao.personalintelligence",
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Omnia registra audio soltanto dopo il tuo consenso esplicito."
+        "NSMicrophoneUsageDescription": "Tao registra audio soltanto dopo il tuo consenso esplicito."
       }
     },
     "android": {
-      "package": "com.omnia.personalintelligence",
+      "package": "com.tao.personalintelligence",
       "permissions": [
         "RECORD_AUDIO"
       ]
@@ -22,16 +22,16 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "name": "Omnia"
+      "name": "Tao"
     },
     "experiments": {
-      "baseUrl": "/Omnia"
+      "baseUrl": "/Tao"
     },
     "plugins": [
       [
         "expo-audio",
         {
-          "microphonePermission": "Consenti a Omnia di registrare un memo audio su tua richiesta.",
+          "microphonePermission": "Consenti a Tao di registrare un memo audio su tua richiesta.",
           "enableBackgroundRecording": false
         }
       ]

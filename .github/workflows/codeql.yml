@@ -1,4 +1,4 @@
-name: Omnia CodeQL static security
+name: Tao CodeQL static security
 on:
   push:
     branches: [main]

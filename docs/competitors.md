@@ -1,6 +1,6 @@
-# Omnia — competitor landscape (research: 2026-11-17)
+# Tao — competitor landscape (research: 2026-11-17)
 
-| Product / project | Relevant capability | Differentiation opportunity for Omnia |
+| Product / project | Relevant capability | Differentiation opportunity for Tao |
 |---|---|---|
 | [OpenClaw](https://github.com/openclaw/openclaw) | Tool-using, cross-channel personal agent | User-owned event normalization, SaaS tenancy and auditable memory timeline |
 | [Omi](https://www.omi.me/) | Wearable audio capture, transcription and memory | Cross-provider data catalog + evidence-linked personal reflection |

@@ -1,6 +1,6 @@
-# Omnia — repository instructions
+# Tao — repository instructions
 
-**Canonical repository:** https://github.com/KeyserDSoze/Omnia  
+**Canonical repository:** https://github.com/KeyserDSoze/Tao  
 **Working branch:** `main` when requested by the owner. Never force push.
 
 ## Before changing code
@@ -13,10 +13,10 @@
 
 ## Boundaries
 
-- `src/backend/Omnia.Domain`: invariants and entities; no cloud SDKs.
-- `src/backend/Omnia.Application`: use cases and ports; no Npgsql/Azure.
-- `src/backend/Omnia.Infrastructure`: PostgreSQL migrations and embedding adapters.
-- `src/backend/Omnia.Api`: REST, JWT/OIDC, CORS, DI.
+- `src/backend/Tao.Domain`: invariants and entities; no cloud SDKs.
+- `src/backend/Tao.Application`: use cases and ports; no Npgsql/Azure.
+- `src/backend/Tao.Infrastructure`: PostgreSQL migrations and embedding adapters.
+- `src/backend/Tao.Api`: REST, JWT/OIDC, CORS, DI.
 - `src/mobile`: Expo React Native and shared web UI; must work with Pages static export.
 - `tests/`: xUnit unit + PostgreSQL integration, Vitest pure client logic, Playwright browser.
 - `docker/`: disposable local equivalents; `infra/azure`: cloud provisioning templates.
@@ -31,9 +31,9 @@ No hardcoded credentials, OAuth refresh tokens or private personal content in gi
 ```sh
 cd src/mobile && npm ci && npm run typecheck && npm test && npm run build:web
 cd ../..
-dotnet test tests/Omnia.Domain.Tests/Omnia.Domain.Tests.csproj
+dotnet test tests/Tao.Domain.Tests/Tao.Domain.Tests.csproj
 docker compose --env-file docker/.env -f docker/compose.yml up --build
-# OMNIA_TEST_DB=... dotnet test tests/Omnia.Integration.Tests/Omnia.Integration.Tests.csproj
+# TAO_TEST_DB=... dotnet test tests/Tao.Integration.Tests/Tao.Integration.Tests.csproj
 ```
 
 ## Frozen npm dependency graph (#188 / ADR 0085)
@@ -95,7 +95,7 @@ The two API Dockerfile FROM statements MUST use Microsoft registry
 These are **manifest-index** digests confirmed against the actual
 Microsoft Artifact Registry and both linux/amd64 and linux/arm64
 descriptors in [read-only discovery run #45201861006](
-https://github.com/KeyserDSoze/Omnia/actions/runs/45201861006).
+https://github.com/KeyserDSoze/Tao/actions/runs/45201861006).
 Do not substitute a single linux/amd64 manifest digest.
 Run `python3 tests/quality/verify_dotnet_image_pins.py --offline`
 before any restore and `--remote` in CI to verify the published tag
@@ -115,7 +115,7 @@ and ALL 20 independent .NET `packages.lock.json` files in backend/tests.
 CI MUST run `python3 -m unittest discover -s tests/quality
 -p 'test_locked_sbom.py'`, generate both deterministic CycloneDX 1.6
 inventories via `python3 tests/quality/generate_locked_sbom.py
---output "$RUNNER_TEMP/omnia-locked-sbom"`, compare using `--verify`
+--output "$RUNNER_TEMP/tao-locked-sbom"`, compare using `--verify`
 and upload both JSON files as a short-lived read-only GitHub Actions
 artifact. Fail closed on missing lock/project, unsupported package type,
 SHA-512 changes, conflicting package IDs, missing root direct dependencies
@@ -148,7 +148,7 @@ The initial 2026-11-23 npm audit found 2 CRITICAL, 3 HIGH, 4 MODERATE.
 Vitest 5.1.1 removed vulnerable tinypool; the coordinated official
 Expo SDK58 / Router58 / RN 0.88 upgrade removed the HIGH
 `query-string 7 -> decode-uri-component 0.2.2` chain without overrides.
-[CI #45220400873](https://github.com/KeyserDSoze/Omnia/actions/runs/45220400873)
+[CI #45220400873](https://github.com/KeyserDSoze/Tao/actions/runs/45220400873)
 has **SUCCESS** in its independent live SCA job (npm all + production,
 20/20 NuGet projects). The isolated SDK58 trial found **0 HIGH,
 0 CRITICAL, 3 MODERATE**; this is not zero vulnerabilities or future
@@ -165,7 +165,7 @@ Source-policy tests under `src/mobile/scripts/sdk58-security-policy.test.mjs`
 reject SDK57/Router57, vulnerable nested `query-string`,
 `decode-uri-component` and `tinypool`, npm overrides, RN 0.88
 native module ABI drift and changes to `web.output=static` or
-`experiments.baseUrl=/Omnia`. This is a regression contract,
+`experiments.baseUrl=/Tao`. This is a regression contract,
 not an advisory feed: the independent live npm/NuGet SCA job is still
 required. CI now exercises Metro Android and iOS exports on Ubuntu;
 these are **not** signed EAS builds, simulator or real-device tests.
@@ -206,7 +206,7 @@ Do not assert immutable multi-page snapshots or native/offline parity.
 
 ## OIDC Web authorization source of truth
 
-`src/mobile/src/services/webAuth.ts` is only for browser OAuth and must use a maintained OIDC library, authorization code + PKCE S256, session state/nonce checks, ephemeral in-memory tokens, correct redirect /Omnia/, and strict public HTTPS/loopback config. Do not add localStorage/AsyncStorage for tokens, don't store password/client_secret or trust client-supplied tenant IDs. Web captures must be API-confirmed, error states explicit, and manual scoped consent obtained first. Native OIDC requires separate Expo AuthSession + SecureStore with device smoke before claiming parity.
+`src/mobile/src/services/webAuth.ts` is only for browser OAuth and must use a maintained OIDC library, authorization code + PKCE S256, session state/nonce checks, ephemeral in-memory tokens, correct redirect /Tao/, and strict public HTTPS/loopback config. Do not add localStorage/AsyncStorage for tokens, don't store password/client_secret or trust client-supplied tenant IDs. Web captures must be API-confirmed, error states explicit, and manual scoped consent obtained first. Native OIDC requires separate Expo AuthSession + SecureStore with device smoke before claiming parity.
 
 ### Web cloud session safety (#170/#171/#172)
 All remote timeline/consent read responses are fenced with `CloudViewEpoch` after signout, new refresh, revoke, erase or unmount. Every API 401 from a current browser session MUST synchronously clear private UI, invalidate outstanding reads and discard local OIDC tokens; 401s from old session generations MUST NOT log out a newer account. Token getter failure must fail closed without dispatching a stale token. Treat 403/429/offline as distinct errors, not proof of expired authentication. **User logout must preempt `busy` mutations**: never deny signout while a POST/export is awaiting a response. Mutation/response JSON and private Blob export must be session-epoch fenced before UI changes, follow-up GET or download. If a real server POST was already accepted, tell the user it may have been processed: logout is not an erasure or rollback. Server-side Keycloak revocation, native device parity and GDPR erasure are separate.
@@ -221,7 +221,7 @@ All new storage for personal content or derived embeddings MUST be registered in
 
 ## Mandatory retention invariants (#136/#32)
 
-All newly persisted memory **must** receive a server-generated expiry based on initial `received_at`; no client control, no automatic extension from idempotent retry. Do not expose expired notes through normal memory browsing. Extend retention only through a new user-authorized capture (never an implicit retry). All new personal-data stores and derivatives require their own documented purge and RLS/security tests. The only global purge function is `public.omnia_purge_expired_memories(integer)` with a bounded, hardcoded body, SECURITY DEFINER, default EXECUTE revoked and granted only to `omnia_retention`; do not put it in the HTTP API role. Use separate random secrets/identities for migration, API and worker. Keep the parent #32 open until source-specific/legal retention, backup restore/tombstones, audit and provider propagation exist. Never claim that 30 days is required by GDPR.
+All newly persisted memory **must** receive a server-generated expiry based on initial `received_at`; no client control, no automatic extension from idempotent retry. Do not expose expired notes through normal memory browsing. Extend retention only through a new user-authorized capture (never an implicit retry). All new personal-data stores and derivatives require their own documented purge and RLS/security tests. The only global purge function is `public.tao_purge_expired_memories(integer)` with a bounded, hardcoded body, SECURITY DEFINER, default EXECUTE revoked and granted only to `tao_retention`; do not put it in the HTTP API role. Use separate random secrets/identities for migration, API and worker. Keep the parent #32 open until source-specific/legal retention, backup restore/tombstones, audit and provider propagation exist. Never claim that 30 days is required by GDPR.
 
 ## Crypto component — mandatory constraints (#137/#33)
 
@@ -230,14 +230,14 @@ All newly persisted memory **must** receive a server-generated expiry based on i
 
 ## Sealed memory write-path (#139 / #138)
 
-Every new memory capture MUST use `SealedMemoryPayload.Encrypt` with a **stable canonical row UUID** and validated tenant/subject as AEAD associated data. The SQL columns `raw_content`, `normalized_json`, `summary`, `tags` are redacted in new rows; `sealed_payload` is mandatory for new INSERT. Never introduce a plaintext fallback for new writes, including key-ring errors or disabled configuration. `omnia_enforce_memory_sealed_writes` and `ck_memory_sealed_content_redacted` must remain effective after schema changes. Timeline and export MAY decode historical legacy rows only until an audited backfill/cutover replaces them; no bypass of JWT RLS or leak in log. New payloads remain within #31 export/erasure and #32 TTL. Crypto key ring is mandatory for API boot and sourced externally, not browser/Expo/GitHub sources. The actual encryption-at-rest gate remains OPEN while legacy rows, vector embeddings, metadata, backup, Key Vault/OpenBao are unresolved.
+Every new memory capture MUST use `SealedMemoryPayload.Encrypt` with a **stable canonical row UUID** and validated tenant/subject as AEAD associated data. The SQL columns `raw_content`, `normalized_json`, `summary`, `tags` are redacted in new rows; `sealed_payload` is mandatory for new INSERT. Never introduce a plaintext fallback for new writes, including key-ring errors or disabled configuration. `tao_enforce_memory_sealed_writes` and `ck_memory_sealed_content_redacted` must remain effective after schema changes. Timeline and export MAY decode historical legacy rows only until an audited backfill/cutover replaces them; no bypass of JWT RLS or leak in log. New payloads remain within #31 export/erasure and #32 TTL. Crypto key ring is mandatory for API boot and sourced externally, not browser/Expo/GitHub sources. The actual encryption-at-rest gate remains OPEN while legacy rows, vector embeddings, metadata, backup, Key Vault/OpenBao are unresolved.
 
 
 ## Offline actor-scoped legacy memory backfill (#140 first slice)
 
-The `Omnia.Backfill` executable must NOT be registered as an HTTP API or accept
+The `Tao.Backfill` executable must NOT be registered as an HTTP API or accept
 untrusted browser-supplied actor selectors. Its operator uses the separately
-provisioned, non-owner, no-BYPASSRLS `omnia_backfill` identity plus external KEK.
+provisioned, non-owner, no-BYPASSRLS `tao_backfill` identity plus external KEK.
 Only SELECT/UPDATE of memory_entries are granted. Acquire
 `PostgresActorLock` **before** `FOR UPDATE SKIP LOCKED` and commit the new
 sealed_payload and four redacted legacy fields atomically. Never change
@@ -249,11 +249,11 @@ per-actor count zero is not global completion. #140/#138/#33 remain open.
 
 ## Count-only global legacy audit (#140 / ADR 0013)
 
-The new offline `Omnia.BackfillAudit` executable, unlike the actor-scoped
+The new offline `Tao.BackfillAudit` executable, unlike the actor-scoped
 backfill worker, obtains an exact GLOBAL legacy row count via the fixed SQL
-function `public.omnia_count_legacy_memories()` only. NEVER register it in
+function `public.tao_count_legacy_memories()` only. NEVER register it in
 HTTP DI or grant EXECUTE to the runtime, retention or backfill role. Its
-separate `omnia_backfill_audit` identity has no direct SELECT/UPDATE/DELETE
+separate `tao_backfill_audit` identity has no direct SELECT/UPDATE/DELETE
 on any personal table and does not inherit schema ownership or BYPASSRLS.
 The migration owner is explicitly allowed RLS SELECT only to support the
 fixed SECURITY DEFINER function under FORCE RLS in Azure non-superuser mode.
@@ -263,7 +263,7 @@ fallback; restore, backups/WAL, concurrency and signed release gates remain.
 ## Approved legacy backfill inventory (#140 / ADR 0014)
 
 The offline backfill may accept an operator-provided private JSON inventory
-via `OMNIA_BACKFILL_INVENTORY_PATH`, instead of a single tenant/subject.
+via `TAO_BACKFILL_INVENTORY_PATH`, instead of a single tenant/subject.
 This is NOT identity discovery or user consent. Require exact schema v1,
 explicit operatorApproved=true, strict nonduplicate tenant+owner pairs,
 max 1000 actors / 256KiB, absolute private file, no symlinks, no extra
@@ -294,7 +294,7 @@ recovery, encrypted backups, WAL/PITR, Azure vault, GDPR erasure or cutover.
 after the synthetic same-cluster restore gate. It creates a NEW temporary
 pgvector container with different PostgreSQL system identifier,
 passwords and roles; no shared PGDATA. Check that restoring a DB without
-the required global roles fails, then provision only the four Omnia
+the required global roles fails, then provision only the four Tao
 restricted roles before the successful pg_restore. Never reuse source
 credentials or import real pg_dumpall password hashes. The harness
 accepts only 127.0.0.1 test ports 15432/15433, fixed databases and
@@ -339,7 +339,7 @@ traffic freeze, or cross-store erasure. Those remain P0 open gates.
 
 ## Recovery quarantine gate (#141 / ADR 0019)
 
-Omnia.Api MUST call RecoveryQuarantineGate.Verify before DB connection,
+Tao.Api MUST call RecoveryQuarantineGate.Verify before DB connection,
 migration or worker startup. Non-Development requires an absolute
 operator-owned Recovery__AccessStateFile outside PGDATA/backup.
 Only exact `ready\n` with private Unix permissions is accepted.
@@ -362,7 +362,7 @@ directly. Recheck the SAME external `RecoveryQuarantineGate.IsReady`
 BEFORE EVERY batch (max 10 x 500). Missing/quarantined/insecure
 marker blocks new retention SQL work; a changed marker between two
 batches MUST stop the second. Continue to use the restricted
-`omnia_retention` login. No direct table privileges or PII logs.
+`tao_retention` login. No direct table privileges or PII logs.
 Do not claim atomic cancellation of an already-running SQL query,
 DB-level fencing, control of offline CLI/workers, replicas or
 providers. The release marker remains unauthenticated; #141 OPEN.
@@ -374,7 +374,7 @@ The offline `RecoveryJournalVerifier` checks strict bounded JSONL:
 contiguous sequences starting at 1, unique event UUIDs, exact v1
 schema, authenticated SHA256 chain and a separately HMAC-authenticated
 checkpoint (distinct key and trust domain). The read-only CLI
-`src/backend/Omnia.RecoveryAudit` MUST fail closed on missing,
+`src/backend/Tao.RecoveryAudit` MUST fail closed on missing,
 truncated, invalid or insecure private files, and it MUST NOT log
 actor identifiers, keys or personal data. Do not use it as an
 automatic API release authorization. A valid checkpoint only detects
@@ -425,7 +425,7 @@ require retention/data-rights review; DO NOT claim GDPR completion.
 The outbox dispatcher role is separate from API/retention/backfill/audit
 and has NO direct SELECT/INSERT/UPDATE/DELETE on personal tables.
 An explicit migration opt-in grants it ONLY EXECUTE of the bounded
-SECURITY DEFINER `omnia_read_erasure_outbox` function (max 100 rows,
+SECURITY DEFINER `tao_read_erasure_outbox` function (max 100 rows,
 no arbitrary actor parameters). The owner-specific SELECT policy
 is necessary because FORCE RLS applies to schema owners, too.
 Never grant this function to PUBLIC or use privileged credentials
@@ -477,11 +477,11 @@ before source loss, nor production DR, crypto trust or GDPR compliance.
 
 ## Isolated CI-only retrying witness publisher (#141 / ADR 0027)
 
-`Omnia.ErasurePublisher` is NOT an HTTP API service or a production
+`Tao.ErasurePublisher` is NOT an HTTP API service or a production
 deletion guarantee. For this slice it MUST require CI=true plus explicit
-`OMNIA_ERASURE_PUBLISHER_CI_ONLY=1`, and accept ONLY the fixed loopback
-synthetic databases/ports/roles (primary omnia_test:15432/omnia_dispatcher,
-witness omnia_witness:15436/omnia_witness_writer). Do not expose
+`TAO_ERASURE_PUBLISHER_CI_ONLY=1`, and accept ONLY the fixed loopback
+synthetic databases/ports/roles (primary tao_test:15432/tao_dispatcher,
+witness tao_witness:15436/tao_witness_writer). Do not expose
 credentials, actor IDs or SQL exception details in logs. Verify both
 EXECUTE-only identities before any dispatch. `--once` is for CI smoke;
 normal operation continuously rescans the full bounded source outbox,
@@ -512,7 +512,7 @@ UNATTESTED events. A saved checkpoint detects witness rollback only
 if its storage, monotonic freshness and key custody truly survive that
 rollback. NEVER issue a new checkpoint after disaster to replace the
 last independently trusted checkpoint; never auto-authorize `ready`.
-`Omnia.WitnessAudit` is CI-ONLY (CI=true plus explicit opt-in, fixed
+`Tao.WitnessAudit` is CI-ONLY (CI=true plus explicit opt-in, fixed
 loopback/DB/reader login), offline and no HTTP. Issue only NEW private
 checkpoint files; verify requires separately private 32-byte key
 file and role guard; fail closed on missing, truncated or tampered files.
@@ -523,11 +523,11 @@ global release gate, source completeness, or GDPR approval. Keep #141 open.
 
 `tests/restore/independent-anchor.sql` MUST be used ONLY on a third
 disposable PostgreSQL 17 cluster at 127.0.0.1:15438, database
-`omnia_anchor`, with a DIFFERENT `system_identifier`, PGDATA, roles
+`tao_anchor`, with a DIFFERENT `system_identifier`, PGDATA, roles
 and randomized credentials from both primary and witness. No production
-or remote host selectors. The separate restricted `omnia_anchor_writer`
+or remote host selectors. The separate restricted `tao_anchor_writer`
 has EXECUTE only on a fixed `anchor.advance_checkpoint(integer,bytea)`,
-and `omnia_anchor_reader` only on `anchor.current_checkpoint()`.
+and `tao_anchor_reader` only on `anchor.current_checkpoint()`.
 Neither can access raw anchor tables. SECURITY DEFINER functions require
 fully qualified names, locked singleton head, strictly increasing counts,
 immutable append-only history, idempotent exact-retry and conflict
@@ -583,7 +583,7 @@ witness. Verify the third-cluster count and exact bytes are unchanged
 after recovery. Never bootstrap/reanchor after the rollback, mutate
 the original anchor, use privileged actor reads, or promote `ready`.
 
-The separate test CLI `Omnia.WitnessPitrRehearsal` MUST require
+The separate test CLI `Tao.WitnessPitrRehearsal` MUST require
 `CI=true`, `GITHUB_ACTIONS=true`, explicit opt-in and exact
 loopback/DB/SQL role restrictions; it may create only a known synthetic
 witness erasure in its `--append-and-anchor` phase. It MUST NOT be
@@ -597,10 +597,10 @@ a crash. #141/#109/#31 remain OPEN.
 ## Live primary-outbox → witness receipt preflight (#141 / ADR 0031)
 
 `PostgresErasureLiveDeliveryAudit` runs READ-ONLY and must validate
-`omnia_dispatcher` EXECUTE-only SOURCE identity and independent
-`omnia_witness_reader` EXECUTE-only WITNESS identity on EVERY audit.
+`tao_dispatcher` EXECUTE-only SOURCE identity and independent
+`tao_witness_reader` EXECUTE-only WITNESS identity on EVERY audit.
 Read the live primary outbox via only the bounded
-`public.omnia_read_erasure_outbox` SECURITY DEFINER function inside
+`public.tao_read_erasure_outbox` SECURITY DEFINER function inside
 ONE `REPEATABLE READ` / `SET TRANSACTION READ ONLY` session, with
 created_at+UUID pagination (never persist as commit-order cursor),
 UUID uniqueness and a 1000-event bound plus overflow probe. For every
@@ -611,7 +611,7 @@ privileges or write-side ACKs; no actor IDs, SQL errors or credentials
 in logs. `VerifyKnownEventAsync` checks a known live committed UUID;
 `VerifyAllAsync` checks every row in the bounded source snapshot.
 After xUnit + witness publisher, CI runs the offline
-`Omnia.ErasureDeliveryAudit --all` tool, requiring CI, GitHub Actions,
+`Tao.ErasureDeliveryAudit --all` tool, requiring CI, GitHub Actions,
 explicit opt-in and fixed loopback DB/roles. Wrong source/witness
 credentials or disabled opt-in must fail. The tool never grants
 `ready` or touches HTTP/worker service state.
@@ -642,7 +642,7 @@ ABSENT; witness must STILL lack that UUID. A bounded, read-only
 `PostgresErasureLiveDeliveryAudit.VerifyAllAsync` may misleadingly
 return success on the remaining source outbox. This must NEVER be
 treated as proof of historic completeness or recovery release.
-`Omnia.UnwitnessedPitrRehearsal` is test-only: fixed
+`Tao.UnwitnessedPitrRehearsal` is test-only: fixed
 127.0.0.1:15432/15435 dispatcher identities and 15436 witness READER,
 `CI=true`, `GITHUB_ACTIONS=true`, explicit opt-in and known private
 synthetic UUID are required. Negative test mode `--live-gap` confirms
@@ -662,9 +662,9 @@ provenance and completeness exists. #141/#109/#31 remain OPEN.
 prototype for an **intent/request before DELETE**, NOT an `erasure_events`
 post-commit receipt. Intent UUID differs from the later source outbox
 UUID and may exist even when primary `EraseAsync` never commits.
-Only `omnia_witness_intent_writer` may EXECUTE
+Only `tao_witness_intent_writer` may EXECUTE
 `witness.append_erase_intent(uuid,varchar,varchar)`, only
-`omnia_witness_intent_reader` may EXECUTE the find/list functions.
+`tao_witness_intent_reader` may EXECUTE the find/list functions.
 Neither role may access raw witness tables or existing completed
 erasure receipts; owner, admin, app runtime and original witness
 writer/reader MUST be rejected inside each .NET adapter operation.
@@ -697,7 +697,7 @@ The opt-in `PostgresPersonalDataService.EraseWithWitnessedIntentAsync`
 is STRICTLY for synthetic CI experiments (`CI=true` and
 `GITHUB_ACTIONS=true`) and MUST NOT be wired into the public API.
 It requires a nonempty request UUID and validates the independent
-`omnia_witness_intent_reader` EXECUTE-only login and exact
+`tao_witness_intent_reader` EXECUTE-only login and exact
 `requestId`, tenant, owner and `erase-actor-intent` BEFORE
 opening any primary actor transaction. A missing, foreign-scope
 or forged intent MUST NOT delete memory/consent or enqueue an
@@ -729,8 +729,8 @@ this intent and no OIDC actor identity is verified here. Keep
 
 `PostgresCorrelatedErasureReconciliation` is CI-ONLY, invoked via
 `InspectAsync(requestUuid)` with three unrelated EXECUTE-only
-identities: `omnia_dispatcher` for primary source, `omnia_witness_intent_reader`
-for the remote PRE-intent, and `omnia_witness_reader` for the remote
+identities: `tao_dispatcher` for primary source, `tao_witness_intent_reader`
+for the remote PRE-intent, and `tao_witness_reader` for the remote
 POST-commit erasure receipt. Reject app, writer, owner and admin SQL
 identities before returning any observation. A known UUID must have
 a verified remote intent with exact actor scope; a missing, conflicting,
@@ -770,7 +770,7 @@ witness, not the THIRD PGDATA checkpoint. An intent is NOT an
 attestation of the primary DELETE/COMMIT or post-commit witness ACK.
 
 `PostgresPreEraseIntentSnapshot.ReadAsync` MUST require the independent
-`omnia_witness_intent_reader` EXECUTE-only identity, scan the
+`tao_witness_intent_reader` EXECUTE-only identity, scan the
 witness under ONE PostgreSQL REPEATABLE READ + READ ONLY transaction,
 enforce a continuous sequence, UUID uniqueness, max 10000 intents
 plus a one-row probe to reject overflow, and never read raw tables.
@@ -782,13 +782,13 @@ synthetic operator approval only at first-time initialisation.
 The existing third-cluster `anchor.advance_checkpoint` SQL enforces
 non-decreasing count and byte-for-byte replay at equal count, with
 EXECUTE-only roles and no direct table grants. Isolate anchors in
-separate databases on the THIRD PGDATA: `omnia_anchor` for completed
-erasure events and `omnia_intent_anchor` for xUnit intent prefix,
+separate databases on the THIRD PGDATA: `tao_anchor` for completed
+erasure events and `tao_intent_anchor` for xUnit intent prefix,
 with distinct signing keys/payloads. Never mix the formats, silently
 re-bootstrap, overwrite old checkpoints, or auto-issue after PITR.
 
 The real WITNESS physical WAL PITR rehearsal must create yet another
-third-cluster database `omnia_witness_pitr_intent_anchor`, seed an
+third-cluster database `tao_witness_pitr_intent_anchor`, seed an
 intent BEFORE basebackup, issue an explicit intent checkpoint, append
 and anchor a new intent AFTER the named WAL restore point, recover a
 physical witness clone missing that intent while leaving THIRD PGDATA
@@ -829,7 +829,7 @@ automatically. The earlier weaker CI-only
 tests and is NOT an anchored operation. Do not treat it as the new gate.
 
 In real physical PRIMARY WAL PITR drill, provision an isolated
-`omnia_pitr_preflight_anchor` database on the THIRD PGDATA; use
+`tao_pitr_preflight_anchor` database on the THIRD PGDATA; use
 separately randomized 32-byte HMAC key held in a 0600 temporary
 runner file. Require a denied pre-delete invocation after remote
 intent append but BEFORE checkpoint issuance, and prove source
@@ -854,10 +854,10 @@ The CI-only `PostgresPersonalDataService.EraseWithOneShotAnchoredIntentAsync`
 adds a THIRD-PGDATA, one-time `admission.execution_claims` record
 **after** authenticating a matching, already-anchored remote pre-intent,
 but **before** opening any primary actor-scoped transaction. The
-dedicated `omnia_claim_writer` EXECUTE-only role may call
+dedicated `tao_claim_writer` EXECUTE-only role may call
 `admission.claim_once(uuid,bytea)` but MUST NOT read/modify raw tables,
 issue HMAC checkpoints or completed-erasure witness receipts. An
-independent `omnia_claim_reader` may call only
+independent `tao_claim_reader` may call only
 `admission.has_claim(uuid)`. The schema's unrevocable-per-user
 one-shot UUID PK is a fail-closed attempt record; any reuse MUST
 raise 23505, including an identical request. A concurrent eight-way
@@ -881,7 +881,7 @@ the HMAC key remain independently trustworthy; both still
 share one disposable CI host and admin with the primary/witness.
 
 The physical primary WAL PITR rehearsal MUST use a separate
-`omnia_pitr_execution_claims` DB on the THIRD PGDATA. It
+`tao_pitr_execution_claims` DB on the THIRD PGDATA. It
 must first deny an unanchored intent, then register a
 one-shot claim and locally commit synthetic actor DELETE
 and same UUID outbox after independent intent checkpoint ACK
@@ -900,12 +900,12 @@ method into REST/API or claim offsite WORM/commit certainty.
 The CI-only third-PGDATA `admission.execution_claims` is **not**
 trustworthy based solely on UUID presence. For read-only verification use
 `PostgresPreEraseExecutionClaimReader.VerifyClaimAsync(uuid,tenant,owner,key,ct)`,
-which requires `omnia_claim_reader` (not the writer or DB admin) and
+which requires `tao_claim_reader` (not the writer or DB admin) and
 reads only `admission.claim_scope(uuid)` through EXECUTE-only grants.
 The function must be created with `SECURITY DEFINER`,
 `search_path=pg_catalog,pg_temp`, and REVOKE PUBLIC/GRANT reader
 in the SAME SQL transaction as CREATE. Never grant raw table SELECT.
-`omnia_claim_writer` MUST NOT receive execute on `claim_scope`.
+`tao_claim_writer` MUST NOT receive execute on `claim_scope`.
 The writer and verifier MUST share one canonical domain-separated
 HMAC-SHA256 payload for UUID, tenant, owner; the verifier must compare
 32-byte HMAC using `CryptographicOperations.FixedTimeEquals`
@@ -914,8 +914,8 @@ key, tampered HMAC, unauthorized SQL identity: fail closed.
 `HasClaimAsync` remains only a boolean diagnostic (not proof of scope).
 
 The real physical PRIMARY PITR rehearsal must use the privately
-supplied `OMNIA_PREERASE_PITR_HMAC_KEY_PATH` and restricted
-`OMNIA_PREERASE_PITR_CLAIM_READER_DB`. Verify no claim exists before
+supplied `TAO_PREERASE_PITR_HMAC_KEY_PATH` and restricted
+`TAO_PREERASE_PITR_CLAIM_READER_DB`. Verify no claim exists before
 the one-shot attempt, then verify the exact tenant/actor HMAC and
 reject foreign actor/reader-writer role confusion AFTER source COMMIT
 and AGAIN after the promoted primary clone has lost its source outbox.
@@ -930,7 +930,7 @@ Keep #141/#109/#31/#32 OPEN.
 The CI-only `EraseWithFourthFenceAsync` method must first validate
 an HMAC-anchored remote pre-intent on witness/third PGDATA; **then**
 commit a domain-separated one-shot UUID/scope-HMAC claim on a distinct
-FOURTH PGDATA using `omnia_claim_writer` EXECUTE-only, **then**
+FOURTH PGDATA using `tao_claim_writer` EXECUTE-only, **then**
 commit the corresponding THIRD-PGDATA claim, **then** open the primary
 actor-scoped DELETE + same-UUID outbox transaction. The FOURTH attempt
 is **not a source COMMIT certificate**, and a failure anywhere after
@@ -1014,7 +1014,7 @@ or treat a valid receipt as GDPR erasure evidence.
 
 ## REAL S3 Object Lock provider read-only slice (#145 / ADR 0044)
 
-`Omnia.ObjectStore.S3.S3ObjectLockAttemptReader` is an AWS SDK v4
+`Tao.ObjectStore.S3.S3ObjectLockAttemptReader` is an AWS SDK v4
 adapter for the ADR0043 observer. The adapter MUST pin the SAME
 exact non-null/non-latest VersionId on BOTH GetObjectRetention and
 GetObject, require per-version retention mode COMPLIANCE and UTC date,

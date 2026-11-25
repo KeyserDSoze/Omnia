@@ -1,4 +1,4 @@
-# Omnia — Test strategy e Evidence Gates (TDD)
+# Tao — Test strategy e Evidence Gates (TDD)
 
 ## Regola di lavoro
 
@@ -71,7 +71,7 @@ scoped+nested npm packages, NuGet transitive/ProjectReference handling,
 missing locks/direct refs, mismatched TFM, corrupt hashes, conflicting
 identities and output ordering. In CI, generate then verify byte
 identity and publish two files as a 14-day GitHub Actions artifact
-(`omnia-locked-dependency-sbom`). Hashes are decoded/canonicalized
+(`tao-locked-dependency-sbom`). Hashes are decoded/canonicalized
 SHA-512, PURLs identify package versions, source ownership is recorded
 as CycloneDX properties. This gate makes **no claim** of independent
 official JSON Schema validation, complete dependency edges, external
@@ -97,36 +97,36 @@ package/version, 30-day expiry, owner, issue and mitigation.
 The latest report is uploaded even on failed CI for transparency,
 not as evidence of PASS.
 
-TDD: RED [CI 45210743119](https://github.com/KeyserDSoze/Omnia/actions/runs/45210743119)
+TDD: RED [CI 45210743119](https://github.com/KeyserDSoze/Tao/actions/runs/45210743119)
 demonstrated 6 policy tests identifying 9 assertions failing on stub;
 8/8 Python policy tests later passed in
-[CI 45213586840](https://github.com/KeyserDSoze/Omnia/actions/runs/45213586840),
+[CI 45213586840](https://github.com/KeyserDSoze/Tao/actions/runs/45213586840),
 which scanned NuGet 20/20 (no advisory reported) and **correctly
 blocked** known npm high/critical. A safe, isolated Vitest 5.1.1
-upgrade [Actions 45215428007](https://github.com/KeyserDSoze/Omnia/actions/runs/45215428007)
+upgrade [Actions 45215428007](https://github.com/KeyserDSoze/Tao/actions/runs/45215428007)
 passed npm ci/TS, 61 Vitest, static Playwright, Expo web, and
 the audit showed critical 2→0; **3 HIGH remain production**.
 A negative query-string CJS test rejects decode-uri-component 0.5.1
 ESM override, demonstrated by
-[trial 45214808484](https://github.com/KeyserDSoze/Omnia/actions/runs/45214808484).
+[trial 45214808484](https://github.com/KeyserDSoze/Tao/actions/runs/45214808484).
 The full SCA job is intentionally red until #195 addresses these
 HIGH findings. Other OSS/image/license/SAST/runtime scans remain
 separate incomplete supply-chain controls.
 
 ## SDK58 routing, CVE and native-module regressions (#195 / ADR 0091)
 
-RED [CI 45219863627](https://github.com/KeyserDSoze/Omnia/actions/runs/45219863627)
+RED [CI 45219863627](https://github.com/KeyserDSoze/Tao/actions/runs/45219863627)
 showed five behavior assertions fail against an empty policy: SDK57
 downgrade, nested HIGH query chain, CRITICAL tinypool, RN ABI drift,
 unsafe npm overrides and server rendering for Pages. GREEN
 `sdk58-security-policy.mjs` checks the reviewed SDK58/Router58,
 RN 0.88.1/React19.3/Vitest5/native ABI pins and `web.output=static`,
-`baseUrl=/Omnia`. CI runs six positive/negative tests before npm ci,
+`baseUrl=/Tao`. CI runs six positive/negative tests before npm ci,
 and OIDC, Pages and native all invoke the CLI before npm ci.
 Independent npm full/prod audit + 20/20 NuGet advisory scans remain
 mandatory; offline policy is **not** a CVE scanner.
 CI bundles Android and iOS through Metro (both success at
-[CI 45220400873](https://github.com/KeyserDSoze/Omnia/actions/runs/45220400873)),
+[CI 45220400873](https://github.com/KeyserDSoze/Tao/actions/runs/45220400873)),
 but does not sign native EAS binaries or execute simulators or
 physical devices. Native release and store credentials remain a
 separate open requirement under #195.
@@ -138,7 +138,7 @@ separate open requirement under #195.
 | Domain/application | xUnit + Vitest | normalizzazione, idempotenza, tag, session state, policy decision | ogni commit |
 | API + PostgreSQL | xUnit integration/Postgres pgvector | migrations, JWT 401/403, RLS, write/read, delete | ogni commit |
 | Provider contracts | xUnit + disposable Docker dependencies | MinIO/Azure IObjectStore, RabbitMQ/Service Bus IEventBus, Ollama/Azure embeddings | ogni commit OSS; Azure staging opt-in |
-| True Browser E2E | Playwright Chromium Web under `/Omnia/` | login PKCE reale, React→HTTP→PostgreSQL, theme, capture, consent revoke | ogni commit core |
+| True Browser E2E | Playwright Chromium Web under `/Tao/` | login PKCE reale, React→HTTP→PostgreSQL, theme, capture, consent revoke | ogni commit core |
 | Native E2E | Android emulator/iOS simulator + device test | secure token, microphone permission, offline capture, deep link | prerelease e PR mobile |
 | AI eval | synthetic golden corpus/red-team | grounded recap, hallucinations, model/summary provenance, prompt injection | cambi modello/feature AI |
 | Nonfunctional | k6/chaos/SCA/secret scanning | quotas, restore, massive imports, kill switch, security | staging + release |
@@ -166,17 +166,17 @@ Each issue links a commit with passing required jobs and relevant logs. Mark as 
 
 ## RLS integration gate (#30)
 
-The CI runs xUnit against disposable pgvector PostgreSQL with a randomized schema-owner password and a separate randomized `omnia_app` password. Tests use the real non-owner connection for all repository queries, never the migration admin. `RlsIsolationTests` deliberately sends SELECT without tenant WHERE and checks fail-closed SELECT/INSERT/UPDATE, no bypass of `row_security`, and no transaction actor-context leakage across a single pooled connection. The full OIDC browser workflow provisions the same app role and confirms JWT → consent → persisted note and cross-owner isolation. An API process with privileged runtime credentials must refuse to start.
+The CI runs xUnit against disposable pgvector PostgreSQL with a randomized schema-owner password and a separate randomized `tao_app` password. Tests use the real non-owner connection for all repository queries, never the migration admin. `RlsIsolationTests` deliberately sends SELECT without tenant WHERE and checks fail-closed SELECT/INSERT/UPDATE, no bypass of `row_security`, and no transaction actor-context leakage across a single pooled connection. The full OIDC browser workflow provisions the same app role and confirms JWT → consent → persisted note and cross-owner isolation. An API process with privileged runtime credentials must refuse to start.
 
 ## GitHub Pages artifact handoff reliability (#142, 2026-11-20)
 
-Failure injection evidenced by [run 44824935287](https://github.com/KeyserDSoze/Omnia/actions/runs/44824935287):
+Failure injection evidenced by [run 44824935287](https://github.com/KeyserDSoze/Tao/actions/runs/44824935287):
 upload succeeded, but deploy immediately observed zero artifacts; rerunning the
 whole job uploaded a second same-named `github-pages` artifact, making deploy
 fail with `Multiple artifacts named ... count is 2`. The Expo build was
 successful; this is an artifact metadata/deploy race.
 
-Pages now uploads under `omnia-pages-<run_id>-<run_attempt>`, and the
+Pages now uploads under `tao-pages-<run_id>-<run_attempt>`, and the
 deploy action targets exactly that name. With read-only Actions permission,
 a bounded wait checks that exactly one unexpired artifact is indexed by
 GitHub before deployment. Zero until timeout or more than one is
@@ -206,7 +206,7 @@ personal data DB nor the REST endpoint is modified.
 ### Pages artifact-service consistency follow-up (#142)
 
 The initial single-job REST polling was insufficient. Run
-[44828446417](https://github.com/KeyserDSoze/Omnia/actions/runs/44828446417)
+[44828446417](https://github.com/KeyserDSoze/Tao/actions/runs/44828446417)
 showed REST `Pages artifact visible` while
 `actions/deploy-pages@v4` immediately observed 0 artifacts through
 the internal `@actions/artifact` artifact-service API. The workflow
@@ -233,14 +233,14 @@ e nessun permission token di cancellazione esiste.
 
 ### RED/GREEN verificata per immutable attempt version pinning (#143)
 
-- [CI RED 44882236030](https://github.com/KeyserDSoze/Omnia/actions/runs/44882236030): compilazione senza modello/provider contract;
-- [CI RED 44882440793](https://github.com/KeyserDSoze/Omnia/actions/runs/44882440793): 1 di 80 test fallito per versioni `latest` e `null`;
-- [CI GREEN 44882456199](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456199): test xUnit/restore/PITR/Docker e mobile verde sul commit `390331a4`;
-- [OIDC E2E 44882456209](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456209) e [Pages 44882456200](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456200) green stesso SHA. Questa è evidenza solo del **contratto con stub**, non di uno storage WORM reale.
+- [CI RED 44882236030](https://github.com/KeyserDSoze/Tao/actions/runs/44882236030): compilazione senza modello/provider contract;
+- [CI RED 44882440793](https://github.com/KeyserDSoze/Tao/actions/runs/44882440793): 1 di 80 test fallito per versioni `latest` e `null`;
+- [CI GREEN 44882456199](https://github.com/KeyserDSoze/Tao/actions/runs/44882456199): test xUnit/restore/PITR/Docker e mobile verde sul commit `390331a4`;
+- [OIDC E2E 44882456209](https://github.com/KeyserDSoze/Tao/actions/runs/44882456209) e [Pages 44882456200](https://github.com/KeyserDSoze/Tao/actions/runs/44882456200) green stesso SHA. Questa è evidenza solo del **contratto con stub**, non di uno storage WORM reale.
 
 ## AWS SDK S3 immutable object version provider rehearsal (#145)
 
-Il nuovo progetto xUnit `tests/Omnia.S3ObjectLock.Tests`
+Il nuovo progetto xUnit `tests/Tao.S3ObjectLock.Tests`
 esercita l'API S3 reale di un OSS temporaneo:
 bucket con Object Lock, versione COMPLIANCE,
 GET con VersionId, GetObjectRetention stessa versione,
@@ -253,11 +253,11 @@ rimane esplicitamente nelle issue aperte.
 
 ### Evidenze TDD e compatibilità S3 Object Lock (#145)
 
-Il test-first ha prodotto [RED CI 44884847236](https://github.com/KeyserDSoze/Omnia/actions/runs/44884847236) (provider S3 non ancora implementato) e [RED CI 44884878720](https://github.com/KeyserDSoze/Omnia/actions/runs/44884878720) (enum AWS SDK PUT da correggere). Dopo test-first, adapter e aggiustamenti del bootstrap S3 CI con uid/gid reale e file privato `0400`, [GREEN CI 44885831789](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831789) su `649e12ab` ha eseguito **2/2 test REALI SeaweedFS**, **19/19 Domain** e **80/80 Integration**, PITR fisici, Docker/mobile; [OIDC 44885831790](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831790) e [Pages 44885831828](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831828) GREEN. Il test provider verifica una semantica S3 reale ma non può attestare l'indipendenza dallo stesso runner, né validità giuridica della retention.
+Il test-first ha prodotto [RED CI 44884847236](https://github.com/KeyserDSoze/Tao/actions/runs/44884847236) (provider S3 non ancora implementato) e [RED CI 44884878720](https://github.com/KeyserDSoze/Tao/actions/runs/44884878720) (enum AWS SDK PUT da correggere). Dopo test-first, adapter e aggiustamenti del bootstrap S3 CI con uid/gid reale e file privato `0400`, [GREEN CI 44885831789](https://github.com/KeyserDSoze/Tao/actions/runs/44885831789) su `649e12ab` ha eseguito **2/2 test REALI SeaweedFS**, **19/19 Domain** e **80/80 Integration**, PITR fisici, Docker/mobile; [OIDC 44885831790](https://github.com/KeyserDSoze/Tao/actions/runs/44885831790) e [Pages 44885831828](https://github.com/KeyserDSoze/Tao/actions/runs/44885831828) GREEN. Il test provider verifica una semantica S3 reale ma non può attestare l'indipendenza dallo stesso runner, né validità giuridica della retention.
 
 ## Azure Blob SDK version-level WORM contract tests (#146 / ADR 0045)
 
-Il progetto `tests/Omnia.AzureBlobWorm.Tests` esercita il
+Il progetto `tests/Tao.AzureBlobWorm.Tests` esercita il
 client reale Azure.Storage.Blobs usando un HTTP transport
 fake: HEAD+GET pinned with `versionid`, risposta con
 policy Locked vs Unlocked/missing/expired, mismatch
@@ -269,14 +269,14 @@ e 403 DELETE sono ancora da implementare (#144).
 
 ### Azure Blob SDK HTTP provider read contract — TDD verifica finale (#146)
 
-- [RED 44888345925](https://github.com/KeyserDSoze/Omnia/actions/runs/44888345925) test-first prima dell'adapter, errore CS0234/CS0246 come atteso.
-- [RED 44888375998](https://github.com/KeyserDSoze/Omnia/actions/runs/44888375998): policy sconosciuta causa eccezione SDK; il reader è stato reso fail-closed e aggiunti test di HEAD/GET mismatch.
-- [CI GREEN 44888632016](https://github.com/KeyserDSoze/Omnia/actions/runs/44888632016) sul commit `df498bc7`: **4/4 test Azure SDK HTTP sintetici**; 2/2 real S3 SeaweedFS, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali e Docker/mobile; [OIDC 44888631958](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631958) e [Pages 44888631988](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631988) SUCCESS sullo stesso SHA.
+- [RED 44888345925](https://github.com/KeyserDSoze/Tao/actions/runs/44888345925) test-first prima dell'adapter, errore CS0234/CS0246 come atteso.
+- [RED 44888375998](https://github.com/KeyserDSoze/Tao/actions/runs/44888375998): policy sconosciuta causa eccezione SDK; il reader è stato reso fail-closed e aggiunti test di HEAD/GET mismatch.
+- [CI GREEN 44888632016](https://github.com/KeyserDSoze/Tao/actions/runs/44888632016) sul commit `df498bc7`: **4/4 test Azure SDK HTTP sintetici**; 2/2 real S3 SeaweedFS, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali e Docker/mobile; [OIDC 44888631958](https://github.com/KeyserDSoze/Tao/actions/runs/44888631958) e [Pages 44888631988](https://github.com/KeyserDSoze/Tao/actions/runs/44888631988) SUCCESS sullo stesso SHA.
 - Questa è una prova di SDK contro risposte HTTP simulate, non di version-level Azure WORM realmente Locked su tenant/account Azure o resistenza al DELETE. Mantenere #144/#141 aperte.
 
 ## S3 conditional COMPLIANCE publisher negative/real tests (#147)
 
-`tests/Omnia.S3ObjectLock.Tests/S3ObjectLockAttemptSubmissionTests.cs`
+`tests/Tao.S3ObjectLock.Tests/S3ObjectLockAttemptSubmissionTests.cs`
 verifica AWS SDK PutObject condizionale su SeaweedFS
 Object Lock reale e rilettura COMPLIANCE della versione
 con HMAC; non deve sostituire il publisher con un
@@ -302,15 +302,15 @@ effimero, non authority offsite.
 
 ### Risultati TDD #147 PUT conditional + retention mode/readback
 
-- [RED 44891077685](https://github.com/KeyserDSoze/Omnia/actions/runs/44891077685): assenza publisher/port prima della sua implementazione.
-- [GREEN 44891269611](https://github.com/KeyserDSoze/Omnia/actions/runs/44891269611): 5/5 S3 suite, altri test e PITR SUCCESS.
-- [RED hardening 44891542059](https://github.com/KeyserDSoze/Omnia/actions/runs/44891542059): 1/6 S3 fallito per accettazione di provider mode AzureLocked o retainUntil effettiva inferiore alla richiesta.
-- [GREEN 44891839494](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839494) sul commit `5b237395`: **7/7 S3 real protocol + fake faults**, **4/4 Azure SDK fake HTTP**, **19/19 Domain**, **80/80 PostgreSQL Integration**, PITR e Docker/mobile SUCCESS; [OIDC 44891839549](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839549), [Pages 44891839509](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839509) SUCCESS. Test dual PITR dimostra ancora replay NON sicuro, quarantena mantenuta.
+- [RED 44891077685](https://github.com/KeyserDSoze/Tao/actions/runs/44891077685): assenza publisher/port prima della sua implementazione.
+- [GREEN 44891269611](https://github.com/KeyserDSoze/Tao/actions/runs/44891269611): 5/5 S3 suite, altri test e PITR SUCCESS.
+- [RED hardening 44891542059](https://github.com/KeyserDSoze/Tao/actions/runs/44891542059): 1/6 S3 fallito per accettazione di provider mode AzureLocked o retainUntil effettiva inferiore alla richiesta.
+- [GREEN 44891839494](https://github.com/KeyserDSoze/Tao/actions/runs/44891839494) sul commit `5b237395`: **7/7 S3 real protocol + fake faults**, **4/4 Azure SDK fake HTTP**, **19/19 Domain**, **80/80 PostgreSQL Integration**, PITR e Docker/mobile SUCCESS; [OIDC 44891839549](https://github.com/KeyserDSoze/Tao/actions/runs/44891839549), [Pages 44891839509](https://github.com/KeyserDSoze/Tao/actions/runs/44891839509) SUCCESS. Test dual PITR dimostra ancora replay NON sicuro, quarantena mantenuta.
 - CI SeaweedFS è sullo stesso runner e non prova offsite immutable custody. #144/#141 OPEN.
 
 ## S3 bounded history reconciliation test-first (ADR0047 / #148)
 
-`tests/Omnia.S3ObjectLock.Tests/S3UncertainAckHistoryTests.cs`
+`tests/Tao.S3ObjectLock.Tests/S3UncertainAckHistoryTests.cs`
 esercita AWS SDK v4 reale su bucket SeaweedFS effimero:
 PUT COMPLIANCE realmente accettata dal server con ACK
 artificialmente perso nel processo caller; scansione
@@ -326,8 +326,8 @@ source commit primario.
 
 ### TDD evidence #148: S3 uncertain ACK history
 
-- [RED 44896553267](https://github.com/KeyserDSoze/Omnia/actions/runs/44896553267) sul commit `5b6aa349`: CS0246 su reconciler e port test-first mancanti.
-- [GREEN 44896756880](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756880) su `d218100f`: **10/10 S3 provider protocol + negative history**, 4/4 Azure SDK fake HTTP, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali/Docker/mobile; [OIDC 44896756790](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756790), [Pages 44896756867](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756867) SUCCESS.
+- [RED 44896553267](https://github.com/KeyserDSoze/Tao/actions/runs/44896553267) sul commit `5b6aa349`: CS0246 su reconciler e port test-first mancanti.
+- [GREEN 44896756880](https://github.com/KeyserDSoze/Tao/actions/runs/44896756880) su `d218100f`: **10/10 S3 provider protocol + negative history**, 4/4 Azure SDK fake HTTP, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali/Docker/mobile; [OIDC 44896756790](https://github.com/KeyserDSoze/Tao/actions/runs/44896756790), [Pages 44896756867](https://github.com/KeyserDSoze/Tao/actions/runs/44896756867) SUCCESS.
 - La detection del replay pericoloso dopo dual-PGDATA PITR continua a richiedere quarantena, non può essere sbloccata dal nuovo reconciler. Zero/multiple/incomplete S3 version listing non prova l'assenza di tentativi. #144/#141 P0 OPEN.
 
 ## S3 signed exact-version pin on second Object Lock bucket (ADR 0048 / #149)
@@ -351,9 +351,9 @@ provider independence o legal GDPR.
 
 ### Evidenze GitHub Actions TDD #149 — cross-bucket signed pin
 
-- [RED 44904227083](https://github.com/KeyserDSoze/Omnia/actions/runs/44904227083): commit test-first `009bd742`, fail CS0246 reader/service mancanti; fix visibilità scope con HMAC domain-separated.
-- [GREEN 44904518296](https://github.com/KeyserDSoze/Omnia/actions/runs/44904518296): commit `5c9b7d88`, 13/13 S3, 4/4 Azure HTTP, 19/19 Domain, 80/80 PG Integration, PITR/Docker/mobile.
-- [GREEN finale codice 44904790204](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790204): `3db924a0`, 14/14 S3 (two-bucket pinned WORM + lost ACK + negative source mode/pin retention/store/keys), 4/4 Azure HTTP fake, 19/19 Domain, 80/80 PG Integration, PITR reali/Docker/mobile; [OIDC 44904790199](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790199), [Pages 44904790212](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790212) SUCCESS su stesso commit.
+- [RED 44904227083](https://github.com/KeyserDSoze/Tao/actions/runs/44904227083): commit test-first `009bd742`, fail CS0246 reader/service mancanti; fix visibilità scope con HMAC domain-separated.
+- [GREEN 44904518296](https://github.com/KeyserDSoze/Tao/actions/runs/44904518296): commit `5c9b7d88`, 13/13 S3, 4/4 Azure HTTP, 19/19 Domain, 80/80 PG Integration, PITR/Docker/mobile.
+- [GREEN finale codice 44904790204](https://github.com/KeyserDSoze/Tao/actions/runs/44904790204): `3db924a0`, 14/14 S3 (two-bucket pinned WORM + lost ACK + negative source mode/pin retention/store/keys), 4/4 Azure HTTP fake, 19/19 Domain, 80/80 PG Integration, PITR reali/Docker/mobile; [OIDC 44904790199](https://github.com/KeyserDSoze/Tao/actions/runs/44904790199), [Pages 44904790212](https://github.com/KeyserDSoze/Tao/actions/runs/44904790212) SUCCESS su stesso commit.
 - La simultanea physical-PITR continua a osservare unsafe replay e quarantena. Un pin locale firmato non sostituisce un catalogo monotono o una custodia amministrativamente separata (#144/#141).
 
 ### Negative pin-catalogue regression S3 (#150 / ADR 0049)
@@ -441,8 +441,8 @@ con ruoli separati e auth header **solo test**; controlla 413 con
 dimensione dichiarata e body chunked/streamed di dimensione superiore
 al limite, 415 per gzip, small JSON ancora disponibile al model binder,
 `GET /health` e consensi non toccati, configurazioni invalide
-rifiutate. Eseguire con `OMNIA_TEST_DB`, `OMNIA_TEST_APP_DB`,
-`OMNIA_TEST_RETENTION_DB`, `OMNIA_TEST_KEYRING_FILE` disponibili.
+rifiutate. Eseguire con `TAO_TEST_DB`, `TAO_TEST_APP_DB`,
+`TAO_TEST_RETENTION_DB`, `TAO_TEST_KEYRING_FILE` disponibili.
 Non inviare contenuti reali; nessun log di payload. Questo test
 non garantisce WAF/ingress production, slowloris, quote distribuite,
 upload audio o vera autenticazione OIDC, che ha la sua E2E.
@@ -463,20 +463,20 @@ an already disconnected client or safe distributed rate limiting.
 
 ## JSON Content-Type early-rejection test-first slice (#158, ADR 0057)
 
-`tests/Omnia.Integration.Tests/ApiJsonContentTypeTests.cs` introduces
+`tests/Tao.Integration.Tests/ApiJsonContentTypeTests.cs` introduces
 a synthetic fail-on-read request body to prove that unsupported/missing
 `Content-Type`, invalid charset, duplicate charset and malformed
 media type yield **415 before any read or handler invocation**.
 Valid `application/json` with/without UTF-8 and
-`application/vnd.omnia+json` must pass unmodified to the handler and
+`application/vnd.tao+json` must pass unmodified to the handler and
 restore the original body stream. `/health` remains untouched.
 These are middleware contract tests, **not** live ingress/network,
 provider-issued OIDC, database mutation, or protection against
 distributed DDoS. Existing real PostgreSQL 413/415, 408 and 429
 integration tests plus OIDC, Pages and mobile CI remain mandatory.
 
-Test-first commit: [ad5f9d0f](https://github.com/KeyserDSoze/Omnia/commit/ad5f9d0f8944b225cf1589995f17c0d7434222ff).
-Implementation commit: [ee7c598d](https://github.com/KeyserDSoze/Omnia/commit/ee7c598d75acec8c1591d6b0ac18f89499777f58).
+Test-first commit: [ad5f9d0f](https://github.com/KeyserDSoze/Tao/commit/ad5f9d0f8944b225cf1589995f17c0d7434222ff).
+Implementation commit: [ee7c598d](https://github.com/KeyserDSoze/Tao/commit/ee7c598d75acec8c1591d6b0ac18f89499777f58).
 CI RED/GREEN evidence must be recorded in issue #158 once checked; no
 unobserved workflow success is implied by these links.
 
@@ -641,7 +641,7 @@ load test or production/GDPR security release.
 
 ## TDD: aggregate tenant requests/minute (#166 / ADR 0065)
 Behavioral RED on test-only commit 4096db9a,
-[CI 44962256629](https://github.com/KeyserDSoze/Omnia/actions/runs/44962256629):
+[CI 44962256629](https://github.com/KeyserDSoze/Tao/actions/runs/44962256629):
 135 passed / 1 failed of 136 real PostgreSQL Integration.
 In WebApplicationFactory with test-only authentication and
 actor=10/min, tenant=2/min, the THIRD different subject of
@@ -664,8 +664,8 @@ No provider/production load or GDPR release is implied.
 ## TDD bounded actor rate partition memory (#167 / ADR 0066)
 
 Behavioral RED on test-only
-[commit b564d5a6](https://github.com/KeyserDSoze/Omnia/commit/b564d5a676e80712ef4e0811c3e6219cfbde05aa)
-and [CI 44966863089](https://github.com/KeyserDSoze/Omnia/actions/runs/44966863089):
+[commit b564d5a6](https://github.com/KeyserDSoze/Tao/commit/b564d5a676e80712ef4e0811c3e6219cfbde05aa)
+and [CI 44966863089](https://github.com/KeyserDSoze/Tao/actions/runs/44966863089):
 real PostgreSQL integration suite **142 pass, 1 fail /
 143 total**. In xUnit WebApplicationFactory with test-only
 auth, actor rate=10/min, aggregate tenant=100/min and
@@ -698,9 +698,9 @@ release is claimed.
 
 ## #185/#186 — Regressioni E2E quota reale e fixture Azure WORM a scadenza
 
-L'aggiunta del test browser sulle giornate caricate (#185) è stata introdotta in RED con Vitest nuova suite mancante, **52 test esistenti PASS** [CI 45169968892](https://github.com/KeyserDSoze/Omnia/actions/runs/45169968892). Il primo run browser RED [45169968906](https://github.com/KeyserDSoze/Omnia/actions/runs/45169968906) ha invece ottenuto **429** durante il caricamento di note sintetiche usando l'account #2 già utilizzato da altre prove; non è una prova del selettore mancante. Non disabilitare la quota. Il workflow provisiona ora un **terzo utente Keycloak effimero** con password generata casualmente, token OIDC reale e budget per-attore autentico, dedicato al nuovo scenario.
+L'aggiunta del test browser sulle giornate caricate (#185) è stata introdotta in RED con Vitest nuova suite mancante, **52 test esistenti PASS** [CI 45169968892](https://github.com/KeyserDSoze/Tao/actions/runs/45169968892). Il primo run browser RED [45169968906](https://github.com/KeyserDSoze/Tao/actions/runs/45169968906) ha invece ottenuto **429** durante il caricamento di note sintetiche usando l'account #2 già utilizzato da altre prove; non è una prova del selettore mancante. Non disabilitare la quota. Il workflow provisiona ora un **terzo utente Keycloak effimero** con password generata casualmente, token OIDC reale e budget per-attore autentico, dedicato al nuovo scenario.
 
-La stessa CI GREEN preliminare [45170398192](https://github.com/KeyserDSoze/Omnia/actions/runs/45170398192) ha rilevato un test di protocollo Azure Blob WORM con `now` fisso al 21 novembre 2026: la retention sintetica al 23 novembre si era avvicinata alla scadenza, e la verifica di produzione `retention > DateTimeOffset.UtcNow.AddHours(1)` ha **correttamente** rifiutato l'input. La #186 corregge **solo il clock della fixture** usando UTC reale e retention futura di 2/3 giorni, preservando i controlli fail-closed. Il test negativo verifica anche che una data del chiamante retrodatata non aggiri la verifica sull'orologio attuale.
+La stessa CI GREEN preliminare [45170398192](https://github.com/KeyserDSoze/Tao/actions/runs/45170398192) ha rilevato un test di protocollo Azure Blob WORM con `now` fisso al 21 novembre 2026: la retention sintetica al 23 novembre si era avvicinata alla scadenza, e la verifica di produzione `retention > DateTimeOffset.UtcNow.AddHours(1)` ha **correttamente** rifiutato l'input. La #186 corregge **solo il clock della fixture** usando UTC reale e retention futura di 2/3 giorni, preservando i controlli fail-closed. Il test negativo verifica anche che una data del chiamante retrodatata non aggiri la verifica sull'orologio attuale.
 
 La #185/#186 si chiudono solo quando CI (Azure 31/31, PG, PITR, Docker, Vitest, Playwright), E2E vero Keycloak e Pages siano tutte `SUCCESS` sul medesimo ultimo commit. I test Azure sono di protocollo **scriptato**, non attestazione di account Azure WORM reale, né della conformità normativa.
 

@@ -1,4 +1,4 @@
-name: Omnia CI
+name: Tao CI
 on:
   push:
     branches: [main]
@@ -47,14 +47,14 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m unittest discover -s tests/quality -p 'test_locked_sbom.py'
-          python3 tests/quality/generate_locked_sbom.py --output "$RUNNER_TEMP/omnia-locked-sbom"
-          python3 tests/quality/generate_locked_sbom.py --verify "$RUNNER_TEMP/omnia-locked-sbom"
-          sha256sum "$RUNNER_TEMP/omnia-locked-sbom/"*.cdx.json
+          python3 tests/quality/generate_locked_sbom.py --output "$RUNNER_TEMP/tao-locked-sbom"
+          python3 tests/quality/generate_locked_sbom.py --verify "$RUNNER_TEMP/tao-locked-sbom"
+          sha256sum "$RUNNER_TEMP/tao-locked-sbom/"*.cdx.json
       - name: Publish locked CycloneDX inventory as short-lived CI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: omnia-locked-dependency-sbom
-          path: ${{ runner.temp }}/omnia-locked-sbom/*.cdx.json
+          name: tao-locked-dependency-sbom
+          path: ${{ runner.temp }}/tao-locked-sbom/*.cdx.json
           if-no-files-found: error
           retention-days: 14
       - name: Test and validate fail-closed NuGet lock graphs
@@ -72,32 +72,32 @@ jobs:
             dotnet restore "$project" --locked-mode
           done
       - name: xUnit domain and application
-        run: dotnet test tests/Omnia.Domain.Tests/Omnia.Domain.Tests.csproj -c Release
+        run: dotnet test tests/Tao.Domain.Tests/Tao.Domain.Tests.csproj -c Release
       - name: Compile .NET 10 API and offline backfill utility
         run: |
-          dotnet build src/backend/Omnia.Api/Omnia.Api.csproj -c Release
-          dotnet build src/backend/Omnia.Backfill/Omnia.Backfill.csproj -c Release
-          dotnet build src/backend/Omnia.BackfillAudit/Omnia.BackfillAudit.csproj -c Release
-          dotnet build src/backend/Omnia.RecoveryAudit/Omnia.RecoveryAudit.csproj -c Release
-          dotnet build src/backend/Omnia.ErasurePublisher/Omnia.ErasurePublisher.csproj -c Release
-          dotnet build src/backend/Omnia.WitnessAudit/Omnia.WitnessAudit.csproj -c Release
-          dotnet build src/backend/Omnia.ErasureDeliveryAudit/Omnia.ErasureDeliveryAudit.csproj -c Release
-          dotnet build tests/Omnia.RestoreRehearsal/Omnia.RestoreRehearsal.csproj -c Release
-          dotnet build tests/Omnia.UnwitnessedPitrRehearsal/Omnia.UnwitnessedPitrRehearsal.csproj -c Release
-          dotnet build tests/Omnia.WitnessPitrRehearsal/Omnia.WitnessPitrRehearsal.csproj -c Release
-          dotnet build tests/Omnia.ClaimPitrRehearsal/Omnia.ClaimPitrRehearsal.csproj -c Release
+          dotnet build src/backend/Tao.Api/Tao.Api.csproj -c Release
+          dotnet build src/backend/Tao.Backfill/Tao.Backfill.csproj -c Release
+          dotnet build src/backend/Tao.BackfillAudit/Tao.BackfillAudit.csproj -c Release
+          dotnet build src/backend/Tao.RecoveryAudit/Tao.RecoveryAudit.csproj -c Release
+          dotnet build src/backend/Tao.ErasurePublisher/Tao.ErasurePublisher.csproj -c Release
+          dotnet build src/backend/Tao.WitnessAudit/Tao.WitnessAudit.csproj -c Release
+          dotnet build src/backend/Tao.ErasureDeliveryAudit/Tao.ErasureDeliveryAudit.csproj -c Release
+          dotnet build tests/Tao.RestoreRehearsal/Tao.RestoreRehearsal.csproj -c Release
+          dotnet build tests/Tao.UnwitnessedPitrRehearsal/Tao.UnwitnessedPitrRehearsal.csproj -c Release
+          dotnet build tests/Tao.WitnessPitrRehearsal/Tao.WitnessPitrRehearsal.csproj -c Release
+          dotnet build tests/Tao.ClaimPitrRehearsal/Tao.ClaimPitrRehearsal.csproj -c Release
       - name: Recovery audit CLI denies missing external journal and checkpoint
         shell: bash
         run: |
           set -euo pipefail
-          log="$(mktemp "$RUNNER_TEMP/omnia-recovery-audit.XXXXXX")"
+          log="$(mktemp "$RUNNER_TEMP/tao-recovery-audit.XXXXXX")"
           trap 'rm -f "$log"' EXIT
-          if env -u OMNIA_RECOVERY_JOURNAL_PATH \
-                 -u OMNIA_RECOVERY_CHECKPOINT_PATH \
-                 -u OMNIA_RECOVERY_JOURNAL_KEY_PATH \
-                 -u OMNIA_RECOVERY_CHECKPOINT_KEY_PATH \
+          if env -u TAO_RECOVERY_JOURNAL_PATH \
+                 -u TAO_RECOVERY_CHECKPOINT_PATH \
+                 -u TAO_RECOVERY_JOURNAL_KEY_PATH \
+                 -u TAO_RECOVERY_CHECKPOINT_KEY_PATH \
             dotnet run --no-build -c Release \
-            --project src/backend/Omnia.RecoveryAudit/Omnia.RecoveryAudit.csproj \
+            --project src/backend/Tao.RecoveryAudit/Tao.RecoveryAudit.csproj \
             > "$log" 2>&1; then
             echo "Recovery audit unexpectedly accepted absent external trust files." >&2
             exit 1
@@ -111,14 +111,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          marker="$(mktemp "$RUNNER_TEMP/omnia-recovery-state.XXXXXX")"
-          log="$(mktemp "$RUNNER_TEMP/omnia-recovery-log.XXXXXX")"
+          marker="$(mktemp "$RUNNER_TEMP/tao-recovery-state.XXXXXX")"
+          log="$(mktemp "$RUNNER_TEMP/tao-recovery-log.XXXXXX")"
           trap 'rm -f "$marker" "$log"' EXIT
           printf 'quarantined\n' > "$marker"
           chmod 600 "$marker"
           if Recovery__AccessStateFile="$marker" ASPNETCORE_ENVIRONMENT=Development \
             dotnet run --no-build --no-launch-profile -c Release \
-              --project src/backend/Omnia.Api/Omnia.Api.csproj > "$log" 2>&1; then
+              --project src/backend/Tao.Api/Tao.Api.csproj > "$log" 2>&1; then
             echo "Quarantined API unexpectedly started." >&2
             exit 1
           fi
@@ -128,7 +128,7 @@ jobs:
           }
           if ASPNETCORE_ENVIRONMENT=Production \
             dotnet run --no-build --no-launch-profile -c Release \
-              --project src/backend/Omnia.Api/Omnia.Api.csproj > "$log" 2>&1; then
+              --project src/backend/Tao.Api/Tao.Api.csproj > "$log" 2>&1; then
             echo "Production API unexpectedly started without release state." >&2
             exit 1
           fi
@@ -139,7 +139,7 @@ jobs:
           printf 'ready\n' > "$marker"
           if Recovery__AccessStateFile="$marker" ASPNETCORE_ENVIRONMENT=Development \
             dotnet run --no-build --no-launch-profile -c Release \
-              --project src/backend/Omnia.Api/Omnia.Api.csproj > "$log" 2>&1; then
+              --project src/backend/Tao.Api/Tao.Api.csproj > "$log" 2>&1; then
             echo "Unconfigured API unexpectedly started." >&2
             exit 1
           fi
@@ -160,11 +160,11 @@ jobs:
           secret="$(openssl rand -hex 32)"
           echo "::add-mask::$access"
           echo "::add-mask::$secret"
-          echo "OMNIA_TEST_S3_ACCESS=$access" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_S3_SECRET=$secret" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_S3_ENDPOINT=http://127.0.0.1:18433" >> "$GITHUB_ENV"
-          echo "OMNIA_S3_CI_ONLY=1" >> "$GITHUB_ENV"
-          auth="$RUNNER_TEMP/omnia-s3-auth.json"
+          echo "TAO_TEST_S3_ACCESS=$access" >> "$GITHUB_ENV"
+          echo "TAO_TEST_S3_SECRET=$secret" >> "$GITHUB_ENV"
+          echo "TAO_TEST_S3_ENDPOINT=http://127.0.0.1:18433" >> "$GITHUB_ENV"
+          echo "TAO_S3_CI_ONLY=1" >> "$GITHUB_ENV"
+          auth="$RUNNER_TEMP/tao-s3-auth.json"
           jq -nc --arg access "$access" --arg secret "$secret" \
             '{identities:[{name:"ci-s3-admin",
               credentials:[{accessKey:$access,secretKey:$secret}],
@@ -182,7 +182,7 @@ jobs:
           chmod 400 "$auth"
           sudo chown "$seaweed_uid:$seaweed_gid" "$auth"
           # Keep an exited container for diagnostics; cleanup runs always.
-          docker run -d --name omnia-ci-s3-object-lock \
+          docker run -d --name tao-ci-s3-object-lock \
             -v "$auth:/etc/seaweedfs/s3.json:ro" \
             -p 127.0.0.1:18433:8333 \
             chrislusf/seaweedfs:4.47 \
@@ -190,9 +190,9 @@ jobs:
               -dir=/data -master.volumeSizeLimitMB=64
           ready=0
           for i in $(seq 1 50); do
-            if [[ "$(docker inspect -f '{{.State.Running}}' omnia-ci-s3-object-lock)" != true ]]; then
+            if [[ "$(docker inspect -f '{{.State.Running}}' tao-ci-s3-object-lock)" != true ]]; then
               echo "S3 container terminated before its health check." >&2
-              docker logs --tail 100 omnia-ci-s3-object-lock || true
+              docker logs --tail 100 tao-ci-s3-object-lock || true
               exit 1
             fi
             # Unauthorized or signed S3 API responses both prove the
@@ -205,23 +205,23 @@ jobs:
             sleep 2
           done
           if [[ "$ready" != 1 ]]; then
-            docker logs --tail 90 omnia-ci-s3-object-lock || true
+            docker logs --tail 90 tao-ci-s3-object-lock || true
             echo "S3 Object Lock service not available." >&2
             exit 1
           fi
 
       - name: Real S3 Object Lock version-pinned adapter integration tests
-        run: dotnet test tests/Omnia.S3ObjectLock.Tests/Omnia.S3ObjectLock.Tests.csproj -c Release
+        run: dotnet test tests/Tao.S3ObjectLock.Tests/Tao.S3ObjectLock.Tests.csproj -c Release
       - name: Stop disposable S3-compatible service
         if: always()
         shell: bash
         run: |
-          docker rm -f omnia-ci-s3-object-lock >/dev/null 2>&1 || true
-          rm -f -- "$RUNNER_TEMP/omnia-s3-auth.json"
+          docker rm -f tao-ci-s3-object-lock >/dev/null 2>&1 || true
+          rm -f -- "$RUNNER_TEMP/tao-s3-auth.json"
 
 
       - name: Azure SDK WORM pinned read/write, history and lost-ACK HTTP contracts
-        run: dotnet test tests/Omnia.AzureBlobWorm.Tests/Omnia.AzureBlobWorm.Tests.csproj -c Release
+        run: dotnet test tests/Tao.AzureBlobWorm.Tests/Tao.AzureBlobWorm.Tests.csproj -c Release
 
       - name: Start disposable PostgreSQL 17 / pgvector
         shell: bash
@@ -239,51 +239,51 @@ jobs:
           echo "::add-mask::$backfill_password"
           echo "::add-mask::$audit_password"
           echo "::add-mask::$dispatch_password"
-          echo "OMNIA_TEST_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia;Password=$password" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_APP_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_app;Password=$app_password" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_RETENTION_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_retention;Password=$retention_password" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_BACKFILL_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_backfill;Password=$backfill_password" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_AUDIT_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_backfill_audit;Password=$audit_password" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_DISPATCH_DB=Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_dispatcher;Password=$dispatch_password" >> "$GITHUB_ENV"
-          ring_file="$RUNNER_TEMP/omnia-test-envelope.keyring.json"
+          echo "TAO_TEST_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao;Password=$password" >> "$GITHUB_ENV"
+          echo "TAO_TEST_APP_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_app;Password=$app_password" >> "$GITHUB_ENV"
+          echo "TAO_TEST_RETENTION_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_retention;Password=$retention_password" >> "$GITHUB_ENV"
+          echo "TAO_TEST_BACKFILL_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_backfill;Password=$backfill_password" >> "$GITHUB_ENV"
+          echo "TAO_TEST_AUDIT_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_backfill_audit;Password=$audit_password" >> "$GITHUB_ENV"
+          echo "TAO_TEST_DISPATCH_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_dispatcher;Password=$dispatch_password" >> "$GITHUB_ENV"
+          ring_file="$RUNNER_TEMP/tao-test-envelope.keyring.json"
           # Synthetic key lives only on this ephemeral runner; never in logs/artifacts.
           ring_key="$(openssl rand -base64 32)"
           jq -nc --arg secret "$ring_key" \
             '{activeKeyId:"ci-v1", keys:{"ci-v1":$secret}}' > "$ring_file"
           chmod 600 "$ring_file"
-          echo "OMNIA_TEST_KEYRING_FILE=$ring_file" >> "$GITHUB_ENV"
-          docker run -d --rm --name omnia-ci-pg \
-            -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_test \
+          echo "TAO_TEST_KEYRING_FILE=$ring_file" >> "$GITHUB_ENV"
+          docker run -d --rm --name tao-ci-pg \
+            -e POSTGRES_USER=tao -e POSTGRES_DB=tao_test \
             -e "POSTGRES_PASSWORD=$password" \
             -p 127.0.0.1:15432:5432 pgvector/pgvector:pg17 \
             -c archive_mode=on \
-            -c "archive_command=mkdir -p /tmp/omnia-ci-wal-archive && test ! -f /tmp/omnia-ci-wal-archive/%f && cp %p /tmp/omnia-ci-wal-archive/%f" \
+            -c "archive_command=mkdir -p /tmp/tao-ci-wal-archive && test ! -f /tmp/tao-ci-wal-archive/%f && cp %p /tmp/tao-ci-wal-archive/%f" \
             -c archive_timeout=60s
           for i in $(seq 1 60); do
-            if docker exec omnia-ci-pg pg_isready -U omnia -d omnia_test; then break; fi
+            if docker exec tao-ci-pg pg_isready -U tao -d tao_test; then break; fi
             sleep 2
           done
-          docker exec omnia-ci-pg pg_isready -U omnia -d omnia_test
-          docker exec -i omnia-ci-pg psql -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_test -v app_password="$app_password" -v retention_password="$retention_password" -v backfill_password="$backfill_password" -v audit_password="$audit_password" -v dispatch_password="$dispatch_password" <<'SQL'
+          docker exec tao-ci-pg pg_isready -U tao -d tao_test
+          docker exec -i tao-ci-pg psql -v ON_ERROR_STOP=1 \
+            -U tao -d tao_test -v app_password="$app_password" -v retention_password="$retention_password" -v backfill_password="$backfill_password" -v audit_password="$audit_password" -v dispatch_password="$dispatch_password" <<'SQL'
           SELECT format(
-            'CREATE ROLE omnia_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
+            'CREATE ROLE tao_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
             :'app_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_retention LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_retention LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'retention_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_backfill LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_backfill LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'backfill_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_backfill_audit LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_backfill_audit LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'audit_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_dispatcher LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_dispatcher LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'dispatch_password'
           ) \gexec
           SQL
@@ -303,53 +303,53 @@ jobs:
           echo "::add-mask::$witness_reader"
           echo "::add-mask::$intent_writer"
           echo "::add-mask::$intent_reader"
-          echo "OMNIA_TEST_INTENT_WRITER_DB=Host=127.0.0.1;Port=15436;Database=omnia_witness;Username=omnia_witness_intent_writer;Password=$intent_writer" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_INTENT_READER_DB=Host=127.0.0.1;Port=15436;Database=omnia_witness;Username=omnia_witness_intent_reader;Password=$intent_reader" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_WITNESS_ADMIN_DB=Host=127.0.0.1;Port=15436;Database=omnia_witness;Username=omnia;Password=$witness_admin" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_WITNESS_WRITER_DB=Host=127.0.0.1;Port=15436;Database=omnia_witness;Username=omnia_witness_writer;Password=$witness_writer" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_WITNESS_READER_DB=Host=127.0.0.1;Port=15436;Database=omnia_witness;Username=omnia_witness_reader;Password=$witness_reader" >> "$GITHUB_ENV"
-          docker run -d --rm --name omnia-ci-erasure-witness \
-            -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_witness \
+          echo "TAO_TEST_INTENT_WRITER_DB=Host=127.0.0.1;Port=15436;Database=tao_witness;Username=tao_witness_intent_writer;Password=$intent_writer" >> "$GITHUB_ENV"
+          echo "TAO_TEST_INTENT_READER_DB=Host=127.0.0.1;Port=15436;Database=tao_witness;Username=tao_witness_intent_reader;Password=$intent_reader" >> "$GITHUB_ENV"
+          echo "TAO_TEST_WITNESS_ADMIN_DB=Host=127.0.0.1;Port=15436;Database=tao_witness;Username=tao;Password=$witness_admin" >> "$GITHUB_ENV"
+          echo "TAO_TEST_WITNESS_WRITER_DB=Host=127.0.0.1;Port=15436;Database=tao_witness;Username=tao_witness_writer;Password=$witness_writer" >> "$GITHUB_ENV"
+          echo "TAO_TEST_WITNESS_READER_DB=Host=127.0.0.1;Port=15436;Database=tao_witness;Username=tao_witness_reader;Password=$witness_reader" >> "$GITHUB_ENV"
+          docker run -d --rm --name tao-ci-erasure-witness \
+            -e POSTGRES_USER=tao -e POSTGRES_DB=tao_witness \
             -e "POSTGRES_PASSWORD=$witness_admin" \
             -p 127.0.0.1:15436:5432 postgres:17 \
             -c archive_mode=on \
-            -c "archive_command=mkdir -p /tmp/omnia-ci-witness-wal-archive && test ! -f /tmp/omnia-ci-witness-wal-archive/%f && cp %p /tmp/omnia-ci-witness-wal-archive/%f" \
+            -c "archive_command=mkdir -p /tmp/tao-ci-witness-wal-archive && test ! -f /tmp/tao-ci-witness-wal-archive/%f && cp %p /tmp/tao-ci-witness-wal-archive/%f" \
             -c archive_timeout=60s
           for i in $(seq 1 60); do
-            if docker exec omnia-ci-erasure-witness \
-               pg_isready -U omnia -d omnia_witness >/dev/null 2>&1; then break; fi
+            if docker exec tao-ci-erasure-witness \
+               pg_isready -U tao -d tao_witness >/dev/null 2>&1; then break; fi
             sleep 2
           done
-          docker exec omnia-ci-erasure-witness pg_isready -U omnia -d omnia_witness
-          docker exec -i omnia-ci-erasure-witness psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_witness \
+          docker exec tao-ci-erasure-witness pg_isready -U tao -d tao_witness
+          docker exec -i tao-ci-erasure-witness psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_witness \
             -v writer_password="$witness_writer" \
             -v reader_password="$witness_reader" \
             -v intent_writer_password="$intent_writer" \
             -v intent_reader_password="$intent_reader" <<'SQL'
           SELECT format(
-            'CREATE ROLE omnia_witness_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_witness_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'writer_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_witness_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_witness_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'reader_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_witness_intent_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_witness_intent_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'intent_writer_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_witness_intent_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_witness_intent_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'intent_reader_password'
           ) \gexec
           SQL
-          docker exec -i omnia-ci-erasure-witness psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_witness < tests/restore/independent-witness.sql
-          primary_id="$(docker exec omnia-ci-pg psql -U omnia -d omnia_test -Atqc \
+          docker exec -i tao-ci-erasure-witness psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_witness < tests/restore/independent-witness.sql
+          primary_id="$(docker exec tao-ci-pg psql -U tao -d tao_test -Atqc \
             'SELECT system_identifier FROM pg_control_system()')"
-          witness_id="$(docker exec omnia-ci-erasure-witness psql \
-            -U omnia -d omnia_witness -Atqc \
+          witness_id="$(docker exec tao-ci-erasure-witness psql \
+            -U tao -d tao_witness -Atqc \
             'SELECT system_identifier FROM pg_control_system()')"
           [[ -n "$primary_id" && -n "$witness_id" && "$primary_id" != "$witness_id" ]] || {
             echo "Witness reused the primary PostgreSQL cluster identity." >&2
@@ -366,57 +366,57 @@ jobs:
           echo "::add-mask::$anchor_admin"
           echo "::add-mask::$anchor_writer"
           echo "::add-mask::$anchor_reader"
-          echo "OMNIA_TEST_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=omnia_anchor;Username=omnia;Password=$anchor_admin" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_anchor;Username=omnia_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_anchor;Username=omnia_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
-          docker run -d --rm --name omnia-ci-witness-anchor \
-            -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_anchor \
+          echo "TAO_TEST_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=tao_anchor;Username=tao;Password=$anchor_admin" >> "$GITHUB_ENV"
+          echo "TAO_TEST_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_anchor;Username=tao_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
+          echo "TAO_TEST_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_anchor;Username=tao_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
+          docker run -d --rm --name tao-ci-witness-anchor \
+            -e POSTGRES_USER=tao -e POSTGRES_DB=tao_anchor \
             -e "POSTGRES_PASSWORD=$anchor_admin" \
             -p 127.0.0.1:15438:5432 postgres:17 \
             -c archive_mode=on \
-            -c "archive_command=mkdir -p /tmp/omnia-ci-third-claim-wal-archive && test ! -f /tmp/omnia-ci-third-claim-wal-archive/%f && cp %p /tmp/omnia-ci-third-claim-wal-archive/%f" \
+            -c "archive_command=mkdir -p /tmp/tao-ci-third-claim-wal-archive && test ! -f /tmp/tao-ci-third-claim-wal-archive/%f && cp %p /tmp/tao-ci-third-claim-wal-archive/%f" \
             -c archive_timeout=60s
           for i in $(seq 1 60); do
-            if docker exec omnia-ci-witness-anchor \
-              pg_isready -U omnia -d omnia_anchor >/dev/null 2>&1; then break; fi
+            if docker exec tao-ci-witness-anchor \
+              pg_isready -U tao -d tao_anchor >/dev/null 2>&1; then break; fi
             sleep 2
           done
-          docker exec omnia-ci-witness-anchor pg_isready -U omnia -d omnia_anchor
-          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_anchor \
+          docker exec tao-ci-witness-anchor pg_isready -U tao -d tao_anchor
+          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_anchor \
             -v writer_password="$anchor_writer" \
             -v reader_password="$anchor_reader" <<'SQL'
           SELECT format(
-            'CREATE ROLE omnia_anchor_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_anchor_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'writer_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_anchor_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_anchor_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'reader_password'
           ) \gexec
           SQL
-          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_anchor < tests/restore/independent-anchor.sql
+          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_anchor < tests/restore/independent-anchor.sql
           # A second DATABASE on the THIRD PGDATA isolates intent checkpoint
           # authority from the completed erasure checkpoint (separate keys
           # and domain-separated HMAC formats, same non-production CI host).
-          docker exec omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d postgres -c 'CREATE DATABASE omnia_intent_anchor' >/dev/null
-          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_intent_anchor < tests/restore/independent-anchor.sql
-          echo "OMNIA_TEST_INTENT_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=omnia_intent_anchor;Username=omnia;Password=$anchor_admin" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_INTENT_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_intent_anchor;Username=omnia_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_INTENT_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_intent_anchor;Username=omnia_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
+          docker exec tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d postgres -c 'CREATE DATABASE tao_intent_anchor' >/dev/null
+          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_intent_anchor < tests/restore/independent-anchor.sql
+          echo "TAO_TEST_INTENT_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=tao_intent_anchor;Username=tao;Password=$anchor_admin" >> "$GITHUB_ENV"
+          echo "TAO_TEST_INTENT_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_intent_anchor;Username=tao_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
+          echo "TAO_TEST_INTENT_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_intent_anchor;Username=tao_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
           # Dedicated HMAC head for the CI-only preflight regression: xUnit
           # runs different test classes concurrently, so NEVER share the
           # issuer's checkpoint/secret with the generic intent-anchor suite.
-          docker exec omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d postgres -c 'CREATE DATABASE omnia_preflight_anchor' >/dev/null
-          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_preflight_anchor < tests/restore/independent-anchor.sql
-          echo "OMNIA_TEST_PREFLIGHT_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=omnia_preflight_anchor;Username=omnia;Password=$anchor_admin" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_PREFLIGHT_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_preflight_anchor;Username=omnia_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_PREFLIGHT_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_preflight_anchor;Username=omnia_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
+          docker exec tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d postgres -c 'CREATE DATABASE tao_preflight_anchor' >/dev/null
+          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_preflight_anchor < tests/restore/independent-anchor.sql
+          echo "TAO_TEST_PREFLIGHT_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=tao_preflight_anchor;Username=tao;Password=$anchor_admin" >> "$GITHUB_ENV"
+          echo "TAO_TEST_PREFLIGHT_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_preflight_anchor;Username=tao_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
+          echo "TAO_TEST_PREFLIGHT_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_preflight_anchor;Username=tao_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
           # The attempt-consumption authority lives in another database on
           # the surviving THIRD PGDATA. Its writer cannot change checkpoint
           # heads, raw tables, or completed-erasure receipts.
@@ -424,47 +424,47 @@ jobs:
           claim_reader_password="$(openssl rand -hex 24)"
           echo "::add-mask::$claim_writer_password"
           echo "::add-mask::$claim_reader_password"
-          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d postgres \
+          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d postgres \
             -v claim_writer_password="$claim_writer_password" \
             -v claim_reader_password="$claim_reader_password" <<'SQL'
           SELECT format(
-            'CREATE ROLE omnia_claim_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_claim_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'claim_writer_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_claim_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_claim_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'claim_reader_password'
           ) \gexec
           SQL
-          docker exec omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d postgres -c 'CREATE DATABASE omnia_claim_preflight_anchor' >/dev/null
-          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_claim_preflight_anchor < tests/restore/independent-anchor.sql
-          echo "OMNIA_TEST_CLAIM_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_claim_preflight_anchor;Username=omnia_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_CLAIM_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_claim_preflight_anchor;Username=omnia_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
-          docker exec omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d postgres -c 'CREATE DATABASE omnia_execution_claims' >/dev/null
-          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_execution_claims < tests/restore/preerase-execution-claims.sql
-          echo "OMNIA_TEST_EXECUTION_CLAIM_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=omnia_execution_claims;Username=omnia;Password=$anchor_admin" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_EXECUTION_CLAIM_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_execution_claims;Username=omnia_claim_writer;Password=$claim_writer_password" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_EXECUTION_CLAIM_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_execution_claims;Username=omnia_claim_reader;Password=$claim_reader_password" >> "$GITHUB_ENV"
+          docker exec tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d postgres -c 'CREATE DATABASE tao_claim_preflight_anchor' >/dev/null
+          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_claim_preflight_anchor < tests/restore/independent-anchor.sql
+          echo "TAO_TEST_CLAIM_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_claim_preflight_anchor;Username=tao_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
+          echo "TAO_TEST_CLAIM_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_claim_preflight_anchor;Username=tao_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
+          docker exec tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d postgres -c 'CREATE DATABASE tao_execution_claims' >/dev/null
+          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_execution_claims < tests/restore/preerase-execution-claims.sql
+          echo "TAO_TEST_EXECUTION_CLAIM_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=tao_execution_claims;Username=tao;Password=$anchor_admin" >> "$GITHUB_ENV"
+          echo "TAO_TEST_EXECUTION_CLAIM_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_execution_claims;Username=tao_claim_writer;Password=$claim_writer_password" >> "$GITHUB_ENV"
+          echo "TAO_TEST_EXECUTION_CLAIM_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_execution_claims;Username=tao_claim_reader;Password=$claim_reader_password" >> "$GITHUB_ENV"
           # A dedicated HMAC pre-intent head for the FOURTH-PGDATA test;
           # no xUnit signer-key overlap with other checkpoint databases.
-          docker exec omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d postgres -c 'CREATE DATABASE omnia_fourth_intent_anchor' >/dev/null
-          docker exec -i omnia-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_fourth_intent_anchor < tests/restore/independent-anchor.sql
-          echo "OMNIA_TEST_FOURTH_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=omnia_fourth_intent_anchor;Username=omnia_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_FOURTH_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=omnia_fourth_intent_anchor;Username=omnia_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
-          source_id="$(docker exec omnia-ci-pg psql -U omnia -d omnia_test -Atqc \
+          docker exec tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d postgres -c 'CREATE DATABASE tao_fourth_intent_anchor' >/dev/null
+          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_fourth_intent_anchor < tests/restore/independent-anchor.sql
+          echo "TAO_TEST_FOURTH_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_fourth_intent_anchor;Username=tao_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
+          echo "TAO_TEST_FOURTH_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_fourth_intent_anchor;Username=tao_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
+          source_id="$(docker exec tao-ci-pg psql -U tao -d tao_test -Atqc \
             'SELECT system_identifier FROM pg_control_system()')"
-          witness_id="$(docker exec omnia-ci-erasure-witness psql \
-            -U omnia -d omnia_witness -Atqc \
+          witness_id="$(docker exec tao-ci-erasure-witness psql \
+            -U tao -d tao_witness -Atqc \
             'SELECT system_identifier FROM pg_control_system()')"
-          anchor_id="$(docker exec omnia-ci-witness-anchor psql \
-            -U omnia -d omnia_anchor -Atqc \
+          anchor_id="$(docker exec tao-ci-witness-anchor psql \
+            -U tao -d tao_anchor -Atqc \
             'SELECT system_identifier FROM pg_control_system()')"
           [[ -n "$anchor_id" && "$anchor_id" != "$source_id" && "$anchor_id" != "$witness_id" ]] || {
             echo "Anchor must use independent PostgreSQL PGDATA." >&2
@@ -480,57 +480,57 @@ jobs:
           echo "::add-mask::$fourth_admin"
           echo "::add-mask::$fourth_writer"
           echo "::add-mask::$fourth_reader"
-          docker run -d --rm --name omnia-ci-fourth-claim-fence \
-            -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_fourth_claims \
+          docker run -d --rm --name tao-ci-fourth-claim-fence \
+            -e POSTGRES_USER=tao -e POSTGRES_DB=tao_fourth_claims \
             -e "POSTGRES_PASSWORD=$fourth_admin" \
             -p 127.0.0.1:15440:5432 postgres:17 \
             -c archive_mode=on \
-            -c "archive_command=mkdir -p /tmp/omnia-ci-fourth-claim-wal-archive && test ! -f /tmp/omnia-ci-fourth-claim-wal-archive/%f && cp %p /tmp/omnia-ci-fourth-claim-wal-archive/%f" \
+            -c "archive_command=mkdir -p /tmp/tao-ci-fourth-claim-wal-archive && test ! -f /tmp/tao-ci-fourth-claim-wal-archive/%f && cp %p /tmp/tao-ci-fourth-claim-wal-archive/%f" \
             -c archive_timeout=60s
           for i in $(seq 1 60); do
-            if docker exec omnia-ci-fourth-claim-fence \
-              pg_isready -U omnia -d omnia_fourth_claims >/dev/null 2>&1; then break; fi
+            if docker exec tao-ci-fourth-claim-fence \
+              pg_isready -U tao -d tao_fourth_claims >/dev/null 2>&1; then break; fi
             sleep 2
           done
-          docker exec omnia-ci-fourth-claim-fence pg_isready -U omnia -d omnia_fourth_claims
-          docker exec -i omnia-ci-fourth-claim-fence psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_fourth_claims \
+          docker exec tao-ci-fourth-claim-fence pg_isready -U tao -d tao_fourth_claims
+          docker exec -i tao-ci-fourth-claim-fence psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_fourth_claims \
             -v writer_password="$fourth_writer" \
             -v reader_password="$fourth_reader" <<'SQL'
           SELECT format(
-            'CREATE ROLE omnia_claim_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_claim_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'writer_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_claim_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_claim_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'reader_password'
           ) \gexec
           SQL
-          docker exec -i omnia-ci-fourth-claim-fence psql -X -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_fourth_claims < tests/restore/preerase-execution-claims.sql
-          echo "OMNIA_TEST_FOURTH_CLAIM_ADMIN_DB=Host=127.0.0.1;Port=15440;Database=omnia_fourth_claims;Username=omnia;Password=$fourth_admin" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_FOURTH_CLAIM_WRITER_DB=Host=127.0.0.1;Port=15440;Database=omnia_fourth_claims;Username=omnia_claim_writer;Password=$fourth_writer" >> "$GITHUB_ENV"
-          echo "OMNIA_TEST_FOURTH_CLAIM_READER_DB=Host=127.0.0.1;Port=15440;Database=omnia_fourth_claims;Username=omnia_claim_reader;Password=$fourth_reader" >> "$GITHUB_ENV"
-          source_id="$(docker exec omnia-ci-pg psql -U omnia -d omnia_test -Atqc 'SELECT system_identifier FROM pg_control_system()')"
-          witness_id="$(docker exec omnia-ci-erasure-witness psql -U omnia -d omnia_witness -Atqc 'SELECT system_identifier FROM pg_control_system()')"
-          third_id="$(docker exec omnia-ci-witness-anchor psql -U omnia -d omnia_anchor -Atqc 'SELECT system_identifier FROM pg_control_system()')"
-          fourth_id="$(docker exec omnia-ci-fourth-claim-fence psql -U omnia -d omnia_fourth_claims -Atqc 'SELECT system_identifier FROM pg_control_system()')"
+          docker exec -i tao-ci-fourth-claim-fence psql -X -v ON_ERROR_STOP=1 \
+            -U tao -d tao_fourth_claims < tests/restore/preerase-execution-claims.sql
+          echo "TAO_TEST_FOURTH_CLAIM_ADMIN_DB=Host=127.0.0.1;Port=15440;Database=tao_fourth_claims;Username=tao;Password=$fourth_admin" >> "$GITHUB_ENV"
+          echo "TAO_TEST_FOURTH_CLAIM_WRITER_DB=Host=127.0.0.1;Port=15440;Database=tao_fourth_claims;Username=tao_claim_writer;Password=$fourth_writer" >> "$GITHUB_ENV"
+          echo "TAO_TEST_FOURTH_CLAIM_READER_DB=Host=127.0.0.1;Port=15440;Database=tao_fourth_claims;Username=tao_claim_reader;Password=$fourth_reader" >> "$GITHUB_ENV"
+          source_id="$(docker exec tao-ci-pg psql -U tao -d tao_test -Atqc 'SELECT system_identifier FROM pg_control_system()')"
+          witness_id="$(docker exec tao-ci-erasure-witness psql -U tao -d tao_witness -Atqc 'SELECT system_identifier FROM pg_control_system()')"
+          third_id="$(docker exec tao-ci-witness-anchor psql -U tao -d tao_anchor -Atqc 'SELECT system_identifier FROM pg_control_system()')"
+          fourth_id="$(docker exec tao-ci-fourth-claim-fence psql -U tao -d tao_fourth_claims -Atqc 'SELECT system_identifier FROM pg_control_system()')"
           [[ -n "$fourth_id" && "$fourth_id" != "$source_id" &&
              "$fourth_id" != "$witness_id" && "$fourth_id" != "$third_id" ]] || {
             echo "Fourth claim fence reused an existing physical PGDATA." >&2
             exit 1
           }
       - name: xUnit real PostgreSQL integration
-        run: dotnet test tests/Omnia.Integration.Tests/Omnia.Integration.Tests.csproj -c Release
+        run: dotnet test tests/Tao.Integration.Tests/Tao.Integration.Tests.csproj -c Release
       - name: Isolated witness publisher CLI denies unsafe mode and confirms a test-only scan
         shell: bash
         run: |
           set -euo pipefail
-          log="$(mktemp "$RUNNER_TEMP/omnia-publisher.XXXXXX")"
+          log="$(mktemp "$RUNNER_TEMP/tao-publisher.XXXXXX")"
           trap 'rm -f "$log"' EXIT
-          if env -u OMNIA_ERASURE_PUBLISHER_CI_ONLY \
+          if env -u TAO_ERASURE_PUBLISHER_CI_ONLY \
              dotnet run --no-build -c Release \
-               --project src/backend/Omnia.ErasurePublisher/Omnia.ErasurePublisher.csproj \
+               --project src/backend/Tao.ErasurePublisher/Tao.ErasurePublisher.csproj \
                -- --once > "$log" 2>&1; then
             echo "Witness publisher unexpectedly accepted unapproved mode." >&2
             exit 1
@@ -539,9 +539,9 @@ jobs:
             echo "Publisher denial was not verified." >&2
             exit 1
           }
-          OMNIA_ERASURE_PUBLISHER_CI_ONLY=1 \
+          TAO_ERASURE_PUBLISHER_CI_ONLY=1 \
             dotnet run --no-build -c Release \
-              --project src/backend/Omnia.ErasurePublisher/Omnia.ErasurePublisher.csproj \
+              --project src/backend/Tao.ErasurePublisher/Tao.ErasurePublisher.csproj \
               -- --once > "$log" 2>&1
           grep -Fq 'ERASURE_PUBLISHER_CYCLE_CONFIRMED' "$log" || {
             echo "Witness publisher did not confirm delivery." >&2
@@ -551,52 +551,52 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          project=src/backend/Omnia.ErasureDeliveryAudit/Omnia.ErasureDeliveryAudit.csproj
-          log="$(mktemp "$RUNNER_TEMP/omnia-live-audit.XXXXXX")"
+          project=src/backend/Tao.ErasureDeliveryAudit/Tao.ErasureDeliveryAudit.csproj
+          log="$(mktemp "$RUNNER_TEMP/tao-live-audit.XXXXXX")"
           trap 'rm -f "$log"' EXIT
-          if env -u OMNIA_ERASURE_LIVE_AUDIT_CI_ONLY \
+          if env -u TAO_ERASURE_LIVE_AUDIT_CI_ONLY \
              dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1; then
             echo "Live delivery audit accepted unapproved mode." >&2
             exit 1
           fi
           grep -Fq 'ERASURE_LIVE_DELIVERY_DENIED' "$log"
-          if OMNIA_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
-             OMNIA_TEST_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
+          if TAO_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
+             TAO_TEST_WITNESS_READER_DB="$TAO_TEST_WITNESS_WRITER_DB" \
              dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1; then
             echo "Live delivery audit accepted witness writer identity." >&2
             exit 1
           fi
           grep -Fq 'ERASURE_LIVE_DELIVERY_DENIED' "$log"
-          if OMNIA_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
-             OMNIA_TEST_DISPATCH_DB="$OMNIA_TEST_APP_DB" \
+          if TAO_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
+             TAO_TEST_DISPATCH_DB="$TAO_TEST_APP_DB" \
              dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1; then
             echo "Live delivery audit accepted application SQL identity." >&2
             exit 1
           fi
           grep -Fq 'ERASURE_LIVE_DELIVERY_DENIED' "$log"
-          OMNIA_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
+          TAO_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
              dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1
           grep -Fq 'ERASURE_LIVE_DELIVERY_CONFIRMED' "$log"
       - name: HMAC witness anchor requires private external checkpoint and consistent reader
         shell: bash
         run: |
           set -euo pipefail
-          log="$(mktemp "$RUNNER_TEMP/omnia-witness-audit.XXXXXX")"
-          private="$(mktemp -d "$RUNNER_TEMP/omnia-witness-anchor.XXXXXX")"
+          log="$(mktemp "$RUNNER_TEMP/tao-witness-audit.XXXXXX")"
+          private="$(mktemp -d "$RUNNER_TEMP/tao-witness-anchor.XXXXXX")"
           trap 'rm -f "$log"; rm -rf "$private"' EXIT
           chmod 700 "$private"
           openssl rand 32 > "$private/key"
           chmod 600 "$private/key"
-          export OMNIA_WITNESS_CHECKPOINT_KEY_PATH="$private/key"
-          export OMNIA_WITNESS_CHECKPOINT_PATH="$private/anchor"
-          project=src/backend/Omnia.WitnessAudit/Omnia.WitnessAudit.csproj
-          if env -u OMNIA_WITNESS_AUDIT_CI_ONLY \
+          export TAO_WITNESS_CHECKPOINT_KEY_PATH="$private/key"
+          export TAO_WITNESS_CHECKPOINT_PATH="$private/anchor"
+          project=src/backend/Tao.WitnessAudit/Tao.WitnessAudit.csproj
+          if env -u TAO_WITNESS_AUDIT_CI_ONLY \
              dotnet run --no-build -c Release --project "$project" -- --issue > "$log" 2>&1; then
             echo "Witness checkpoint issuer allowed unapproved execution." >&2
             exit 1
           fi
           grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
-          export OMNIA_WITNESS_AUDIT_CI_ONLY=1
+          export TAO_WITNESS_AUDIT_CI_ONLY=1
           if dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1; then
             echo "Witness checkpoint audit accepted an absent anchor." >&2
             exit 1
@@ -619,7 +619,7 @@ jobs:
           fi
           grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
           mv "$private/saved" "$private/anchor"
-          if OMNIA_TEST_WITNESS_READER_DB="$OMNIA_TEST_WITNESS_WRITER_DB" \
+          if TAO_TEST_WITNESS_READER_DB="$TAO_TEST_WITNESS_WRITER_DB" \
              dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1; then
             echo "Witness audit accepted a writer as reader." >&2
             exit 1
@@ -651,14 +651,14 @@ jobs:
       - name: Stop disposable database
         if: always()
         run: |
-          docker rm -f omnia-ci-fourth-claim-fence || true
-          docker rm -f omnia-ci-witness-anchor || true
-          docker rm -f omnia-ci-erasure-witness || true
-          docker rm -f omnia-ci-pg || true
+          docker rm -f tao-ci-fourth-claim-fence || true
+          docker rm -f tao-ci-witness-anchor || true
+          docker rm -f tao-ci-erasure-witness || true
+          docker rm -f tao-ci-pg || true
       - name: Validate Docker Compose
         run: docker compose --env-file docker/.env.example -f docker/compose.yml config --quiet
       - name: Build API container
-        run: docker build -f docker/Dockerfile.api -t omnia-api:ci .
+        run: docker build -f docker/Dockerfile.api -t tao-api:ci .
   security-audit:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -681,27 +681,27 @@ jobs:
           set -euo pipefail
           node src/mobile/scripts/verify-mobile-lockfile.mjs
           python3 tests/quality/verify_nuget_locks.py
-          python3 tests/quality/generate_locked_sbom.py --output "$RUNNER_TEMP/omnia-audit-sbom"
+          python3 tests/quality/generate_locked_sbom.py --output "$RUNNER_TEMP/tao-audit-sbom"
       - name: TDD expiring moderate advisory review (#215)
         run: python3 -m unittest discover -s tests/quality -p 'test_moderate_reviews.py'
       - name: Audit live official npm and NuGet advisories (all + production)
         shell: bash
         env:
-          NUGET_PACKAGES: ${{ runner.temp }}/omnia-nuget-license-cache
+          NUGET_PACKAGES: ${{ runner.temp }}/tao-nuget-license-cache
         run: |
           set -euo pipefail
           python3 tests/quality/run_live_advisory_audit.py \
-            --output "$RUNNER_TEMP/omnia-security-audit/summary.json"
+            --output "$RUNNER_TEMP/tao-security-audit/summary.json"
           python3 tests/quality/verify_moderate_reviews.py \
-            --report "$RUNNER_TEMP/omnia-security-audit/summary.json" \
+            --report "$RUNNER_TEMP/tao-security-audit/summary.json" \
             --reviews security/moderate-advisory-reviews.json \
             --source-sha "$GITHUB_SHA"
       - name: Publish advisory evidence even if the fail-closed gate blocks
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: omnia-security-audit
-          path: ${{ runner.temp }}/omnia-security-audit/summary.json
+          name: tao-security-audit
+          path: ${{ runner.temp }}/tao-security-audit/summary.json
           if-no-files-found: ignore
           retention-days: 14
       - name: TDD and inventory declared npm licenses (#216)
@@ -712,13 +712,13 @@ jobs:
           python3 -m unittest discover -s tests/quality -p 'test_npm_license_inventory.py'
           python3 tests/quality/npm_license_inventory.py \
             --lock src/mobile/package-lock.json \
-            --output "$RUNNER_TEMP/omnia-npm-licenses/inventory.json"
+            --output "$RUNNER_TEMP/tao-npm-licenses/inventory.json"
       - name: Publish npm license metadata inventory (not legal clearance)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: omnia-npm-license-inventory
-          path: ${{ runner.temp }}/omnia-npm-licenses/inventory.json
+          name: tao-npm-license-inventory
+          path: ${{ runner.temp }}/tao-npm-licenses/inventory.json
           if-no-files-found: ignore
           retention-days: 14
       - name: TDD and inventory restored NuGet package licenses (#217)
@@ -727,14 +727,14 @@ jobs:
           set -euo pipefail
           python3 -m unittest discover -s tests/quality -p 'test_nuget_license_inventory.py'
           python3 tests/quality/nuget_license_inventory.py \
-            --cache "$RUNNER_TEMP/omnia-nuget-license-cache" \
-            --output "$RUNNER_TEMP/omnia-nuget-licenses/inventory.json"
+            --cache "$RUNNER_TEMP/tao-nuget-license-cache" \
+            --output "$RUNNER_TEMP/tao-nuget-licenses/inventory.json"
       - name: Publish NuGet license inventory (not legal clearance)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: omnia-nuget-license-inventory
-          path: ${{ runner.temp }}/omnia-nuget-licenses/inventory.json
+          name: tao-nuget-license-inventory
+          path: ${{ runner.temp }}/tao-nuget-licenses/inventory.json
           if-no-files-found: ignore
           retention-days: 14
 
@@ -770,12 +770,12 @@ jobs:
           set -euo pipefail
           python3 -m unittest discover -s ../../tests/quality -p 'test_web_notice_evidence.py'
           python3 ../../tests/quality/web_notice_evidence.py \
-            --root . --output "$RUNNER_TEMP/omnia-web-notice-evidence/report.json"
+            --root . --output "$RUNNER_TEMP/tao-web-notice-evidence/report.json"
       - name: Publish Web notice evidence (not legal clearance)
         uses: actions/upload-artifact@v4
         with:
-          name: omnia-web-notice-evidence
-          path: ${{ runner.temp }}/omnia-web-notice-evidence/report.json
+          name: tao-web-notice-evidence
+          path: ${{ runner.temp }}/tao-web-notice-evidence/report.json
           if-no-files-found: error
           retention-days: 14
       - name: Verify SDK58 Metro bundles Android and iOS (not native device builds)
@@ -789,7 +789,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: omnia-browser-diagnostics
+          name: tao-browser-diagnostics
           path: |
             src/mobile/test-results
             src/mobile/playwright-report

@@ -8,8 +8,8 @@
 ## Problem
 
 Existing ASP.NET Core 10 named endpoint policy
-RequireRateLimiting("omnia-api") enforces a fixed-window
-120/min rate for each validated tenant_id+sub, but Omnia
+RequireRateLimiting("tao-api") enforces a fixed-window
+120/min rate for each validated tenant_id+sub, but Tao
 had no explicitly bounded number of actor partition
 entries retained by that policy. Many independently
 authenticated subjects could create arbitrarily many
@@ -70,8 +70,8 @@ an independent second admission step.
 
 ## TDD evidence and CI gate
 
-On test-first [b564d5a6](https://github.com/KeyserDSoze/Omnia/commit/b564d5a676e80712ef4e0811c3e6219cfbde05aa),
-[RED CI 44966863089](https://github.com/KeyserDSoze/Omnia/actions/runs/44966863089)
+On test-first [b564d5a6](https://github.com/KeyserDSoze/Tao/commit/b564d5a676e80712ef4e0811c3e6219cfbde05aa),
+[RED CI 44966863089](https://github.com/KeyserDSoze/Tao/actions/runs/44966863089)
 showed 142 passed / 1 failed / 143 total real
 PostgreSQL xUnit integration tests: a third
 authenticated distinct subject was incorrectly
@@ -80,7 +80,7 @@ All prior tests passed, mobile passed; RED was
 behavioral, not compilation.
 
 Implementation commit
-[d2c8b554](https://github.com/KeyserDSoze/Omnia/commit/d2c8b554cdbd260ad1d2ff96cc1faf55e70b6482)
+[d2c8b554](https://github.com/KeyserDSoze/Tao/commit/d2c8b554cdbd260ad1d2ff96cc1faf55e70b6482)
 introduces bounded shared windows, actor middleware
 and uniform privacy-preserving 429. New actor
 regressions test 128 contenders, 1000 expired
@@ -116,4 +116,4 @@ neighboring 60-second windows. Parent #37/#2 OPEN.
 - .NET TimeProvider:
   https://learn.microsoft.com/en-us/dotnet/api/system.timeprovider?view=net-10.0
 - Prior ADR 0065:
-  https://github.com/KeyserDSoze/Omnia/blob/main/adr/0065-aggregate-tenant-request-rate-window.md
+  https://github.com/KeyserDSoze/Tao/blob/main/adr/0065-aggregate-tenant-request-rate-window.md

@@ -5,12 +5,12 @@ COPY global.json ./
 RUN test "$(dotnet --version)" = "10.0.404"
 # NuGet locked graph and CI policy are repository-root MSBuild properties.
 COPY Directory.Build.props ./
-COPY src/backend/Omnia.Domain/ src/backend/Omnia.Domain/
-COPY src/backend/Omnia.Application/ src/backend/Omnia.Application/
-COPY src/backend/Omnia.Infrastructure/ src/backend/Omnia.Infrastructure/
-COPY src/backend/Omnia.Api/ src/backend/Omnia.Api/
-RUN dotnet restore src/backend/Omnia.Api/Omnia.Api.csproj --locked-mode
-RUN dotnet publish src/backend/Omnia.Api/Omnia.Api.csproj --no-restore -c Release -o /output
+COPY src/backend/Tao.Domain/ src/backend/Tao.Domain/
+COPY src/backend/Tao.Application/ src/backend/Tao.Application/
+COPY src/backend/Tao.Infrastructure/ src/backend/Tao.Infrastructure/
+COPY src/backend/Tao.Api/ src/backend/Tao.Api/
+RUN dotnet restore src/backend/Tao.Api/Tao.Api.csproj --locked-mode
+RUN dotnet publish src/backend/Tao.Api/Tao.Api.csproj --no-restore -c Release -o /output
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.15-noble@sha256:aac50ceef10391e78a899e3d2ccd00bbafa2dcb56ccf4586cbccf00edb84fc21
 # Real runtime image must contain the intended framework patch versions.
@@ -20,4 +20,4 @@ WORKDIR /app
 COPY --from=build /output .
 USER $APP_UID
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "Omnia.Api.dll"]
+ENTRYPOINT ["dotnet", "Tao.Api.dll"]

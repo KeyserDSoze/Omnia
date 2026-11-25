@@ -21,7 +21,7 @@ NuGet, OIDC, RLS and privacy gates have independent requirements.
   The hash MUST be of the top-level OCI/Docker manifest **index**
   rather than a single-platform manifest.
 - The read-only GitHub Actions
-  [#45201861006](https://github.com/KeyserDSoze/Omnia/actions/runs/45201861006)
+  [#45201861006](https://github.com/KeyserDSoze/Tao/actions/runs/45201861006)
   ran Docker buildx `imagetools inspect --format '{{json .Manifest}}'`
   against the official Microsoft Artifact Registry. Each top-level
   index has SHA-256 image manifest descriptors for **linux/amd64** and
@@ -33,8 +33,8 @@ NuGet, OIDC, RLS and privacy gates have independent requirements.
   The discovery workflow had `contents:read` and is removed after
   pinning; the hashes did not come from assumptions or test fixtures.
 - TDD RED commit
-  [fbf891b](https://github.com/KeyserDSoze/Omnia/commit/fbf891b751ec135427b4179fb325ff1b60972d05)
-  with [CI #45201860932](https://github.com/KeyserDSoze/Omnia/actions/runs/45201860932):
+  [fbf891b](https://github.com/KeyserDSoze/Tao/commit/fbf891b751ec135427b4179fb325ff1b60972d05)
+  with [CI #45201860932](https://github.com/KeyserDSoze/Tao/actions/runs/45201860932):
   four negative+positive policy tests PASS; fail-closed on both FROM
   references lacking digest.
 - Offline policy tests validate the exact Microsoft registry/repository,
@@ -74,9 +74,9 @@ Official references:
 
 The same official MCR version tags began resolving to different multiarch
 index digests, so the existing strict CI pin contract correctly rejected
-both tags: [red CI](https://github.com/KeyserDSoze/Omnia/actions/runs/45227656682).
+both tags: [red CI](https://github.com/KeyserDSoze/Tao/actions/runs/45227656682).
 A CI-only conditional **read-only** `--discover` after failure obtained
-new index digests on [diagnostic run](https://github.com/KeyserDSoze/Omnia/actions/runs/45228302048)
+new index digests on [diagnostic run](https://github.com/KeyserDSoze/Tao/actions/runs/45228302048)
 for both linux/amd64 and linux/arm64. Official Microsoft November 10
 2026 .NET 10.0.15 security release still names SDK 10.0.404 and runtime
 10.0.15 as current: https://dotnet.microsoft.com/en-us/download/dotnet/10.0 .

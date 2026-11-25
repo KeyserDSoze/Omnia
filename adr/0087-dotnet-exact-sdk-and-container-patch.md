@@ -7,7 +7,7 @@
 
 ## Context
 
-Omnia already locks all 20 NuGet graphs (ADR 0086) yet CI/OIDC used
+Tao already locks all 20 NuGet graphs (ADR 0086) yet CI/OIDC used
 `dotnet-version: '10.0.x'` and the API Dockerfile pulled unbounded
 `sdk:10.0` and `aspnet:10.0` tags. Re-running the same source in a
 future month could select a new SDK toolchain and runtime patch.
@@ -41,7 +41,7 @@ The official Microsoft .NET 10 SDK Docker supported tag table lists
 
 - RED `4ff7ab0`: four pure policy tests PASS; live CI fails
   *for exact missing SDK pin/global.json and floating workflows/images*.
-  https://github.com/KeyserDSoze/Omnia/actions/runs/45199024939
+  https://github.com/KeyserDSoze/Tao/actions/runs/45199024939
 - GREEN and REFACTOR: commit/action IDs tracked in #190 after all
   three same-SHA workflows complete; no status inferred from a
   successful policy alone.

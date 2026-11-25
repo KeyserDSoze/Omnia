@@ -22,8 +22,8 @@ transitive overrides.
 ## Decision and real evidence
 
 1. First migrate Vitest to **5.1.1**, removing the vulnerable
-   tinypool test dependency. [Trial #45215428007](https://github.com/KeyserDSoze/Omnia/actions/runs/45215428007)
-   and commit [d6b9af2](https://github.com/KeyserDSoze/Omnia/commit/d6b9af290)
+   tinypool test dependency. [Trial #45215428007](https://github.com/KeyserDSoze/Tao/actions/runs/45215428007)
+   and commit [d6b9af2](https://github.com/KeyserDSoze/Tao/commit/d6b9af290)
    confirm this separately.
 2. Migrate the entire Expo stack using SDK58 and the official
    `npx expo install --fix --npm` matrix (not an arbitrary Router
@@ -32,27 +32,27 @@ transitive overrides.
    **react-native@0.88.1**, Reanimated **4.7.1**, Worklets
    **0.13.0**, Gesture Handler **3.3.0**, and Vitest **5.1.1**.
    Preserve exact npm v3 root ranges and SHA-512 tarball integrity.
-3. The [read-only trial #45217840306](https://github.com/KeyserDSoze/Omnia/actions/runs/45217840306)
+3. The [read-only trial #45217840306](https://github.com/KeyserDSoze/Tao/actions/runs/45217840306)
    successfully exercised clean npm ci, Expo version reconciliation,
    TypeScript, Vitest, static Expo Web export, Playwright static E2E
    **2/2**, Metro Android bundle and npm audit both full and
    production (**0 HIGH/CRITICAL; 3 MODERATE**). It verified
    `query-string` and `decode-uri-component` are absent from the
-   resolved graph. The [checked nonforce promotion #45218562795](https://github.com/KeyserDSoze/Omnia/actions/runs/45218562795)
+   resolved graph. The [checked nonforce promotion #45218562795](https://github.com/KeyserDSoze/Tao/actions/runs/45218562795)
    repeated all gates before committing ONLY package.json and
    package-lock.json on main at
-   [e0ebb14](https://github.com/KeyserDSoze/Omnia/commit/e0ebb14acbbf0152b3d9eeb0acd75c6c0a98846c).
+   [e0ebb14](https://github.com/KeyserDSoze/Tao/commit/e0ebb14acbbf0152b3d9eeb0acd75c6c0a98846c).
 4. Explicitly preserve `src/mobile/app.json` with
-   `web.output=static` and `experiments.baseUrl=/Omnia`
+   `web.output=static` and `experiments.baseUrl=/Tao`
    for GitHub Pages, because SDK58 Router may otherwise select
    server rendering; Pages never hosts the .NET API.
-5. TDD RED [CI #45219863627](https://github.com/KeyserDSoze/Omnia/actions/runs/45219863627)
+5. TDD RED [CI #45219863627](https://github.com/KeyserDSoze/Tao/actions/runs/45219863627)
    showed five failures against an empty policy for old SDK,
    vulnerable nested package names, changed native ABI, unsafe
    overrides and Pages server output. GREEN implemented
    `sdk58-security-policy.mjs` with six positive/negative unit
    tests and `verify-sdk58-security.mjs`, invoked before npm ci
-   from CI/OIDC/Pages/native. [CI #45220400873](https://github.com/KeyserDSoze/Omnia/actions/runs/45220400873)
+   from CI/OIDC/Pages/native. [CI #45220400873](https://github.com/KeyserDSoze/Tao/actions/runs/45220400873)
    passed the policy, Metro Android **and iOS** bundles and the
    separate live npm+NuGet SCA job (**20/20 NuGet**). Real OIDC and
    Pages jobs also passed the same SHA.

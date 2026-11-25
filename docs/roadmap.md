@@ -1,4 +1,4 @@
-# Omnia — product & engineering roadmap
+# Tao — product & engineering roadmap
 
 ## v0.1 — Foundation (code in main, validation pending)
 
@@ -14,7 +14,7 @@
 - [x] Toolchain .NET SDK esatta 10.0.404 via root global.json + Actions CI/OIDC, immagini API Docker Ubuntu Noble SDK 10.0.404 / ASP.NET 10.0.15 per version tag e controlli reali; ADR 0087 / #190.
 - [x] API Microsoft .NET Docker `FROM tag@sha256:index` verificati con registry discovery su amd64 e arm64, policy source fail-closed e reale build Docker CI amd64; ADR 0088 / #191.
 - [x] SBOM **inventario lockfile** CycloneDX JSON 1.6 npm + 20 NuGet, SHA-512, PURL, determinismo/diff e artefatti CI temporanei; ADR 0089 / #192. NON un SBOM di binary/container.
-- [x] Gate SCA **fail-closed** npm all+production e NuGet 20/20, con report, test negativi e waiver stretti (#193 / ADR 0090); [CI 45220400873](https://github.com/KeyserDSoze/Omnia/actions/runs/45220400873) SCA **SUCCESS** dopo remediation.
+- [x] Gate SCA **fail-closed** npm all+production e NuGet 20/20, con report, test negativi e waiver stretti (#193 / ADR 0090); [CI 45220400873](https://github.com/KeyserDSoze/Tao/actions/runs/45220400873) SCA **SUCCESS** dopo remediation.
 - [x] Mitigate le 2 CRITICAL del tooling test mediante Vitest 5.1.1 e rimozione di tinypool (#194).
 - [x] Migrazione ufficiale Expo SDK58 / Router58.0.32 / RN 0.88.1, npm v3 lock verificato: rimossa catena HIGH query-string/decode-uri-component senza override, audit npm all/prod **0 HIGH/CRITICAL, 3 MODERATE**; regressione static Pages e policy native ABI (#195, ADR 0091).
 - [x] Metro bundle **Android e iOS** in CI; non è EAS build né esecuzione su simulator/device.
@@ -34,7 +34,7 @@
 - [ ] PostgreSQL RLS defence-in-depth, schema evolutions, retention, export, user delete and audit log.
 - [ ] Integration E2E browser OIDC → API → PostgreSQL and separate mobile device smoke with native simulator.
 
-## v0.3 — Omnia Memory Graph
+## v0.3 — Tao Memory Graph
 
 - [ ] Connectors Microsoft Graph Outlook/Calendar, CRM adapter and consent registry with scoped OAuth.
 - [ ] MCP client and server gateway, capability sandbox, network egress policy and provenance.
@@ -224,7 +224,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Verified bounded JSONL sequence, event MAC, SHA-256 chain,
   exact v1 schema, distinct-key authenticated checkpoint and
   rejection of missing/truncated/reordered/forged or gapped events.
-- [x] Read-only `Omnia.RecoveryAudit` and private file validation;
+- [x] Read-only `Tao.RecoveryAudit` and private file validation;
   no access to PostgreSQL or data mutation.
 - [x] xUnit RED/GREEN and CI smoke for no-input fail-closed CLI.
 - [ ] Record final Actions status and evidence on issue #141.
@@ -314,7 +314,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 
 ## #141 — CI-only autonomous witness publisher and retry (ADR 0027, 2026-11-20)
 
-- [x] Offline `Omnia.ErasurePublisher` process, separate from public API, rejects anything but fixed synthetic loopback CI identities; validates dispatch and witness EXECUTE-only SQL roles.
+- [x] Offline `Tao.ErasurePublisher` process, separate from public API, rejects anything but fixed synthetic loopback CI identities; validates dispatch and witness EXECUTE-only SQL roles.
 - [x] Continuous bounded rescans with 5-second normal interval, capped exponential backoff after failure, and no logs of actors/connection details. A one-shot CLI smoke is in CI.
 - [x] Test RED specified witness outage, automatic retry, external receipt persistence across a fresh publisher invocation; witness dedup keeps the same UUID/sequence. Actual PostgreSQL CI GREEN evidence is required before marking test gates complete.
 - [ ] Production-grade publisher deployment, independently durable/attested ACK and source lag alerting, monotonic completeness proof across primary failures, replay release authority, offsite WORM/vault, replicas/workers ingress fencing, and GDPR review remain OPEN in #141 / #31 / #109 / #125.
@@ -328,7 +328,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 
 ## #141 — Third PostgreSQL witness checkpoint anchor (ADR 0029, 2026-11-20)
 
-- [x] CI provisions a THIRD PostgreSQL 17 instance with distinct PGDATA, system identifier and random login secrets (127.0.0.1:15438, `omnia_anchor`), beyond the primary and the erasure witness. It stores only the signed checkpoint bytes/count, not raw actors.
+- [x] CI provisions a THIRD PostgreSQL 17 instance with distinct PGDATA, system identifier and random login secrets (127.0.0.1:15438, `tao_anchor`), beyond the primary and the erasure witness. It stores only the signed checkpoint bytes/count, not raw actors.
 - [x] SQL head lock and append-only checkpoint rows prevent regression and conflicting equal-count replay for restricted writer; exact retries are idempotent. Reader and writer get only their respective SECURITY DEFINER functions, never table rights. .NET verifies role inside standalone read/write operations.
 - [x] Issuer verifies previously anchored HMAC prefix against current witness before advancing; verifier compares current witness with independently stored checkpoint, fails closed on wrong key or simulated witness prefix truncation/alteration. TDD RED/GREEN Actions evidence is tracked in #141.
 - [ ] This is three DB **containers on one CI host**, not immutable/offsite/monotonic custody. Real witness PITR against independently surviving anchor, external signer/vault, key rotation, monitoring, failover, source delivery completeness, global release fence and GDPR data rights remain OPEN.
@@ -370,7 +370,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   primary outbox in a single REPEATABLE READ / READ ONLY PostgreSQL
   snapshot through EXECUTE-only SQL and checks matching witness receipt
   UUID+tenant+subject+type. It never writes source cursor or receipt.
-- [x] Separate CI-only offline `Omnia.ErasureDeliveryAudit --all` verifies
+- [x] Separate CI-only offline `Tao.ErasureDeliveryAudit --all` verifies
   *all* currently committed source outbox rows AFTER test publisher
   completes; denies missing opt-in and wrong witness/source roles.
 - [ ] This is a LIVE delivery-health audit, not historical completeness
@@ -490,13 +490,13 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   continuo, max 10000 e overflow probe nello snapshot
   `REPEATABLE READ READ ONLY` della SECONDA PGDATA.
 - [x] Terza PGDATA PostgreSQL 17, database separato
-  `omnia_intent_anchor`, controllo EXECUTE-only con
+  `tao_intent_anchor`, controllo EXECUTE-only con
   SQL monotonic high-watermark; bootstrapping primo
   esplicito, nuovi checkpoint solo dopo verifica
   autenticata del prefisso precedente, reissue/regressione
   o chiave errata negati.
 - [x] PITR FISICO witness aggiunge una seconda database
-  `omnia_witness_pitr_intent_anchor` e chiave indipendente:
+  `tao_witness_pitr_intent_anchor` e chiave indipendente:
   checkpoint antesignano su intent pre-backup,
   nuovo intent dopo restore point WAL, ripristino clone
   prima del nuovo intent, credenziali reader ruotate,
@@ -528,7 +528,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   Replay UUID con record ancora presente → unique
   violation 23505 e rollback di dati più recenti.
 - [x] Rehearsal fisico del PITR primario: database
-  `omnia_pitr_preflight_anchor` separato sul terzo
+  `tao_pitr_preflight_anchor` separato sul terzo
   PGDATA, chiave HMAC privata temporanea, intento
   remoto registrato ma NON ancora ancorato → tentativo
   `erase-unwitnessed` rifiutato senza cancellazione
@@ -656,7 +656,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   vecchia claim nel clone QUARTA, rotazione reader+writer e rifiuto
   delle credenziali ereditate. Il retry deve fallire con `23505`
   sulla TERZA dopo la nuova claim su QUARTA.
-- [x] **GREEN verificata**: [Omnia CI 44824173620](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173620), [OIDC browser E2E 44824173641](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173641) e [Pages 44824173601](https://github.com/KeyserDSoze/Omnia/actions/runs/44824173601) tutti SUCCESS al commit implementativo `274f574a`; entrambi i gate PITR terza/quarta sono success.
+- [x] **GREEN verificata**: [Tao CI 44824173620](https://github.com/KeyserDSoze/Tao/actions/runs/44824173620), [OIDC browser E2E 44824173641](https://github.com/KeyserDSoze/Tao/actions/runs/44824173641) e [Pages 44824173601](https://github.com/KeyserDSoze/Tao/actions/runs/44824173601) tutti SUCCESS al commit implementativo `274f574a`; entrambi i gate PITR terza/quarta sono success.
 - [ ] Autorità offsite WORM indipendente, prova commit del primario,
   eventuale rollback simultaneo TERZA+QUARTA, autenticazione OIDC e
   fencing globale ancora APERTI. **Nessuna cancellazione source in test.**
@@ -687,7 +687,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   `IImmutableAttemptObjectReader` senza dipendenze cloud,
   senza inserimento in API/DELETE; solo `MayAutoReplay=false`,
   `MayReleaseRecovery=false`, `ProvesSourceDeleteCommit=false`.
-- [x] **RED/GREEN GitHub Actions verificate**: [RED initial 44882236030](https://github.com/KeyserDSoze/Omnia/actions/runs/44882236030) per tipi mancanti; [RED alias 44882440793](https://github.com/KeyserDSoze/Omnia/actions/runs/44882440793) per `latest`/`null`; GREEN `390331a4` con [CI 44882456199](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456199), [OIDC 44882456209](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456209) e [Pages 44882456200](https://github.com/KeyserDSoze/Omnia/actions/runs/44882456200) tutte SUCCESS. #143 chiusa; #144 e #141 aperte.
+- [x] **RED/GREEN GitHub Actions verificate**: [RED initial 44882236030](https://github.com/KeyserDSoze/Tao/actions/runs/44882236030) per tipi mancanti; [RED alias 44882440793](https://github.com/KeyserDSoze/Tao/actions/runs/44882440793) per `latest`/`null`; GREEN `390331a4` con [CI 44882456199](https://github.com/KeyserDSoze/Tao/actions/runs/44882456199), [OIDC 44882456209](https://github.com/KeyserDSoze/Tao/actions/runs/44882456209) e [Pages 44882456200](https://github.com/KeyserDSoze/Tao/actions/runs/44882456200) tutte SUCCESS. #143 chiusa; #144 e #141 aperte.
 - [ ] **#141**: implementare adapter reali Azure Blob e S3 Object
   Lock (on-prem realmente indipendente), controllare lock e
   retention per versione, version pin esterno monotono,
@@ -702,7 +702,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   AWS v4 pinning per GetObject e GetObjectRetention, COMPLIANCE
   soltanto, 512 byte max, version e actor-scope verificati
   dal precedente contratto, errori falliscono chiusi.
-- [x] **RED/GREEN verificata su GitHub Actions**: [RED adapter mancante 44884847236](https://github.com/KeyserDSoze/Omnia/actions/runs/44884847236), [RED enum SDK 44884878720](https://github.com/KeyserDSoze/Omnia/actions/runs/44884878720). GREEN sullo SHA `649e12ab`: [CI 44885831789](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831789) (2/2 S3, 19/19 Domain, 80/80 PostgreSQL, PITR/Docker/mobile), [OIDC 44885831790](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831790), [Pages 44885831828](https://github.com/KeyserDSoze/Omnia/actions/runs/44885831828) tutti SUCCESS; #145 limitata al test S3 chiusa.
+- [x] **RED/GREEN verificata su GitHub Actions**: [RED adapter mancante 44884847236](https://github.com/KeyserDSoze/Tao/actions/runs/44884847236), [RED enum SDK 44884878720](https://github.com/KeyserDSoze/Tao/actions/runs/44884878720). GREEN sullo SHA `649e12ab`: [CI 44885831789](https://github.com/KeyserDSoze/Tao/actions/runs/44885831789) (2/2 S3, 19/19 Domain, 80/80 PostgreSQL, PITR/Docker/mobile), [OIDC 44885831790](https://github.com/KeyserDSoze/Tao/actions/runs/44885831790), [Pages 44885831828](https://github.com/KeyserDSoze/Tao/actions/runs/44885831828) tutti SUCCESS; #145 limitata al test S3 chiusa.
 - [ ] **#144 OPEN**: verifica di MinIO/on-prem in ambiente
   indipendente, Azure Blob immutabile, IAM/RBAC, HSM/vault,
   version pin monotono, disaster multi-site e S3 provider
@@ -715,7 +715,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Reader Azure.Storage.Blobs separate from API: exact
   BlobClient.WithVersion for HEAD+GET, version-level Locked
   ImmutabilityPolicy and UTC retention, size and ETag checks.
-- [x] **RED/GREEN verificata**: [RED adapter absent 44888345925](https://github.com/KeyserDSoze/Omnia/actions/runs/44888345925), [RED unknown enum 44888375998](https://github.com/KeyserDSoze/Omnia/actions/runs/44888375998), [GREEN CI 44888632016](https://github.com/KeyserDSoze/Omnia/actions/runs/44888632016) (4/4 Azure SDK HTTP, 2/2 S3 reali, 19/19 Domain, 80/80 Integration, PITR/Docker/mobile), [OIDC 44888631958](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631958), [Pages 44888631988](https://github.com/KeyserDSoze/Omnia/actions/runs/44888631988) tutte SUCCESS sul commit implementativo `df498bc7`. #146 chiudibile solo per test HTTP SDK. #144 e #141 aperte.
+- [x] **RED/GREEN verificata**: [RED adapter absent 44888345925](https://github.com/KeyserDSoze/Tao/actions/runs/44888345925), [RED unknown enum 44888375998](https://github.com/KeyserDSoze/Tao/actions/runs/44888375998), [GREEN CI 44888632016](https://github.com/KeyserDSoze/Tao/actions/runs/44888632016) (4/4 Azure SDK HTTP, 2/2 S3 reali, 19/19 Domain, 80/80 Integration, PITR/Docker/mobile), [OIDC 44888631958](https://github.com/KeyserDSoze/Tao/actions/runs/44888631958), [Pages 44888631988](https://github.com/KeyserDSoze/Tao/actions/runs/44888631988) tutte SUCCESS sul commit implementativo `df498bc7`. #146 chiudibile solo per test HTTP SDK. #144 e #141 aperte.
 - [ ] #144 P0: Azure REAL locked version-level WORM staging
   + Managed Identity/RBAC + separate administration,
   S3 offsite, persistent monotone pin authority, delete 403
@@ -732,7 +732,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   retainUntil UTC, VersionId pinned e readback
   COMPLIANCE con actor MAC. Solo `Observed`/`Uncertain`,
   mai un token di DELETE/replay/recovery.
-- [x] **RED/GREEN verify**: [RED initial 44891077685](https://github.com/KeyserDSoze/Omnia/actions/runs/44891077685), [RED provider/retention 44891542059](https://github.com/KeyserDSoze/Omnia/actions/runs/44891542059), [GREEN CI 44891839494](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839494), [OIDC 44891839549](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839549), [Pages 44891839509](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839509) tutte SUCCESS su `5b237395`; 7/7 S3 e 4/4 Azure SDK contract, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali.
+- [x] **RED/GREEN verify**: [RED initial 44891077685](https://github.com/KeyserDSoze/Tao/actions/runs/44891077685), [RED provider/retention 44891542059](https://github.com/KeyserDSoze/Tao/actions/runs/44891542059), [GREEN CI 44891839494](https://github.com/KeyserDSoze/Tao/actions/runs/44891839494), [OIDC 44891839549](https://github.com/KeyserDSoze/Tao/actions/runs/44891839549), [Pages 44891839509](https://github.com/KeyserDSoze/Tao/actions/runs/44891839509) tutte SUCCESS su `5b237395`; 7/7 S3 e 4/4 Azure SDK contract, 19/19 Domain, 80/80 PostgreSQL Integration, PITR reali.
 - [ ] #144/#141 ancora OPEN: offsite admin indipendente,
   Azure WORM staging, external monotonic pin, source
   COMMIT certificate, writer OIDC e global DR quarantine.
@@ -743,7 +743,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   effettiva abbreviata rispetto al PUT richiesto;
   il publisher ora ritorna `Uncertain` in entrambi i casi.
 - [x] XUnit impedisce adapter AWS con retry SDK attivi.
-- [x] **TDD RED/GREEN confermata**: [RED 44891542059](https://github.com/KeyserDSoze/Omnia/actions/runs/44891542059) per provider/retention errati, [GREEN CI 44891839494](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839494) su `5b237395` (7/7 S3, 4/4 Azure, 19/19 Domain, 80/80 PostgreSQL), [OIDC 44891839549](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839549), [Pages 44891839509](https://github.com/KeyserDSoze/Omnia/actions/runs/44891839509) tutte SUCCESS.
+- [x] **TDD RED/GREEN confermata**: [RED 44891542059](https://github.com/KeyserDSoze/Tao/actions/runs/44891542059) per provider/retention errati, [GREEN CI 44891839494](https://github.com/KeyserDSoze/Tao/actions/runs/44891839494) su `5b237395` (7/7 S3, 4/4 Azure, 19/19 Domain, 80/80 PostgreSQL), [OIDC 44891839549](https://github.com/KeyserDSoze/Tao/actions/runs/44891839549), [Pages 44891839509](https://github.com/KeyserDSoze/Tao/actions/runs/44891839509) tutte SUCCESS.
 - [ ] #144/#141: pin version ID e authority esterna
   indipendente dal runner e da tutti i PGDATA, fonte
   autenticata COMMIT primaria, Azure WORM staging.
@@ -757,7 +757,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
   `S3ObjectLockAttemptHistoryReconciler`, bound 8×2,
   HMAC+COMPLIANCE+store/actor, soltanto
   `PreviouslyObserved` o `Uncertain` non autorizzativi.
-- [x] TDD verificata: [RED CI 44896553267](https://github.com/KeyserDSoze/Omnia/actions/runs/44896553267) mancava l'adapter; [GREEN CI 44896756880](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756880) **SUCCESS** (10/10 S3, 4/4 Azure HTTP, 19/19 Domain, 80/80 PG Integration, PITR/Docker/mobile), [OIDC 44896756790](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756790) e [Pages 44896756867](https://github.com/KeyserDSoze/Omnia/actions/runs/44896756867) SUCCESS sul commit `d218100f`. #148 chiudibile solo per il reconciler read-only, non per offsite/monotonic pin.
+- [x] TDD verificata: [RED CI 44896553267](https://github.com/KeyserDSoze/Tao/actions/runs/44896553267) mancava l'adapter; [GREEN CI 44896756880](https://github.com/KeyserDSoze/Tao/actions/runs/44896756880) **SUCCESS** (10/10 S3, 4/4 Azure HTTP, 19/19 Domain, 80/80 PG Integration, PITR/Docker/mobile), [OIDC 44896756790](https://github.com/KeyserDSoze/Tao/actions/runs/44896756790) e [Pages 44896756867](https://github.com/KeyserDSoze/Tao/actions/runs/44896756867) SUCCESS sul commit `d218100f`. #148 chiudibile solo per il reconciler read-only, non per offsite/monotonic pin.
 - [ ] **#144/#141 P0 OPEN**: S3 version-history scan
   non è un pin monotono/offsite indipendente, non
   attesta source DELETE COMMIT o global DR gate;
@@ -773,7 +773,7 @@ La pianificazione corrente è [docs/backlog.md](backlog.md): M0 prerequisiti pri
 - [x] Pin writer e reader S3 real protocol con GET
   version-specific + GetObjectRetention COMPLIANCE
   ed expiration confronto con la ricevuta.
-- [x] **TDD RED/GREEN verificata**: [RED CI 44904227083](https://github.com/KeyserDSoze/Omnia/actions/runs/44904227083) per tipi assenti; [GREEN CI 44904790204](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790204) su `3db924a0`: 14/14 S3 (pin reale con 2 bucket + 4 test nuovi), 4/4 Azure SDK HTTP, 19/19 Domain, 80/80 Integration e PITR/Docker/mobile SUCCESS; [OIDC 44904790199](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790199), [Pages 44904790212](https://github.com/KeyserDSoze/Omnia/actions/runs/44904790212) SUCCESS, medesimo SHA. La chiusura #149 copre solo questa slice, dopo recheck di ogni commit docs finale.
+- [x] **TDD RED/GREEN verificata**: [RED CI 44904227083](https://github.com/KeyserDSoze/Tao/actions/runs/44904227083) per tipi assenti; [GREEN CI 44904790204](https://github.com/KeyserDSoze/Tao/actions/runs/44904790204) su `3db924a0`: 14/14 S3 (pin reale con 2 bucket + 4 test nuovi), 4/4 Azure SDK HTTP, 19/19 Domain, 80/80 Integration e PITR/Docker/mobile SUCCESS; [OIDC 44904790199](https://github.com/KeyserDSoze/Tao/actions/runs/44904790199), [Pages 44904790212](https://github.com/KeyserDSoze/Tao/actions/runs/44904790212) SUCCESS, medesimo SHA. La chiusura #149 copre solo questa slice, dopo recheck di ogni commit docs finale.
 - [ ] **#144/#141 P0 rimangono OPEN**: due bucket same-runner
   non equivalgono a authority indipendente; serve
   durable monotonic version-pin external control plane,

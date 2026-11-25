@@ -377,7 +377,7 @@ export default function Home() {
       try {
         const element = document.createElement('a');
         element.href = objectUrl;
-        element.download = 'omnia-personal-data.json';
+        element.download = 'tao-personal-data.json';
         document.body.appendChild(element);
         element.click();
         element.remove();
@@ -504,7 +504,7 @@ export default function Home() {
       <View style={styles.top}>
         <View style={styles.brand}>
           <View style={[styles.mark, { backgroundColor: p.accent }]}><Text style={{ color: p.accentText, fontWeight: '900', fontSize: 19 }}>O</Text></View>
-          <View><Text style={[styles.brandName, heading]}>omnia</Text><Text style={[styles.eyebrow, { color: p.subtle }]}>PERSONAL INTELLIGENCE</Text></View>
+          <View><Text style={[styles.brandName, heading]}>tao</Text><Text style={[styles.eyebrow, { color: p.subtle }]}>PERSONAL INTELLIGENCE</Text></View>
         </View>
         <Pressable testID="theme-toggle" accessibilityRole="button" accessibilityLabel="Cambia tema" onPress={() => setOverride(mode === 'dark' ? 'light' : 'dark')} style={[styles.themeButton, { borderColor: p.border, backgroundColor: p.surface }]}>
           <Text style={{ color: p.text }}>{mode === 'dark' ? '☀ Tema chiaro' : '☾ Tema scuro'}</Text>
@@ -923,7 +923,7 @@ export default function Home() {
           <Text style={[styles.featureState, { color: p.subtle }]}>{feature.state}</Text>
         </View>)}
       </View>
-      <Text style={[styles.footer, { color: p.subtle }]}>OMNIA · FOUNDATION 0.2 · PRIVACY BY DESIGN · NESSUNA AUTOMAZIONE ATTIVA</Text>
+      <Text style={[styles.footer, { color: p.subtle }]}>TAO · FOUNDATION 0.2 · PRIVACY BY DESIGN · NESSUNA AUTOMAZIONE ATTIVA</Text>
     </ScrollView>
   );
 }

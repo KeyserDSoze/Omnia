@@ -1,10 +1,10 @@
-name: Omnia GitHub Pages
+name: Tao GitHub Pages
 on:
   push:
     branches: [main]
   workflow_dispatch:
 concurrency:
-  group: omnia-pages
+  group: tao-pages
   cancel-in-progress: true
 jobs:
   build:
@@ -48,7 +48,7 @@ jobs:
       - name: Choose unique artifact
         id: artifact
         if: steps.pages.outputs.enabled == 'true'
-        run: echo "name=omnia-pages-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+        run: echo "name=tao-pages-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@v3
         if: steps.pages.outputs.enabled == 'true'
         with:

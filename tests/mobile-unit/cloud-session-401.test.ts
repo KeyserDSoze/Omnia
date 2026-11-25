@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryApi, type CloudSessionBoundary } from '../../src/mobile/src/services/memoryApi';
 
 const cfg = {
-  issuer: 'http://localhost:8081/realms/omnia',
-  clientId: 'omnia-web',
+  issuer: 'http://localhost:8081/realms/tao',
+  clientId: 'tao-web',
   apiBaseUrl: 'http://localhost:8080'
 };
 afterEach(() => vi.unstubAllGlobals());

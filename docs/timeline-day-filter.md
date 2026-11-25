@@ -6,4 +6,4 @@ Il giorno selezionato si applica in **AND** ai filtri sorgente (#182) e tag (#18
 
 Le etichette tag esistenti restano euristiche di parole chiave, non insight AI. Le date rappresentano il giorno nel fuso del dispositivo, non necessariamente la data che aveva il sistema esterno al momento dell'evento. Le altre pagine possono contenere giornate non ancora proposte. Il filtro non crea thread, non aggiorna dati o consensi e non conserva dati in URL o browser storage. Logout, 401 e cancellazione dell'account sul database principale eliminano selezioni e note insieme.
 
-Dettagli architetturali: [ADR 0083](../adr/0083-loaded-web-timeline-local-day-selection.md); prove TDD e test Keycloak: [issue #185](https://github.com/KeyserDSoze/Omnia/issues/185). Restano aperte #79, #7, #41, #17, #2 per funzioni generali e privacy non completata.
+Dettagli architetturali: [ADR 0083](../adr/0083-loaded-web-timeline-local-day-selection.md); prove TDD e test Keycloak: [issue #185](https://github.com/KeyserDSoze/Tao/issues/185). Restano aperte #79, #7, #41, #17, #2 per funzioni generali e privacy non completata.

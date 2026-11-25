@@ -6,7 +6,7 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:19006', ...devices['Desktop Chrome'], trace: 'retain-on-failure' },
   webServer: {
     command: 'node scripts/serve-static.mjs',
-    url: 'http://127.0.0.1:19006/Omnia/',
+    url: 'http://127.0.0.1:19006/Tao/',
     timeout: 30_000,
     reuseExistingServer: !process.env.CI
   }

@@ -52,8 +52,8 @@ availability tradeoff and fixed-window edges can permit
 bursts across adjacent 60-second periods.
 
 ## TDD evidence and verification gate
-Test-first RED [4096db9a](https://github.com/KeyserDSoze/Omnia/commit/4096db9a38bda0ef4127ffd815f17b076ca1462a)
-on [CI 44962256629](https://github.com/KeyserDSoze/Omnia/actions/runs/44962256629):
+Test-first RED [4096db9a](https://github.com/KeyserDSoze/Tao/commit/4096db9a38bda0ef4127ffd815f17b076ca1462a)
+on [CI 44962256629](https://github.com/KeyserDSoze/Tao/actions/runs/44962256629):
 135 passed, 1 behaviorally failed of 136 real
 PostgreSQL Integration tests: third subject of one
 tenant incorrectly got 200 instead of aggregate 429

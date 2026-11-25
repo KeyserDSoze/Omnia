@@ -19,7 +19,7 @@ The `main.bicep` foundation declares baseline PaaS resources; additional network
 
 ## Recovery-quarantine prerequisite (#141 / ADR 0019)
 
-Before deploying a non-Development Omnia API, an external
+Before deploying a non-Development Tao API, an external
 operator-controlled, read-only secret/config mount must expose
 Recovery__AccessStateFile outside the PostgreSQL backup lifecycle.
 Only exact `ready\n` is accepted; a missing or quarantined marker

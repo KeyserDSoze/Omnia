@@ -45,7 +45,7 @@ is an advisory retry hint, NOT guaranteed capacity.
 
 ## Test-first and validation
 
-Test-only commit on main [9a0c0312](https://github.com/KeyserDSoze/Omnia/commit/9a0c03129e937690490b1c442af7a3a4be1ca62d)
+Test-only commit on main [9a0c0312](https://github.com/KeyserDSoze/Tao/commit/9a0c03129e937690490b1c442af7a3a4be1ca62d)
 adds a real xUnit WebApplicationFactory + PostgreSQL behavioral
 regression: global actor cap 3, per-tenant cap 1, aggregate tenant
 quota 1. Tenant A successfully makes one request then sends more

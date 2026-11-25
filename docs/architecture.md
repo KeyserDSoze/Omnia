@@ -1,20 +1,20 @@
-# Omnia — architettura v0.1 (2026-11-17)
+# Tao — architettura v0.1 (2026-11-17)
 
 ## Scelta architetturale
 
 Monorepo ispirato a SoftwareFactory, con confini espliciti `domain → application → infrastructure → api`, test indipendenti, documentazione e ADR. Modular monolith **prima** dei microservizi. Su Azure un Container App .NET 10 e servizi PaaS. Expo Router ha un bundle statico per GitHub Pages e build native Android/iOS: il backend NON viene ospitato su Pages.
 
 ```text
-Expo React Native (iOS, Android, GitHub Pages /Omnia/)
+Expo React Native (iOS, Android, GitHub Pages /Tao/)
      | OAuth Authorization Code + PKCE [not yet implemented in UI]
      v
-Omnia.Api ASP.NET Core .NET 10 (Bearer JWT/JWKS OIDC)
+Tao.Api ASP.NET Core .NET 10 (Bearer JWT/JWKS OIDC)
      | DI: IMemoryCatalog
      v
-Omnia.Application (catalog, provenance, classification)
+Tao.Application (catalog, provenance, classification)
      | IMemoryRepository    | IEmbeddingProvider
      v                      v
-Omnia.Infrastructure     None | Ollama | Azure OpenAI
+Tao.Infrastructure     None | Ollama | Azure OpenAI
      |
 PostgreSQL 17+ pgvector (same engine dev/test/production)
 ```
@@ -101,11 +101,11 @@ ASP.NET Core built-in rate-limiter middleware is placed **after JWT authenticati
 
 ## OIDC web client + sync slice (2026-11-17)
 
-Il Browser Web (Expo static `/Omnia/`) usa `oidc-client-ts` come public client per Authorization Code + PKCE S256, valida il callback via state/nonce/issuer, mantiene JWT access e refresh **in RAM** (nessun storage persistente) e memorizza solo le transazioni OAuth necessarie in `sessionStorage`. Non affida al browser il controllo finale: .NET 10 verifica sempre firma JWT/JWKS, issuer, audience e claim unici `sub`/`tenant_id`. Il client non invia tenant/owner nel corpo. I token sono inviati esclusivamente in header `Authorization: Bearer` verso una API HTTPS configurata (HTTP solo localhost/loopback per sviluppo) con redirect vietati; errori HTTP/timeout non generano falsi salvataggi. Consent `manual/memory.capture` richiede spunta esplicita; revoca impedisce nuovi memo. La UI è solo Web, non una prova di autenticazione nativa.
+Il Browser Web (Expo static `/Tao/`) usa `oidc-client-ts` come public client per Authorization Code + PKCE S256, valida il callback via state/nonce/issuer, mantiene JWT access e refresh **in RAM** (nessun storage persistente) e memorizza solo le transazioni OAuth necessarie in `sessionStorage`. Non affida al browser il controllo finale: .NET 10 verifica sempre firma JWT/JWKS, issuer, audience e claim unici `sub`/`tenant_id`. Il client non invia tenant/owner nel corpo. I token sono inviati esclusivamente in header `Authorization: Bearer` verso una API HTTPS configurata (HTTP solo localhost/loopback per sviluppo) con redirect vietati; errori HTTP/timeout non generano falsi salvataggi. Consent `manual/memory.capture` richiede spunta esplicita; revoca impedisce nuovi memo. La UI è solo Web, non una prova di autenticazione nativa.
 
 ## Tenant/subject Row-Level Security — prima implementazione di #30
 
-`0003_rls_scope.sql` definisce `FORCE RLS` in PostgreSQL 17 su `memory_entries` e `consent_grants`: row owner = `current_setting('omnia.tenant_id',true)` e `current_setting('omnia.owner_sub',true)`, verificati da `USING` e `WITH CHECK`. I valori mancanti/empty negano l'accesso. `PostgresActorScope` apre connessione e transazione, imposta GUC locali con parametri prima di ogni statement e ne governa commit/rollback; **non ci sono GUC di sessione globali**. Il runtime connection pool usa account `omnia_app` senza poteri bypass/owner, mentre `PostgresMigrator` usa una connessione DI distinta per DDL + GRANT. `PostgresRuntimeGuard.VerifyAsync` rifiuta avvio per credenziali runtime privilegiate o RLS disabilitata. `docker/db/bootstrap.sh` crea/ruota account locali senza password hardcoded. CI e browser OAuth reali avviano lo stesso runtime role.
+`0003_rls_scope.sql` definisce `FORCE RLS` in PostgreSQL 17 su `memory_entries` e `consent_grants`: row owner = `current_setting('tao.tenant_id',true)` e `current_setting('tao.owner_sub',true)`, verificati da `USING` e `WITH CHECK`. I valori mancanti/empty negano l'accesso. `PostgresActorScope` apre connessione e transazione, imposta GUC locali con parametri prima di ogni statement e ne governa commit/rollback; **non ci sono GUC di sessione globali**. Il runtime connection pool usa account `tao_app` senza poteri bypass/owner, mentre `PostgresMigrator` usa una connessione DI distinta per DDL + GRANT. `PostgresRuntimeGuard.VerifyAsync` rifiuta avvio per credenziali runtime privilegiate o RLS disabilitata. `docker/db/bootstrap.sh` crea/ruota account locali senza password hardcoded. CI e browser OAuth reali avviano lo stesso runtime role.
 
 Questa è difesa in profondità contro query che dimenticano il filtro tenant, non una sostituzione della validazione OIDC né una protezione contro SQL arbitrario ottenuto per injection. Ruoli admin di migrazione e superuser restano confini ad alto privilegio: Azure deve separarli e gestirli fuori dal servizio pubblico.
 
@@ -113,18 +113,18 @@ Questa è difesa in profondità contro query che dimenticano il filtro tenant, n
 
 `IPersonalDataService` (Application) ha due operazioni nel PostgreSQL corrente: export JSON via streaming e cancellazione transazionale. `PostgresPersonalDataService` (Infrastructure) usa `PostgresActorScope` e `PostgresActorLock` (advisory transaction lock, actor = tenant+subject). L'export tiene il lock durante la lettura e comprende tutte le righe e i derivati delle tabelle personali, senza limiti artificiali di 100/200 record. La cancellazione ottiene lo stesso lock e rimuove prima i consensi, poi le note, nella stessa transazione; `GrantAsync`, `RevokeAsync`, `UpsertAsync` acquisiscono il lock prima di scrivere per serializzare i tentativi concorrenti. Tutto rimane sotto FORCE RLS e ruolo DB limitato. Le API non ricevono tenant/owner dal body, solo dai claim JWT validati.
 
-`GET /api/v1/privacy/export`: risposta JSON attachment no-store. `POST /api/v1/privacy/erase` con conferma esplicita: receipt con conteggi e limitazione dichiarata a `omnia-postgresql-primary`. La UI browser espone download e cancellazione con checkbox + frase esatta. Nessuna revoca di token IdP o propagazione a provider/backups in questa slice; native resta da implementare.
+`GET /api/v1/privacy/export`: risposta JSON attachment no-store. `POST /api/v1/privacy/erase` con conferma esplicita: receipt con conteggi e limitazione dichiarata a `tao-postgresql-primary`. La UI browser espone download e cancellazione con checkbox + frase esatta. Nessuna revoca di token IdP o propagazione a provider/backups in questa slice; native resta da implementare.
 
 ## Memory retention worker — M1 slice #136
 
 - Migrazione `0004_memory_retention.sql`: `expires_at` NOT NULL e default DB `now() + 30 days` per le note; backfill dei legacy da `received_at`, non dal momento della migrazione. Index su `expires_at`; se un retry idempotente avviene prima di scadenza il TTL resta immutato, mentre una nuova esplicita capture di un record già scaduto inizia un nuovo periodo. Consensi hanno lifecycle e scadenze separate.
 - `PostgresMemoryRepository.RecentAsync` filtra `expires_at > now()` oltre a tenant+owner e RLS. L'export JSON include `expiresAt` e resta completo su **tutte le righe non ancora rimosse fisicamente**, anche se già scadute (diritto di accesso), sino al purge.
-- `PostgresRetentionRepository` esegue solo `SELECT public.omnia_purge_expired_memories(@batch)` con parametro numerico; nel DB il ruolo `omnia_retention` è separato dall'account API `omnia_app` e dal migratore, non possiede permessi su tabelle e non può bypassare RLS. Il migratore concede esclusivamente EXECUTE sulla routine privilegiata, rimuovendo il default PUBLIC; `PostgresRetentionRepository.VerifyWorkerRoleAsync` blocca lo startup in caso di privilegio eccessivo.
+- `PostgresRetentionRepository` esegue solo `SELECT public.tao_purge_expired_memories(@batch)` con parametro numerico; nel DB il ruolo `tao_retention` è separato dall'account API `tao_app` e dal migratore, non possiede permessi su tabelle e non può bypassare RLS. Il migratore concede esclusivamente EXECUTE sulla routine privilegiata, rimuovendo il default PUBLIC; `PostgresRetentionRepository.VerifyWorkerRoleAsync` blocca lo startup in caso di privilegio eccessivo.
 - `RetentionSweepService` è un `BackgroundService` nell'attuale processo API (worker separato previsto in produzione), con prima esecuzione all'avvio e intervallo 15 minuti. `FOR UPDATE SKIP LOCKED` consente più istanze concorrenti, max 500 righe per batch e 10 batch per ciclo. Un errore è registrato con il solo nome del tipo e ritentato al ciclo successivo. Il limite batch impedisce monopolio/DoS del worker, ma non rappresenta una garanzia SLO o uno scheduler affidabile durante un outage.
 
 ## Cryptography boundary — slice #137
 
-`Omnia.Application.EncryptionScope` e `IEnvelopeEncryption` definiscono un port provider-neutral per proteggere futuri payload persistenti. Infra implementa `EnvelopeKeyRing` (file JSON esterno, API `FromBase64` per trusted providers) e `AesGcmEnvelopeEncryption` (v1 binario con key ID, AES-GCM payload e wrap). L'operazione `Rewrap` verifica il tag del payload e sostituisce il solo DEK-wrapping, mantenendo immutati ciphertext e tag dati. Sono supportate fino a 16 KEK per key ring e payload in memoria fino a 1 MiB; non sono supportati media grandi in streaming. Per una futura persistenza il caller dovrà ricavare l'attore da JWT verificato e non dal corpo della richiesta, e associare il ciphertext al record canonical ID. Per il piano future data-store servono RLS, export, erase, retention e contract test aggiornati. **Il port non è ancora iniettato nell'API e non protegge i dati attuali del database.**
+`Tao.Application.EncryptionScope` e `IEnvelopeEncryption` definiscono un port provider-neutral per proteggere futuri payload persistenti. Infra implementa `EnvelopeKeyRing` (file JSON esterno, API `FromBase64` per trusted providers) e `AesGcmEnvelopeEncryption` (v1 binario con key ID, AES-GCM payload e wrap). L'operazione `Rewrap` verifica il tag del payload e sostituisce il solo DEK-wrapping, mantenendo immutati ciphertext e tag dati. Sono supportate fino a 16 KEK per key ring e payload in memoria fino a 1 MiB; non sono supportati media grandi in streaming. Per una futura persistenza il caller dovrà ricavare l'attore da JWT verificato e non dal corpo della richiesta, e associare il ciphertext al record canonical ID. Per il piano future data-store servono RLS, export, erase, retention e contract test aggiornati. **Il port non è ancora iniettato nell'API e non protegge i dati attuali del database.**
 
 
 ## Persisted sealed notes — phase 1 (#139)
@@ -137,7 +137,7 @@ Migration `0005_memory_sealed_payload.sql` adds nullable `memory_entries.sealed_
 
 ## Offline witness prefix audit — synthetic security slice (ADR 0028)
 
-An additional **offline** .NET 10 tool `Omnia.WitnessAudit` validates a
+An additional **offline** .NET 10 tool `Tao.WitnessAudit` validates a
 bounded and snapshot-consistent prefix of erasure receipts from an
 independent PostgreSQL witness using the EXECUTE-only reader, and an
 HMAC checkpoint outside that PGDATA. This is not an application
@@ -177,7 +177,7 @@ primary `erasure_outbox` rows against independent witness receipts,
 requiring exact UUID and actor scope. Its primary scan is bounded
 inside one `REPEATABLE READ` transaction using the dispatch
 SECURITY DEFINER function; the remote witness uses its separate
-EXECUTE-only reader function. The standalone `Omnia.ErasureDeliveryAudit`
+EXECUTE-only reader function. The standalone `Tao.ErasureDeliveryAudit`
 process is CI-only, never an HTTP API or recovery-release authority.
 The check cannot establish erasure history lost after primary PITR
 and cannot substitute for the independently anchored witness or
@@ -377,7 +377,7 @@ l'architettura non contiene ancora una offsite/WORM authority.
 
 ## Adapter S3 version-pinned (ADR 0044)
 
-Il nuovo adapter `Omnia.ObjectStore.S3` implementa il port
+Il nuovo adapter `Tao.ObjectStore.S3` implementa il port
 `IImmutableAttemptObjectReader` con AWS SDK v4, ma non
 viene registrato nella API SaaS o nel processo di DELETE.
 Legge `GetObjectRetention` della stessa versione letta
@@ -413,7 +413,7 @@ esterna al primario PostgreSQL.
 
 ## S3 version history reconciliation for lost ACK (ADR0047)
 
-`Omnia.ObjectStore.S3` ora espone una porta paginata
+`Tao.ObjectStore.S3` ora espone una porta paginata
 `IS3AttemptVersionHistory`, un adapter AWS SDK v4
 `ListVersions` e un reconciler read-only. Questo
 ultimo ricerca una possibile versione COMPLIANCE scritta

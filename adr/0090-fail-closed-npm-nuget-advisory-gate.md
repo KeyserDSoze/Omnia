@@ -41,7 +41,7 @@ reports that contain HIGH/CRITICAL packages (`blocked`).
 4. No waiver by default: `security/audit-exceptions.json` starts
    empty. Any future exception must match an exact ecosystem,
    package, resolved version and advisory URL plus mitigation reason
-   at least 30 chars, owner, tracked Omnia GitHub issue, and expiry
+   at least 30 chars, owner, tracked Tao GitHub issue, and expiry
    strictly within 30 days. Expired, stale, duplicate or wildcard
    exceptions **fail**, rather than giving a clean result.
 5. Preserve the lockfile restoration and image-digest gates;
@@ -51,33 +51,33 @@ reports that contain HIGH/CRITICAL packages (`blocked`).
 
 ## Test-first evidence and observed real findings
 
-- RED: [commit b72719b](https://github.com/KeyserDSoze/Omnia/commit/b72719b784597e15922797906819b9a18c5f5dd3)
-  / [CI 45210743119](https://github.com/KeyserDSoze/Omnia/actions/runs/45210743119):
+- RED: [commit b72719b](https://github.com/KeyserDSoze/Tao/commit/b72719b784597e15922797906819b9a18c5f5dd3)
+  / [CI 45210743119](https://github.com/KeyserDSoze/Tao/actions/runs/45210743119):
   six behavioral tests fail on provisional unsafe parser for
   critical/high rejection, malformed/failed reports, exact expiring
   waivers and suspicious indirect findings. Failure was expected.
-- GREEN policy: [commit 63685a2](https://github.com/KeyserDSoze/Omnia/commit/63685a2a37a78ff021518cfa5fde83688304442f);
-  [CI 45213586840](https://github.com/KeyserDSoze/Omnia/actions/runs/45213586840)
+- GREEN policy: [commit 63685a2](https://github.com/KeyserDSoze/Tao/commit/63685a2a37a78ff021518cfa5fde83688304442f);
+  [CI 45213586840](https://github.com/KeyserDSoze/Tao/actions/runs/45213586840)
   has **8/8** policy unit tests green, then real NuGet scans
   **20/20 projects, 0 advisories reported**, and expected red
   overall job due to npm vulnerabilities. Validated NuGet CLI
   --project syntax and clean no-framework JSON from official output.
 - Real npm discovery:
-  [45212260879](https://github.com/KeyserDSoze/Omnia/actions/runs/45212260879)
+  [45212260879](https://github.com/KeyserDSoze/Tao/actions/runs/45212260879)
   returned 2 CRITICAL / 3 HIGH / 4 MODERATE in locked npm graph.
   CRITICAL via tinypool@1.1.1 and Vitest@3.2.7, HIGH via
   decode-uri-component@0.2.2, query-string@7.1.3 and
   expo-router@57.0.32. HIGH occurs even in the production scope.
-- REMEDIATION: [isolated trial 45215428007](https://github.com/KeyserDSoze/Omnia/actions/runs/45215428007)
+- REMEDIATION: [isolated trial 45215428007](https://github.com/KeyserDSoze/Tao/actions/runs/45215428007)
   SUCCESS: only Vitest test runner to 5.1.1 with a fresh locked
   npm graph, npm ci, TS, 61 Vitest, Expo export, Playwright static,
   and official npm audit **0 critical / 3 high / 3 moderate**.
   Commit to main:
-  [d6b9af2](https://github.com/KeyserDSoze/Omnia/commit/d6b9af2900a5ca3c1c5da1be9ed519bbc136b6c7).
+  [d6b9af2](https://github.com/KeyserDSoze/Tao/commit/d6b9af2900a5ca3c1c5da1be9ed519bbc136b6c7).
   npm package manifest/lock changed atomically after real tests.
 - REJECTED: a transitive `decode-uri-component@0.5.1` override
   was found incompatible with `query-string 7` CommonJS:
-  [trial 45214808484](https://github.com/KeyserDSoze/Omnia/actions/runs/45214808484)
+  [trial 45214808484](https://github.com/KeyserDSoze/Tao/actions/runs/45214808484)
   failed `TypeError: decodeComponent is not a function`
   in an explicit new regression test; NO incompatible override was
   committed. #195 tracks a coordinated supported Expo SDK/Router

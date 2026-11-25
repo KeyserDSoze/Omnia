@@ -5,7 +5,7 @@
 
 ## Problem
 
-Omnia unifies high-risk personal/third-party data and connects AI agents to tools. A single giant implementation would risk uncontrolled access, untestable behavior and false claims of capability.
+Tao unifies high-risk personal/third-party data and connects AI agents to tools. A single giant implementation would risk uncontrolled access, untestable behavior and false claims of capability.
 
 ## Decision
 

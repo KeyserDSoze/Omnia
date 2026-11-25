@@ -1,4 +1,4 @@
-// Omnia PaaS resource baseline; not production-safe until private networking and identity are added.
+// Tao PaaS resource baseline; not production-safe until private networking and identity are added.
 targetScope = 'resourceGroup'
 
 @description('Short globally unique prefix (lowercase letters/numbers only).')
@@ -11,7 +11,7 @@ param location string = resourceGroup().location
 @description('Strong PostgreSQL admin password, supplied from secure environment, never committed.')
 param dbPassword string
 @description('Admin username; do not use for runtime API connections after least-privilege setup.')
-param dbAdmin string = 'omniaadmin'
+param dbAdmin string = 'taoadmin'
 
 var suffix = uniqueString(resourceGroup().id, prefix)
 var storageName = take(toLower('${prefix}${suffix}'), 24)
@@ -84,7 +84,7 @@ resource pgVector 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024
 
 resource pgdb 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
   parent: postgres
-  name: 'omnia'
+  name: 'tao'
   properties: { charset: 'UTF8', collation: 'en_US.utf8' }
 }
 

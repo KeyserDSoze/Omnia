@@ -40,7 +40,7 @@ This ledger records only the first-party authenticated request; it is **not** ve
 
 ## Test evidence
 
-Domain tests in `tests/Omnia.Domain.Tests/ConsentTests.cs`; real pgvector PostgreSQL tests in `tests/Omnia.Integration.Tests/ConsentPersistenceTests.cs`. CI execution must be verified and linked in issue #29 before treating this slice as passing.
+Domain tests in `tests/Tao.Domain.Tests/ConsentTests.cs`; real pgvector PostgreSQL tests in `tests/Tao.Integration.Tests/ConsentPersistenceTests.cs`. CI execution must be verified and linked in issue #29 before treating this slice as passing.
 
 ## Consent history truncation: active manual visibility (#178 / ADR 0077)
 

@@ -1,11 +1,11 @@
 {
-  "realm": "omnia",
+  "realm": "tao",
   "enabled": true,
-  "displayName": "Omnia (local development only)",
+  "displayName": "Tao (local development only)",
   "clients": [
     {
-      "clientId": "omnia-web",
-      "name": "Omnia local SPA",
+      "clientId": "tao-web",
+      "name": "Tao local SPA",
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
@@ -52,12 +52,12 @@
         "profile",
         "roles",
         "email",
-        "omnia-api-audience"
+        "tao-api-audience"
       ]
     },
     {
-      "clientId": "omnia-api",
-      "name": "Omnia API audience",
+      "clientId": "tao-api",
+      "name": "Tao API audience",
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false
@@ -65,19 +65,19 @@
   ],
   "clientScopes": [
     {
-      "name": "omnia-api-audience",
+      "name": "tao-api-audience",
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "true"
       },
       "protocolMappers": [
         {
-          "name": "audience omnia-api",
+          "name": "audience tao-api",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
           "config": {
-            "included.client.audience": "omnia-api",
+            "included.client.audience": "tao-api",
             "access.token.claim": "true"
           }
         }
@@ -85,6 +85,6 @@
     }
   ],
   "defaultDefaultClientScopes": [
-    "omnia-api-audience"
+    "tao-api-audience"
   ]
 }

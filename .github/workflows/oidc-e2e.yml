@@ -1,4 +1,4 @@
-name: Omnia OIDC real-browser E2E
+name: Tao OIDC real-browser E2E
 on:
   push:
     branches: [main]
@@ -37,7 +37,7 @@ jobs:
           set -euo pipefail
           python3 -m unittest discover -s tests/quality -p 'test_nuget_lock.py'
           python3 tests/quality/verify_nuget_locks.py
-          dotnet restore src/backend/Omnia.Api/Omnia.Api.csproj --locked-mode
+          dotnet restore src/backend/Tao.Api/Tao.Api.csproj --locked-mode
 
       - name: Start disposable PostgreSQL and Keycloak with random credentials
         shell: bash
@@ -54,27 +54,27 @@ jobs:
           echo "::add-mask::$apppass"
           echo "::add-mask::$retentionpass"
           {
-            echo "OMNIA_E2E_PG_PASSWORD=$pgpass"
-            echo "OMNIA_E2E_APP_PASSWORD=$apppass"
-            echo "OMNIA_E2E_RETENTION_PASSWORD=$retentionpass"
-            echo "OMNIA_E2E_KEYRING_FILE=$RUNNER_TEMP/omnia-e2e-envelope.keyring.json"
-            echo "OMNIA_E2E_KC_PASSWORD=$kcpass"
-            echo "OMNIA_E2E_PASSWORD=$userpass"
-            echo "OMNIA_E2E_USER1=omnia-ci-one"
-            echo "OMNIA_E2E_USER2=omnia-ci-two"
-            echo "OMNIA_E2E_USER3=omnia-ci-three"
+            echo "TAO_E2E_PG_PASSWORD=$pgpass"
+            echo "TAO_E2E_APP_PASSWORD=$apppass"
+            echo "TAO_E2E_RETENTION_PASSWORD=$retentionpass"
+            echo "TAO_E2E_KEYRING_FILE=$RUNNER_TEMP/tao-e2e-envelope.keyring.json"
+            echo "TAO_E2E_KC_PASSWORD=$kcpass"
+            echo "TAO_E2E_PASSWORD=$userpass"
+            echo "TAO_E2E_USER1=tao-ci-one"
+            echo "TAO_E2E_USER2=tao-ci-two"
+            echo "TAO_E2E_USER3=tao-ci-three"
           } >> "$GITHUB_ENV"
           ring_key="$(openssl rand -base64 32)"
           jq -nc --arg secret "$ring_key" \
             '{activeKeyId:"e2e-v1", keys:{"e2e-v1":$secret}}' \
-            > "$RUNNER_TEMP/omnia-e2e-envelope.keyring.json"
-          chmod 600 "$RUNNER_TEMP/omnia-e2e-envelope.keyring.json"
+            > "$RUNNER_TEMP/tao-e2e-envelope.keyring.json"
+          chmod 600 "$RUNNER_TEMP/tao-e2e-envelope.keyring.json"
 
-          docker run -d --rm --name omnia-oidc-pg \
-            -e POSTGRES_USER=omnia -e POSTGRES_DB=omnia_test \
+          docker run -d --rm --name tao-oidc-pg \
+            -e POSTGRES_USER=tao -e POSTGRES_DB=tao_test \
             -e "POSTGRES_PASSWORD=$pgpass" \
             -p 127.0.0.1:15432:5432 pgvector/pgvector:pg17
-          docker run -d --rm --name omnia-oidc-keycloak \
+          docker run -d --rm --name tao-oidc-keycloak \
             -e KC_BOOTSTRAP_ADMIN_USERNAME=ci-admin \
             -e "KC_BOOTSTRAP_ADMIN_PASSWORD=$kcpass" \
             -v "$GITHUB_WORKSPACE/docker/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro" \
@@ -82,28 +82,28 @@ jobs:
             start-dev --import-realm --hostname=http://localhost:8081
 
           for i in $(seq 1 90); do
-            if docker exec omnia-oidc-pg pg_isready -U omnia -d omnia_test >/dev/null 2>&1; then break; fi
+            if docker exec tao-oidc-pg pg_isready -U tao -d tao_test >/dev/null 2>&1; then break; fi
             sleep 2
           done
-          docker exec omnia-oidc-pg pg_isready -U omnia -d omnia_test
-          docker exec -i omnia-oidc-pg psql -v ON_ERROR_STOP=1 \
-            -U omnia -d omnia_test -v app_password="$apppass" -v retention_password="$retentionpass" <<'SQL'
+          docker exec tao-oidc-pg pg_isready -U tao -d tao_test
+          docker exec -i tao-oidc-pg psql -v ON_ERROR_STOP=1 \
+            -U tao -d tao_test -v app_password="$apppass" -v retention_password="$retentionpass" <<'SQL'
           SELECT format(
-            'CREATE ROLE omnia_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
+            'CREATE ROLE tao_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
             :'app_password'
           ) \gexec
           SELECT format(
-            'CREATE ROLE omnia_retention LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            'CREATE ROLE tao_retention LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
             :'retention_password'
           ) \gexec
           SQL
 
           for i in $(seq 1 120); do
-            if curl -fsS http://localhost:8081/realms/omnia/.well-known/openid-configuration >/dev/null; then break; fi
+            if curl -fsS http://localhost:8081/realms/tao/.well-known/openid-configuration >/dev/null; then break; fi
             sleep 2
           done
-          curl -fsS http://localhost:8081/realms/omnia/.well-known/openid-configuration \
-            | jq -e '.issuer == "http://localhost:8081/realms/omnia"'
+          curl -fsS http://localhost:8081/realms/tao/.well-known/openid-configuration \
+            | jq -e '.issuer == "http://localhost:8081/realms/tao"'
 
       - name: Provision synthetic identities through Keycloak admin API
         shell: bash
@@ -114,17 +114,17 @@ jobs:
             --data-urlencode 'grant_type=password' \
             --data-urlencode 'client_id=admin-cli' \
             --data-urlencode 'username=ci-admin' \
-            --data-urlencode "password=$OMNIA_E2E_KC_PASSWORD" \
+            --data-urlencode "password=$TAO_E2E_KC_PASSWORD" \
             | jq -r '.access_token')"
           test "${#admin_token}" -gt 40
           echo "::add-mask::$admin_token"
 
           # Each actor signs in via genuine PKCE/JWT. The third disposable
           # subject isolates late paging E2E from prior actors' real 429 quota.
-          for username in "$OMNIA_E2E_USER1" "$OMNIA_E2E_USER2" "$OMNIA_E2E_USER3"; do
-            body="$(jq -nc --arg username "$username" --arg password "$OMNIA_E2E_PASSWORD" \
-              '{username: $username, firstName: "Omnia", lastName: "Synthetic", email: ($username + "@example.test"), emailVerified: true, requiredActions: [], enabled: true, credentials: [{type:"password", value:$password, temporary:false}]}')"
-            curl -fsS -X POST http://localhost:8081/admin/realms/omnia/users \
+          for username in "$TAO_E2E_USER1" "$TAO_E2E_USER2" "$TAO_E2E_USER3"; do
+            body="$(jq -nc --arg username "$username" --arg password "$TAO_E2E_PASSWORD" \
+              '{username: $username, firstName: "Tao", lastName: "Synthetic", email: ($username + "@example.test"), emailVerified: true, requiredActions: [], enabled: true, credentials: [{type:"password", value:$password, temporary:false}]}')"
+            curl -fsS -X POST http://localhost:8081/admin/realms/tao/users \
               -H "Authorization: Bearer $admin_token" \
               -H "Content-Type: application/json" \
               --data-binary "$body"
@@ -134,37 +134,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export Database__ConnectionString="Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_app;Password=$OMNIA_E2E_APP_PASSWORD"
-          export Database__MigrationConnectionString="Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia;Password=$OMNIA_E2E_PG_PASSWORD"
-          export Database__RetentionConnectionString="Host=127.0.0.1;Port=15432;Database=omnia_test;Username=omnia_retention;Password=$OMNIA_E2E_RETENTION_PASSWORD"
-          export Crypto__KeyRingPath="$OMNIA_E2E_KEYRING_FILE"
-          export Auth__Issuer=http://localhost:8081/realms/omnia
-          export Auth__Audience=omnia-api
+          export Database__ConnectionString="Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_app;Password=$TAO_E2E_APP_PASSWORD"
+          export Database__MigrationConnectionString="Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao;Password=$TAO_E2E_PG_PASSWORD"
+          export Database__RetentionConnectionString="Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_retention;Password=$TAO_E2E_RETENTION_PASSWORD"
+          export Crypto__KeyRingPath="$TAO_E2E_KEYRING_FILE"
+          export Auth__Issuer=http://localhost:8081/realms/tao
+          export Auth__Audience=tao-api
           export Embeddings__Provider=none
           export Cors__Origins__0=http://127.0.0.1:19006
           export ASPNETCORE_ENVIRONMENT=Development
           export ASPNETCORE_URLS=http://127.0.0.1:8080
           # This state is owned by the ephemeral test operator, not restored
           # from PGDATA or exposed in the web/API bundle.
-          export Recovery__AccessStateFile="$RUNNER_TEMP/omnia-oidc-recovery-state"
+          export Recovery__AccessStateFile="$RUNNER_TEMP/tao-oidc-recovery-state"
           printf 'ready\n' > "$Recovery__AccessStateFile"
           chmod 600 "$Recovery__AccessStateFile"
-          nohup dotnet run --project src/backend/Omnia.Api/Omnia.Api.csproj \
+          nohup dotnet run --project src/backend/Tao.Api/Tao.Api.csproj \
             --configuration Release --no-launch-profile \
-            > "$RUNNER_TEMP/omnia-oidc-api.log" 2>&1 < /dev/null &
+            > "$RUNNER_TEMP/tao-oidc-api.log" 2>&1 < /dev/null &
           for i in $(seq 1 100); do
             if curl -fsS http://127.0.0.1:8080/health >/dev/null; then exit 0; fi
             sleep 2
           done
-          cat "$RUNNER_TEMP/omnia-oidc-api.log"
+          cat "$RUNNER_TEMP/tao-oidc-api.log"
           exit 1
 
       - name: Running API blocks access immediately when recovery quarantine is activated
         shell: bash
         run: |
           set -euo pipefail
-          marker="$RUNNER_TEMP/omnia-oidc-recovery-state"
-          body="$(mktemp "$RUNNER_TEMP/omnia-quarantine-response.XXXXXX")"
+          marker="$RUNNER_TEMP/tao-oidc-recovery-state"
+          body="$(mktemp "$RUNNER_TEMP/tao-quarantine-response.XXXXXX")"
           trap 'rm -f "$body"' EXIT
           printf 'quarantined\n' > "$marker"
           chmod 600 "$marker"
@@ -183,9 +183,9 @@ jobs:
       - name: Build static Expo for actual OIDC + API
         working-directory: src/mobile
         env:
-          EXPO_PUBLIC_OMNIA_OIDC_ISSUER: http://localhost:8081/realms/omnia
-          EXPO_PUBLIC_OMNIA_OIDC_CLIENT_ID: omnia-web
-          EXPO_PUBLIC_OMNIA_API_URL: http://127.0.0.1:8080
+          EXPO_PUBLIC_TAO_OIDC_ISSUER: http://localhost:8081/realms/tao
+          EXPO_PUBLIC_TAO_OIDC_CLIENT_ID: tao-web
+          EXPO_PUBLIC_TAO_API_URL: http://127.0.0.1:8080
         run: npm run typecheck && npm run build:web
 
       - name: Install Chromium
@@ -195,22 +195,22 @@ jobs:
       - name: Playwright browser real PKCE, JWT, consent, sync, cross-user
         working-directory: src/mobile
         env:
-          OMNIA_REAL_OIDC_E2E: '1'
+          TAO_REAL_OIDC_E2E: '1'
         run: npx playwright test e2e/auth-sync.spec.ts --reporter=line --retries=0
 
       - name: Capture safe diagnostics on failure
         if: failure()
         shell: bash
         run: |
-          if test -f "$RUNNER_TEMP/omnia-oidc-api.log"; then
-            tail -n 120 "$RUNNER_TEMP/omnia-oidc-api.log" | sed -E 's/(Password=)[^; ]+/\1***/g'
+          if test -f "$RUNNER_TEMP/tao-oidc-api.log"; then
+            tail -n 120 "$RUNNER_TEMP/tao-oidc-api.log" | sed -E 's/(Password=)[^; ]+/\1***/g'
           fi
-          docker logs --tail 100 omnia-oidc-keycloak 2>&1 || true
+          docker logs --tail 100 tao-oidc-keycloak 2>&1 || true
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: omnia-oidc-browser-diagnostics
+          name: tao-oidc-browser-diagnostics
           path: |
             src/mobile/test-results
             src/mobile/playwright-report
@@ -220,4 +220,4 @@ jobs:
       - name: Cleanup disposable test services
         if: always()
         run: |
-          docker rm -f omnia-oidc-pg omnia-oidc-keycloak || true
+          docker rm -f tao-oidc-pg tao-oidc-keycloak || true

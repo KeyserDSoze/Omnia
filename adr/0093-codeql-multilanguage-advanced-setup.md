@@ -6,7 +6,7 @@
 
 ## Context
 
-Omnia's locked restores and official npm/NuGet advisory gates detect vulnerable dependencies, but not first-party source-code data-flow vulnerabilities. Omnia's actual source includes .NET 10/C#, Expo TypeScript, Python scripts and GitHub Actions YAML. A source scanner complements but cannot replace SCA, runtime authentication and data protection tests.
+Tao's locked restores and official npm/NuGet advisory gates detect vulnerable dependencies, but not first-party source-code data-flow vulnerabilities. Tao's actual source includes .NET 10/C#, Expo TypeScript, Python scripts and GitHub Actions YAML. A source scanner complements but cannot replace SCA, runtime authentication and data protection tests.
 
 ## Decision
 

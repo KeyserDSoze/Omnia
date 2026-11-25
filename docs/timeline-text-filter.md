@@ -20,4 +20,4 @@ full-account, native/offline, connettori, thread né cancellazione dei backup.
 Restano aperte #79/#7/#41/#17/#2.
 
 ADR: ../adr/0084-loaded-web-timeline-text-filter.md
-Tracking: https://github.com/KeyserDSoze/Omnia/issues/187
+Tracking: https://github.com/KeyserDSoze/Tao/issues/187

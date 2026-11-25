@@ -1,4 +1,4 @@
-# Omnia · Personal Intelligence Platform
+# Tao · Personal Intelligence Platform
 
 > **Foundation v0.1** — un unico monorepo per web, Android, iOS e API SaaS. Lo sviluppo avviene su `main` come richiesto. La foundation non è ancora un prodotto pronto a trattare dati personali reali.
 
@@ -25,10 +25,10 @@ adr/                           Architectural Decision Records
 docs/                          architecture, roadmap, security, research
 docker/                        compose, Keycloak realm, API Dockerfile
 infra/azure/                   PaaS foundation (Bicep; not yet validated)
-src/backend/Omnia.Domain/      aggregates & invariants
-src/backend/Omnia.Application/ use cases + ports
-src/backend/Omnia.Infrastructure/ PostgreSQL + embeddings adapters
-src/backend/Omnia.Api/         HTTP, OIDC, DI
+src/backend/Tao.Domain/      aggregates & invariants
+src/backend/Tao.Application/ use cases + ports
+src/backend/Tao.Infrastructure/ PostgreSQL + embeddings adapters
+src/backend/Tao.Api/         HTTP, OIDC, DI
 src/mobile/src/app/            Expo Router, web/iOS/Android UI
 src/mobile/src/domain/         testable pure logic
 tests/                         xUnit / Vitest / Playwright
@@ -100,24 +100,24 @@ uno scan malware/CVE o una certificazione supply chain.
 
 Ogni CI produce **due inventari deterministici** per le dipendenze
 bloccate di Expo/npm e dei 20 progetti .NET/NuGet:
-`omnia-npm.cdx.json` e `omnia-nuget.cdx.json`. I documenti includono
+`tao-npm.cdx.json` e `tao-nuget.cdx.json`. I documenti includono
 package URL (PURL), versioni risolte, SHA-512 e riferimenti ai lock
 di origine; non contengono dati utente. Sono generati in un percorso
 temporaneo, verificati a byte identici e caricati nell'artefatto
-GitHub Actions `omnia-locked-dependency-sbom` con conservazione 14
+GitHub Actions `tao-locked-dependency-sbom` con conservazione 14
 giorni. Vedi [ADR 0089](adr/0089-deterministic-locked-package-cyclonedx-sbom.md),
-[runbook SBOM](docs/locked-dependency-sbom.md) e [#192](https://github.com/KeyserDSoze/Omnia/issues/192).
+[runbook SBOM](docs/locked-dependency-sbom.md) e [#192](https://github.com/KeyserDSoze/Tao/issues/192).
 **Un SBOM di lockfile non è una scansione CVE**, non prova
 licenze, attestation, runtime/binary/container coverage o compliance:
 #22/#15/#10 restano aperte.
 
 ## Vulnerabilità dipendenze — CI security gate (non ancora verde)
 
-Omnia esegue in CI il job **`security-audit`**: scanner npm ufficiale
+Tao esegue in CI il job **`security-audit`**: scanner npm ufficiale
 su tutti i package del lock e sul sottoinsieme produzione, più verifica
 NuGet delle dipendenze dirette/transitive di tutti i 20 progetti.
 Lo script `tests/quality/run_live_advisory_audit.py` pubblica un report
-JSON come artefatto Actions `omnia-security-audit` (14 giorni),
+JSON come artefatto Actions `tao-security-audit` (14 giorni),
 **anche quando il gate fallisce**. Gli output incompleti o le advisory
 non disponibili producono fallimento, mai un falso esito pulito.
 Le eccezioni sono inizialmente assenti e, se introdotte, richiedono
@@ -128,10 +128,10 @@ Il 23 novembre 2026 è stato aggiornato il **solo Vitest alla 5.1.1**
 con `npm ci`, TypeScript, Vitest, Expo export e Playwright superati,
 eliminando **2 critical** di `tinypool`/tooling. Restano **3 high**
 nella catena di produzione `expo-router` /`query-string` /
-`decode-uri-component`, più 3 moderate: [#194](https://github.com/KeyserDSoze/Omnia/issues/194).
+`decode-uri-component`, più 3 moderate: [#194](https://github.com/KeyserDSoze/Tao/issues/194).
 L'override ingenuo alla versione ESM `decode-uri-component 0.5.1`
 ha rotto il parser CommonJS; il test di compatibilità impedisce di
-ripeterlo. È aperta [#195](https://github.com/KeyserDSoze/Omnia/issues/195)
+ripeterlo. È aperta [#195](https://github.com/KeyserDSoze/Tao/issues/195)
 per una migrazione Expo compatibile. **Finché ci sono finding high
 non mitigati la CI security resta volutamente rossa.**
 Vedi [ADR 0090](adr/0090-fail-closed-npm-nuget-advisory-gate.md)
@@ -139,22 +139,22 @@ e il [runbook](docs/dependency-advisory-scan.md).
 
 ## Aggiornamento di sicurezza Expo SDK58
 
-Omnia usa ora il lock npm v3 verificato con **Expo SDK58 (58.0.26),
+Tao usa ora il lock npm v3 verificato con **Expo SDK58 (58.0.26),
 Expo Router 58.0.32, React Native 0.88.1, React 19.3.0 e
 Vitest 5.1.1**. Il grafo non include più `query-string 7`,
 `decode-uri-component 0.2.2` e `tinypool`; nessun override
 transitivo è stato introdotto. [Trial isolato
-45217840306](https://github.com/KeyserDSoze/Omnia/actions/runs/45217840306):
+45217840306](https://github.com/KeyserDSoze/Tao/actions/runs/45217840306):
 `npm ci`, typecheck, Vitest, Web export, Playwright, bundle Android e
 audit npm all/prod hanno superato i controlli (**0 HIGH/CRITICAL,
 3 MODERATE**). Il [gate SCA reale
-45220400873](https://github.com/KeyserDSoze/Omnia/actions/runs/45220400873)
+45220400873](https://github.com/KeyserDSoze/Tao/actions/runs/45220400873)
 ha verificato npm all/prod più NuGet 20/20 con job SUCCESS.
 
 Il nuovo [validator](src/mobile/scripts/verify-sdk58-security.mjs)
 impedisce il ritorno di vulnerabilità note, incompatibilità native,
 override di dipendenze e perdita di `web.output=static` e
-`/Omnia` per GitHub Pages. CI verifica anche i **bundle Metro
+`/Tao` per GitHub Pages. CI verifica anche i **bundle Metro
 Android e iOS**; non sostituiscono EAS build, firma, distribuzione o
 test su emulatori e dispositivi, ancora pendenti nella #195.
 Vedi [ADR 0091](adr/0091-expo-sdk58-security-migration.md) e
@@ -171,11 +171,11 @@ curl http://localhost:8080/health
 # In modalità embeddings ollama: docker compose --env-file docker/.env -f docker/compose.yml exec ollama ollama pull nomic-embed-text
 ```
 
-Keycloak locale è disponibile su localhost:8081, realm `omnia`; creare un utente e configurare i client via console Keycloak. I token API devono includere `sub`, `tenant_id` e `aud=omnia-api`. **Nessun token di test o account demo è hardcoded.** Test integration richiede un Postgres pgvector usa-e-getta e la variabile `OMNIA_TEST_DB`.
+Keycloak locale è disponibile su localhost:8081, realm `tao`; creare un utente e configurare i client via console Keycloak. I token API devono includere `sub`, `tenant_id` e `aud=tao-api`. **Nessun token di test o account demo è hardcoded.** Test integration richiede un Postgres pgvector usa-e-getta e la variabile `TAO_TEST_DB`.
 
 ## Rilascio
 
-- **Web**: Settings → Pages → Source: GitHub Actions; workflow `.github/workflows/pages.yml` pubblica `src/mobile/dist` quando Pages è abilitato. URL atteso dopo deploy riuscito: https://keyserdsoze.github.io/Omnia/
+- **Web**: Settings → Pages → Source: GitHub Actions; workflow `.github/workflows/pages.yml` pubblica `src/mobile/dist` quando Pages è abilitato. URL atteso dopo deploy riuscito: https://keyserdsoze.github.io/Tao/
 - **Android/iOS**: `eas.json` prepara i profili, ma firma, account store e token Expo sono da configurare.
 - **Azure**: vedere `infra/azure/README.md`; non dichiarare deploy o hosting attivi senza verifiche.
 
@@ -209,22 +209,22 @@ Per l'ambiente Docker locale già predisposto:
 docker compose --env-file docker/.env -f docker/compose.yml up --build -d db keycloak api
 # 2. Da un'altra shell avvia il web server Expo con sole impostazioni PUBBLICHE (non secrets)
 cd src/mobile
-EXPO_PUBLIC_OMNIA_OIDC_ISSUER=http://localhost:8081/realms/omnia \
-EXPO_PUBLIC_OMNIA_OIDC_CLIENT_ID=omnia-web \
-EXPO_PUBLIC_OMNIA_API_URL=http://localhost:8080 \
+EXPO_PUBLIC_TAO_OIDC_ISSUER=http://localhost:8081/realms/tao \
+EXPO_PUBLIC_TAO_OIDC_CLIENT_ID=tao-web \
+EXPO_PUBLIC_TAO_API_URL=http://localhost:8080 \
 npm run web
 ```
 Keycloak non crea credenziali utente reali per default: creare un utente sintetico nel realm locale e testare l'OIDC flow; non commitare password. Redirect consentiti nel realm import: `http://localhost:19006/*` e `http://127.0.0.1:19006/*`. Client OAuth **pubblico**, senza secret. L'API valida firma, issuer, audience e sub/tenant del bearer JWT. Configurare separatamente HTTPS, client, origins e issuer reali per una futura deployment Azure/Pages (non incluso). Le variabili `EXPO_PUBLIC_*` sono visibili nel browser: **NON inserire segreti**.
 
-La Pages pubblica su <https://keyserdsoze.github.io/Omnia/> mantiene la demo locale quando non riceve configurazione cloud. La presenza di una sola variabile viene trattata come errore di configurazione, mai come sync implicito. Native iOS/Android resta demo fino all'OIDC via browser nativo con SecureStore (#40). Audio resta solo locale, non viene caricato dal flusso memo.
+La Pages pubblica su <https://keyserdsoze.github.io/Tao/> mantiene la demo locale quando non riceve configurazione cloud. La presenza di una sola variabile viene trattata come errore di configurazione, mai come sync implicito. Native iOS/Android resta demo fino all'OIDC via browser nativo con SecureStore (#40). Audio resta solo locale, non viene caricato dal flusso memo.
 
 ## PostgreSQL RLS e connessione non privilegiata (feature #30)
 
-La memoria e i consensi ora hanno **Row-Level Security applicata dal database**. L'API usa un ruolo `omnia_app` non superuser, non owner e privo di `BYPASSRLS`; un account distinto di migrazione installa le tabelle e concede all'app solo SELECT/INSERT/UPDATE/DELETE sui dati personali. Il backend **rifiuta l'avvio** se manca uno dei due ruoli, se i ruoli coincidono, se l'utente applicativo può bypassare RLS o se le policy non sono `FORCE`. I repository impostano la coppia `tenant_id`+`owner_sub` verificata dal JWT esclusivamente tramite `set_config(..., is_local=true)` nella stessa transazione SQL del lavoro; le connessioni riutilizzate non ereditano l'identità precedente.
+La memoria e i consensi ora hanno **Row-Level Security applicata dal database**. L'API usa un ruolo `tao_app` non superuser, non owner e privo di `BYPASSRLS`; un account distinto di migrazione installa le tabelle e concede all'app solo SELECT/INSERT/UPDATE/DELETE sui dati personali. Il backend **rifiuta l'avvio** se manca uno dei due ruoli, se i ruoli coincidono, se l'utente applicativo può bypassare RLS o se le policy non sono `FORCE`. I repository impostano la coppia `tenant_id`+`owner_sub` verificata dal JWT esclusivamente tramite `set_config(..., is_local=true)` nella stessa transazione SQL del lavoro; le connessioni riutilizzate non ereditano l'identità precedente.
 
-Per Docker locale creare due password differenti in `docker/.env` (variabili `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`), poi `docker compose --env-file docker/.env -f docker/compose.yml up --build -d`. Il servizio one-shot `db-bootstrap` crea o aggiorna il ruolo runtime: serve anche per volumi già esistenti. L'API riceve `Database__ConnectionString` (solo `omnia_app`) e `Database__MigrationConnectionString` (solo owner schema). **In Azure occorre provisionare questi due account/identità separati con permessi minimi e secret vault**: la configurazione Docker è solo uno sviluppo locale.
+Per Docker locale creare due password differenti in `docker/.env` (variabili `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`), poi `docker compose --env-file docker/.env -f docker/compose.yml up --build -d`. Il servizio one-shot `db-bootstrap` crea o aggiorna il ruolo runtime: serve anche per volumi già esistenti. L'API riceve `Database__ConnectionString` (solo `tao_app`) e `Database__MigrationConnectionString` (solo owner schema). **In Azure occorre provisionare questi due account/identità separati con permessi minimi e secret vault**: la configurazione Docker è solo uno sviluppo locale.
 
-I test con pgvector vero verificano SQL non filtrato, blocco INSERT/UPDATE cross-owner, revoca e assenza di leak del context tra connessioni. La UI su GitHub Pages resta demo, l'accesso OIDC Web funziona solo con API+Keycloak reali configurati. Questa difesa non neutralizza la SQL injection se l'attaccante controlla istruzioni SQL arbitrarie e cambia i parametri custom `omnia.*`; servono query parametrizzate, permessi minimi, audit e threat review.
+I test con pgvector vero verificano SQL non filtrato, blocco INSERT/UPDATE cross-owner, revoca e assenza di leak del context tra connessioni. La UI su GitHub Pages resta demo, l'accesso OIDC Web funziona solo con API+Keycloak reali configurati. Questa difesa non neutralizza la SQL injection se l'attaccante controlla istruzioni SQL arbitrarie e cambia i parametri custom `tao.*`; servono query parametrizzate, permessi minimi, audit e threat review.
 
 ## Esportazione e cancellazione dati (prima slice #31)
 
@@ -238,13 +238,13 @@ La cancellazione richiede una spunta e la digitazione esatta di `ELIMINA`; il se
 
 Le note nella tabella `memory_entries` scadono **30 giorni dopo `received_at`**, l'istante server di prima ricezione; non dalla data dell'evento né dal rinnovo di un consenso. L'idempotent retry di una nota non allunga il periodo. Le note già scadute non appaiono nella timeline. Un worker ricorrente elimina fisicamente dal database primario i record scaduti, **inclusi testo raw, dati normalizzati e vettori**; esegue una prima scansione all'avvio dell'API e poi ogni 15 minuti (max 5.000 record per ciclo, con batch 500).
 
-La configurazione locale ora richiede **tre segreti PostgreSQL differenti** in `docker/.env`: `POSTGRES_PASSWORD` per le migrazioni, `APP_DB_PASSWORD` per l'API con RLS e `RETENTION_DB_PASSWORD` per `omnia_retention`. Il ruolo di pulizia non legge direttamente tabelle personali e può chiamare soltanto una funzione SQL delimitata e testata. Il bootstrap Docker gestisce volumi esistenti.
+La configurazione locale ora richiede **tre segreti PostgreSQL differenti** in `docker/.env`: `POSTGRES_PASSWORD` per le migrazioni, `APP_DB_PASSWORD` per l'API con RLS e `RETENTION_DB_PASSWORD` per `tao_retention`. Il ruolo di pulizia non legge direttamente tabelle personali e può chiamare soltanto una funzione SQL delimitata e testata. Il bootstrap Docker gestisce volumi esistenti.
 
 **Attenzione:** i 30 giorni sono una policy tecnica iniziale e **non** una durata GDPR universalmente valida. I consensi/audit non sono soggetti a questa eliminazione finché non è definita una policy specifica. Backup/WAL, provider AI, dispositivi, object store e connettori sono fuori scope. Il parent #32 rimane aperto fino alla configurabilità per finalità/categoria/tenant, alla propagazione e alla revisione legale. Vedi [docs/retention.md](docs/retention.md).
 
 ## Cifratura applicativa — prima base #33 (sotto-issue #137)
 
-`Omnia.Application.IEnvelopeEncryption` e `Omnia.Infrastructure.AesGcmEnvelopeEncryption` offrono un **codec crittografico riutilizzabile**, con AES-256-GCM, chiave dati casuale per oggetto, protezione della chiave dati tramite KEK versionata, contesto autenticato `tenantId / ownerSubject / purpose / recordId` e `Rewrap` per aggiornare la KEK senza perdere i contenuti. Le chiavi possono essere caricate **soltanto da un file JSON esterno con percorso assoluto** (`EnvelopeKeyRing.FromFile`) o direttamente da un provider segreto fidato; non vengono fornite chiavi di default. Dettagli in [docs/envelope-encryption.md](docs/envelope-encryption.md).
+`Tao.Application.IEnvelopeEncryption` e `Tao.Infrastructure.AesGcmEnvelopeEncryption` offrono un **codec crittografico riutilizzabile**, con AES-256-GCM, chiave dati casuale per oggetto, protezione della chiave dati tramite KEK versionata, contesto autenticato `tenantId / ownerSubject / purpose / recordId` e `Rewrap` per aggiornare la KEK senza perdere i contenuti. Le chiavi possono essere caricate **soltanto da un file JSON esterno con percorso assoluto** (`EnvelopeKeyRing.FromFile`) o direttamente da un provider segreto fidato; non vengono fornite chiavi di default. Dettagli in [docs/envelope-encryption.md](docs/envelope-encryption.md).
 
 **Limite importante:** il codec NON è ancora collegato alle tabelle PostgreSQL né all'audio, ai token OAuth, ai provider AI o a un Key Vault/OpenBao. Le colonne attuali `raw_content`, `normalized_json`, `summary` e `embedding` **continuano a essere memorizzate come prima**. Non dichiarare che i dati correnti siano cifrati a livello applicativo. La parent #33 resta aperta per migrazione/backfill, applicazione a tutte le classi di dati, vault e verifiche di recupero/disaster recovery.
 
@@ -342,7 +342,7 @@ process memory, DB/AI, media connectors or upstream WAF.
 
 ## Per-actor bounded JSON buffer lifetime (#165 / ADR 0064)
 
-Omnia now applies atomic, per-API-instance live buffered
+Tao now applies atomic, per-API-instance live buffered
 JSON request ceilings to **global / OIDC tenant / OIDC
 tenant+subject actor**, defaults **64 / 16 / 4**, while
 the downstream handler holds its bounded JSON body stream.
@@ -359,7 +359,7 @@ distributed capacity, whole-memory/DB/AI control,
 media/connector quotas, WAF or GDPR release.
 
 ## Tenant-aggregate authenticated API rate (#166 / ADR 0065)
-In addition to per-account 120 requests/minute, Omnia
+In addition to per-account 120 requests/minute, Tao
 limits all accounts of one OIDC tenant collectively to
 RateLimit:TenantRequestsPerMinute (default **600** per
 fixed 60-second window; valid 1..10000) per API process.
@@ -455,7 +455,7 @@ clears local private notes, consent, drafts and confirmation, regardless
 of whether a capture or personal export is in flight. Late responses
 cannot repopulate another session's UI, trigger refreshes or download
 a private JSON export. An already accepted server mutation is NOT
-rolled back by closing the browser session: Omnia explicitly warns
+rolled back by closing the browser session: Tao explicitly warns
 that a request may have been processed and must be checked at the
 next login. Real Keycloak/JWT/PostgreSQL browser scenarios and
 deferred-promise Vitest tests exercise the behavior; native/device
@@ -567,7 +567,7 @@ fuori scope OAuth provider, native cloud offline,
 snapshot storico e valutazione di conformità GDPR.
 
 
-**Evidenza TDD UI:** issue [#181](https://github.com/KeyserDSoze/Omnia/issues/181), ADR [0079](adr/0079-signed-web-consent-ledger-lifecycle.md), test Vitest dei fence e browser Keycloak reale. La UI non inventa permessi di provider esterni né afferma conformità GDPR completa.
+**Evidenza TDD UI:** issue [#181](https://github.com/KeyserDSoze/Tao/issues/181), ADR [0079](adr/0079-signed-web-consent-ledger-lifecycle.md), test Vitest dei fence e browser Keycloak reale. La UI non inventa permessi di provider esterni né afferma conformità GDPR completa.
 
 
 ## Filtro sorgente sulla timeline Web (#182)

@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { hasOidcCallback, isAllowedPublicEndpoint, resolveWebMode } from '../../src/mobile/src/services/config';
 import { CloudApiError, MemoryApi } from '../../src/mobile/src/services/memoryApi';
 
-const cloud = { issuer: 'http://localhost:8081/realms/omnia', clientId: 'omnia-web', apiBaseUrl: 'http://localhost:8080' };
+const cloud = { issuer: 'http://localhost:8081/realms/tao', clientId: 'tao-web', apiBaseUrl: 'http://localhost:8080' };
 afterEach(() => vi.unstubAllGlobals());
 
 describe('OIDC public client config', () => {
@@ -15,7 +15,7 @@ describe('OIDC public client config', () => {
     expect(resolveWebMode(cloud).kind).toBe('cloud');
   });
   it('requires HTTPS except for explicit loopback development', () => {
-    expect(isAllowedPublicEndpoint('https://identity.example/realms/omnia')).toBe(true);
+    expect(isAllowedPublicEndpoint('https://identity.example/realms/tao')).toBe(true);
     expect(isAllowedPublicEndpoint('http://127.0.0.1:8080')).toBe(true);
     expect(isAllowedPublicEndpoint('http://localhost:8080')).toBe(true);
     expect(isAllowedPublicEndpoint('http://identity.example')).toBe(false);

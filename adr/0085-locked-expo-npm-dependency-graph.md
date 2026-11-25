@@ -42,19 +42,19 @@ build did not prove reproducibility.
 
 RED commit 9cf6f36 adds 3 policy tests (all pass) and shows
 CI mobile failure on missing package-lock (ENOENT) before install:
-https://github.com/KeyserDSoze/Omnia/actions/runs/45190402898.
+https://github.com/KeyserDSoze/Tao/actions/runs/45190402898.
 
 First bootstrap rejected npm ERESOLVE with incompatible latest optional
 Reanimated peer:
-https://github.com/KeyserDSoze/Omnia/actions/runs/45190701384.
+https://github.com/KeyserDSoze/Tao/actions/runs/45190701384.
 
 Compatible peers and fresh `npm ci` then passed 61 Vitest, typecheck,
 Expo export, but the first robot Git push lacked credentials:
-https://github.com/KeyserDSoze/Omnia/actions/runs/45191248138.
+https://github.com/KeyserDSoze/Tao/actions/runs/45191248138.
 
 Single-file scoped authenticated GitHub Contents API committed a tested
 9,708-line lockfile on main commit 0ced034:
-https://github.com/KeyserDSoze/Omnia/actions/runs/45191772525.
+https://github.com/KeyserDSoze/Tao/actions/runs/45191772525.
 
 Same SHA success for CI/Pages/OIDC must be checked and linked in #188
 before closure.

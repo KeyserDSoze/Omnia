@@ -54,7 +54,7 @@ and recovery quarantine remain unchanged.
 
 ## TDD / tests
 
-Test-first `tests/Omnia.Integration.Tests/ApiJsonBodyBudgetTests.cs`
+Test-first `tests/Tao.Integration.Tests/ApiJsonBodyBudgetTests.cs`
 runs via WebApplicationFactory + disposable real PostgreSQL
 roles and a **test-only fake auth handler**. It asserts declared
 oversize `Content-Length` -> 413, chunked/unknown Content-Length
@@ -66,22 +66,22 @@ No test sends user personal data; no test claims real OIDC
 validation (the separate real-browser/JWKS workflow covers it).
 
 - **RED verificato**: test-first
-  [`5ed18198`](https://github.com/KeyserDSoze/Omnia/commit/5ed18198b59c8d13e529bfe93609243f46c101f2),
-  [CI 44925769441](https://github.com/KeyserDSoze/Omnia/actions/runs/44925769441)
+  [`5ed18198`](https://github.com/KeyserDSoze/Tao/commit/5ed18198b59c8d13e529bfe93609243f46c101f2),
+  [CI 44925769441](https://github.com/KeyserDSoze/Tao/actions/runs/44925769441)
   **FAILURE attesa CS0103** nei test Integration per `ApiJsonBodyBudget`
   mancante; Domain 19/19, S3 16/16 e Azure 31/31 erano
   passati prima della compilazione Integration.
 - **GREEN verificato**: implementazione classe
-  [`00a38732`](https://github.com/KeyserDSoze/Omnia/commit/00a38732a5cf6897588b722b2a523184fe19825e),
+  [`00a38732`](https://github.com/KeyserDSoze/Tao/commit/00a38732a5cf6897588b722b2a523184fe19825e),
   registrazione API e config
-  [`8b3c2845`](https://github.com/KeyserDSoze/Omnia/commit/8b3c2845c2fa8575179d63a8a3eac6123d5a2bcd),
-  ADR/docs [`a0565c74`](https://github.com/KeyserDSoze/Omnia/commit/a0565c74c9420f3a8797c41bd4fbb88b39100773).
-  [CI 44926025165](https://github.com/KeyserDSoze/Omnia/actions/runs/44926025165)
+  [`8b3c2845`](https://github.com/KeyserDSoze/Tao/commit/8b3c2845c2fa8575179d63a8a3eac6123d5a2bcd),
+  ADR/docs [`a0565c74`](https://github.com/KeyserDSoze/Tao/commit/a0565c74c9420f3a8797c41bd4fbb88b39100773).
+  [CI 44926025165](https://github.com/KeyserDSoze/Tao/actions/runs/44926025165)
   **SUCCESS** sullo stesso SHA: 82/82 real PostgreSQL Integration
   (inclusi HTTP 413/415 e chunked), 19/19 Domain, 16/16 SeaweedFS
   S3, 31/31 Azure SDK; recovery/PITR fisici, Docker e mobile.
-  [OIDC 44926025187](https://github.com/KeyserDSoze/Omnia/actions/runs/44926025187)
-  e [Pages 44926025208](https://github.com/KeyserDSoze/Omnia/actions/runs/44926025208)
+  [OIDC 44926025187](https://github.com/KeyserDSoze/Tao/actions/runs/44926025187)
+  e [Pages 44926025208](https://github.com/KeyserDSoze/Tao/actions/runs/44926025208)
   **SUCCESS** sul commit `a0565c74`.
 - L'aggiornamento ADR con questa prova crea un **nuovo commit main**:
   prima della chiusura verificare nuovamente CI/OIDC/Pages tutte

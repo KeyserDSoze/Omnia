@@ -44,7 +44,7 @@ unchanged.
 
 ## TDD / verification
 
-Test-first `tests/Omnia.Integration.Tests/ApiJsonBodyReadTimeoutTests.cs`
+Test-first `tests/Tao.Integration.Tests/ApiJsonBodyReadTimeoutTests.cs`
 with a cancellation-aware synthetic Stream and DefaultHttpContext
 tests four independent invariants:
 
@@ -58,22 +58,22 @@ tests four independent invariants:
 - Invalid config below 100 or above 30,000 ms fails fast;
   100, 10,000 and 30,000 ms are accepted.
 
-**TDD RED verified:** [test-first `6fbac604`](https://github.com/KeyserDSoze/Omnia/commit/6fbac60496363d32e29f77b106f899442d6c15ea)
-and [CI 44927574990](https://github.com/KeyserDSoze/Omnia/actions/runs/44927574990)
+**TDD RED verified:** [test-first `6fbac604`](https://github.com/KeyserDSoze/Tao/commit/6fbac60496363d32e29f77b106f899442d6c15ea)
+and [CI 44927574990](https://github.com/KeyserDSoze/Tao/actions/runs/44927574990)
 **expected FAILURE**: missing `ValidateReadTimeoutMilliseconds` (CS0117),
 no four-argument `InvokeAsync` (CS1501). Existing domain 19/19,
 S3 16/16, Azure 31/31 and mobile passed before the integration
 compile gate.
 
-**TDD GREEN verified:** [implementation `1a5ecfb8`](https://github.com/KeyserDSoze/Omnia/commit/1a5ecfb863649cfc087b49261f55eee2cbbe49fe),
-[CI 44927667367](https://github.com/KeyserDSoze/Omnia/actions/runs/44927667367)
-**SUCCESS**; [ADR/docs `820cb162`](https://github.com/KeyserDSoze/Omnia/commit/820cb162e974c23848f285e85a7f98096b47efe2),
-[CI 44927797752](https://github.com/KeyserDSoze/Omnia/actions/runs/44927797752)
+**TDD GREEN verified:** [implementation `1a5ecfb8`](https://github.com/KeyserDSoze/Tao/commit/1a5ecfb863649cfc087b49261f55eee2cbbe49fe),
+[CI 44927667367](https://github.com/KeyserDSoze/Tao/actions/runs/44927667367)
+**SUCCESS**; [ADR/docs `820cb162`](https://github.com/KeyserDSoze/Tao/commit/820cb162e974c23848f285e85a7f98096b47efe2),
+[CI 44927797752](https://github.com/KeyserDSoze/Tao/actions/runs/44927797752)
 **SUCCESS**: domain 19/19, SeaweedFS S3 16/16, Azure SDK 31/31,
 real PostgreSQL integration 87/87 (5 new timeout tests), physical
 PITR/multi-cluster witness, Docker and mobile all SUCCESS.
-[OIDC real-browser E2E 44927797766](https://github.com/KeyserDSoze/Omnia/actions/runs/44927797766)
-and [Pages 44927797785](https://github.com/KeyserDSoze/Omnia/actions/runs/44927797785)
+[OIDC real-browser E2E 44927797766](https://github.com/KeyserDSoze/Tao/actions/runs/44927797766)
+and [Pages 44927797785](https://github.com/KeyserDSoze/Tao/actions/runs/44927797785)
 **SUCCESS** on same `820cb162` SHA.
 
 This evidence amendment creates a **new final main SHA**. Re-run

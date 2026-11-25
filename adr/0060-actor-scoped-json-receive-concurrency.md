@@ -55,7 +55,7 @@ binding, PostgreSQL or AI. Do not log, emit, export or persist keys.
 
 ## TDD and threat review
 
-Test-first [commit c7ca11e6](https://github.com/KeyserDSoze/Omnia/commit/c7ca11e60a70b9288b9c4c2eef8ed5e835ef34f5)
+Test-first [commit c7ca11e6](https://github.com/KeyserDSoze/Tao/commit/c7ca11e60a70b9288b9c4c2eef8ed5e835ef34f5)
 exercises the old global-only behavior via synthetic held body
 streams and expects the fifth request of the same actor to be denied
 while a second actor is accepted. CI run 44952228652 confirms the
@@ -85,4 +85,4 @@ parent #37, epic #2 and production compliance gates stay OPEN.
 - .NET Dictionary concurrent access requires synchronization:
   https://learn.microsoft.com/en-us/dotnet/api/system.collections.generic.dictionary-2?view=net-10.0
 - ADR 0058, global read cap:
-  https://github.com/KeyserDSoze/Omnia/blob/main/adr/0058-json-body-read-concurrency.md
+  https://github.com/KeyserDSoze/Tao/blob/main/adr/0058-json-body-read-concurrency.md

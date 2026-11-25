@@ -4,7 +4,10 @@ import { hasOidcCallback, type WebCloudConfig } from './config';
 export interface BrowserAuth {
   handleRedirect(): Promise<boolean>;
   hasSession(): Promise<boolean>;
-  login(): Promise<void>;
+  /** Optional Keycloak identity provider hint (social login: google, microsoft). */
+  login(idpHint?: 'google' | 'microsoft'): Promise<void>;
+  /** Display data from the validated ID token; never used for authorization. */
+  profile(): Promise<{ name: string | null; email: string | null }>;
   accessToken(): Promise<string>;
   /** Local-only fail-closed handling when the API rejects bearer auth. */
   discardLocalSession(): Promise<void>;
@@ -52,7 +55,12 @@ export function createBrowserAuth(config: WebCloudConfig): BrowserAuth {
       const user = await manager.getUser();
       return Boolean(user?.access_token && !user.expired);
     },
-    login: () => manager.signinRedirect(),
+    login: idpHint => manager.signinRedirect(idpHint ? { extraQueryParams: { kc_idp_hint: idpHint } } : undefined),
+    async profile() {
+      const claims = (await manager.getUser())?.profile;
+      const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
+      return { name: text(claims?.name) ?? text(claims?.preferred_username), email: text(claims?.email) };
+    },
     async accessToken() {
       const user = await manager.getUser();
       if (!user) throw new Error('Accesso richiesto.');

@@ -12,11 +12,10 @@ import { filterLoadedByTag, tagOptions } from '../services/timelineTagFilter';
 import { groupTimelineByLocalDay } from '../services/timelineDayGrouping';
 import { dayOptions, filterLoadedByLocalDay } from '../services/timelineDayFilter';
 import { filterLoadedByText } from '../services/timelineTextFilter';
-import { TodayPanel } from '../components/TodayPanel';
-import { ConnectionsPanel } from '../components/ConnectionsPanel';
-import { BriefingPanel } from '../components/BriefingPanel';
-import type { ConnectorProviderDto } from '../services/memoryApi';
-import { createDemoToday, demoProviders } from '../services/demoToday';
+import { ChatHome } from '../components/ChatHome';
+import { SettingsPanel } from '../components/SettingsPanel';
+import { loginOptions, type ConnectorProviderId } from '../services/memoryApi';
+import { createDemoToday } from '../services/demoToday';
 
 type LocalMemo = { id: string; source: string; occurredAt: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
@@ -93,10 +92,10 @@ export default function Home() {
   const [recording, setRecording] = useState(false);
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
-  const [connectorProviders, setConnectorProviders] = useState<ConnectorProviderDto[]>([]);
-  const [todayKey, setTodayKey] = useState(0);
-  const [preActions, setPreActions] = useState<Record<string, string>>({});
-  const accountsSignatureRef = useRef<string | null>(null);
+  const [view, setView] = useState<'chat' | 'settings' | 'memory'>('chat');
+  const [profile, setProfile] = useState<{ name: string | null; email: string | null } | null>(null);
+  const [socialProviders, setSocialProviders] = useState<ConnectorProviderId[]>([]);
+  const [setupRequest, setSetupRequest] = useState(0);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   // Keep every consent-history page and its opaque cursor confined to the
@@ -137,9 +136,7 @@ export default function Home() {
     setEraseAcknowledged(false);
     setDraft('');
     retryRef.current = null;
-    setConnectorProviders([]);
-    setPreActions({});
-    accountsSignatureRef.current = null;
+    setProfile(null);
     // Release a pending mutation's disabled controls after API 401/logout.
     setBusy(false);
   }
@@ -295,13 +292,16 @@ export default function Home() {
     });
     void (async () => {
       try {
+        void loginOptions(webMode.config.apiBaseUrl).then(providers => { if (live) setSocialProviders(providers); });
         await auth.handleRedirect();
         if (!live || !sameSession(bootEpoch)) return;
         if (!await auth.hasSession()) {
           if (live && sameSession(bootEpoch)) setAuthState('signed-out');
           return;
         }
+        const who = await auth.profile();
         if (live && sameSession(bootEpoch)) {
+          setProfile(who);
           setAuthState('signed-in');
           await refreshCloud();
         }
@@ -319,9 +319,9 @@ export default function Home() {
     };
   }, []);
 
-  async function login() {
+  async function login(idpHint?: ConnectorProviderId) {
     if (busy) return;
-    try { await authRef.current?.login(); }
+    try { await authRef.current?.login(idpHint); }
     catch { setNotice('Impossibile avviare il login OIDC. Verifica il provider.'); }
   }
 
@@ -517,38 +517,56 @@ export default function Home() {
 
   const cardStyle = { backgroundColor: p.surface, borderColor: p.border };
   const heading = { color: p.text };
+  const signedIn = webMode.kind === 'cloud' && authState === 'signed-in' && apiRef.current !== null;
+  const activeView = view === 'settings' && !signedIn ? 'chat' : view;
+  const chatMode = webMode.kind === 'demo' ? 'demo' : webMode.kind === 'invalid' ? 'invalid' :
+    authState === 'signed-in' ? 'signed-in' : authState === 'checking' ? 'checking' : 'signed-out';
+  const initials = (profile?.name ?? profile?.email ?? '').split(/[\s@.]+/).filter(Boolean).slice(0, 2)
+    .map(x => x[0]!.toUpperCase()).join('') || '⚙';
   return (
     <ScrollView style={{ flex: 1, backgroundColor: p.bg }} contentContainerStyle={styles.page}>
       <View style={styles.top}>
-        <View style={styles.brand}>
+        <Pressable testID="open-chat" accessibilityRole="button" accessibilityLabel="Chat" onPress={() => setView('chat')} style={styles.brand}>
           <View style={[styles.mark, { backgroundColor: p.accent }]}><Text style={{ color: p.accentText, fontWeight: '900', fontSize: 21 }}>道</Text></View>
-          <View><Text style={[styles.brandName, heading]}>tao</Text><Text style={[styles.eyebrow, { color: p.subtle }]}>PERSONAL INTELLIGENCE</Text></View>
-        </View>
-        <Pressable testID="theme-toggle" accessibilityRole="button" accessibilityLabel="Cambia tema" onPress={() => setOverride(mode === 'dark' ? 'light' : 'dark')} style={[styles.themeButton, { borderColor: p.border, backgroundColor: p.surface }]}>
-          <Text style={{ color: p.text }}>{mode === 'dark' ? '☀ Tema chiaro' : '☾ Tema scuro'}</Text>
+          <View><Text style={[styles.brandName, heading]}>tao</Text><Text style={[styles.eyebrow, { color: p.subtle }]}>IL TUO ASSISTENTE DI LAVORO</Text></View>
         </Pressable>
+        <View style={styles.nav}>
+          <Pressable testID="open-memory" accessibilityRole="button" onPress={() => setView(activeView === 'memory' ? 'chat' : 'memory')}
+            style={[styles.themeButton, { borderColor: p.border, backgroundColor: activeView === 'memory' ? p.card2 : p.surface }]}>
+            <Text style={{ color: p.text }}>{activeView === 'memory' ? '← Chat' : 'Note e privacy'}</Text>
+          </Pressable>
+          <Pressable testID="theme-toggle" accessibilityRole="button" accessibilityLabel="Cambia tema" onPress={() => setOverride(mode === 'dark' ? 'light' : 'dark')} style={[styles.themeButton, { borderColor: p.border, backgroundColor: p.surface }]}>
+            <Text style={{ color: p.text }}>{mode === 'dark' ? '☀ Tema chiaro' : '☾ Tema scuro'}</Text>
+          </Pressable>
+          {signedIn && (
+            <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Account e impostazioni"
+              onPress={() => setView(activeView === 'settings' ? 'chat' : 'settings')}
+              style={[styles.avatar, { backgroundColor: p.accent }]}>
+              <Text style={{ color: p.accentText, fontWeight: '800' }}>{initials}</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
-      <View style={styles.hero}>
-        <Text style={[styles.eyebrow, { color: p.accent }]}>IL TUO SPAZIO PERSONALE</Text>
-        <Text style={[styles.title, heading]}>La tua giornata.{"\n"}Più chiara, ogni giorno.</Text>
-        <Text style={[styles.description, { color: p.subtle }]}>Un posto per raccogliere i tuoi momenti, collegare i puntini e costruire una memoria che controlli tu.</Text>
+      {/* The chat stays mounted so its conversation survives a visit to the other views. */}
+      <View style={activeView === 'chat' ? undefined : styles.hidden}>
+        <ChatHome p={p} mode={chatMode} invalidReason={webMode.kind === 'invalid' ? webMode.reason : undefined}
+          api={signedIn ? apiRef.current : null} demo={demoToday} profileName={profile?.name ?? null}
+          socialProviders={socialProviders} onLogin={idp => { void login(idp); }}
+          onOpenMemory={prefill => { if (prefill !== undefined) setDraft(prefill); setView('memory'); }}
+          onOpenSettings={() => setView(signedIn ? 'settings' : 'memory')} setupRequest={setupRequest} />
       </View>
-      {demoToday && <TodayPanel api={demoToday} providers={demoProviders} p={p} demo />}
-      {webMode.kind === 'cloud' && authState === 'signed-in' && apiRef.current && (
-        <>
-          <TodayPanel key={todayKey} api={apiRef.current} providers={connectorProviders} p={p}
-            suggestions={preActions} />
-          <BriefingPanel api={apiRef.current} p={p} onSuggestions={setPreActions} />
-          <ConnectionsPanel api={apiRef.current} p={p} onChanged={connectors => {
-            setConnectorProviders(connectors.providers);
-            // Reload the deck only when accounts actually changed (connect/disconnect).
-            const signature = connectors.accounts.map(a => a.id).sort().join(',');
-            if (accountsSignatureRef.current !== null && accountsSignatureRef.current !== signature)
-              setTodayKey(k => k + 1);
-            accountsSignatureRef.current = signature;
-          }} />
-        </>
+      {activeView === 'settings' && signedIn && apiRef.current && (
+        <SettingsPanel api={apiRef.current} p={p} profile={profile ?? { name: null, email: null }}
+          accountConsoleUrl={webMode.kind === 'cloud' ? webMode.config.issuer + '/account' : null}
+          onLogout={() => { setView('chat'); void logout(); }} onOpenMemory={() => setView('memory')}
+          onRunSetup={() => { setView('chat'); setSetupRequest(n => n + 1); }} />
       )}
+      {activeView === 'memory' && <>
+      <View style={styles.hero}>
+        <Text style={[styles.eyebrow, { color: p.accent }]}>MEMORIA E PRIVACY</Text>
+        <Text style={[styles.title, heading]}>Le tue note.{"\n"}I tuoi dati.</Text>
+        <Text style={[styles.description, { color: p.subtle }]}>Cattura momenti, gestisci i consensi, esporta o cancella tutto quello che Tao conserva.</Text>
+      </View>
       <View style={[styles.card, cardStyle, { minHeight: 0, marginBottom: 20 }]}>
         <Text style={[styles.kicker, { color: p.subtle }]}>ACCESSO E DATI</Text>
         <Text testID="auth-status" style={[styles.hint, heading]}>
@@ -957,7 +975,8 @@ export default function Home() {
           <Text style={[styles.featureState, { color: p.subtle }]}>{feature.state}</Text>
         </View>)}
       </View>
-      <Text style={[styles.footer, { color: p.subtle }]}>TAO · 0.3 · PRIVACY BY DESIGN · NESSUNA AZIONE SENZA LA TUA CONFERMA</Text>
+      </>}
+      <Text style={[styles.footer, { color: p.subtle }]}>TAO · 0.4 · PRIVACY BY DESIGN · NESSUNA AZIONE SENZA LA TUA CONFERMA</Text>
     </ScrollView>
   );
 }
@@ -968,7 +987,10 @@ const styles = StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12 }, mark: { width: 43, height: 43, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   brandName: { fontSize: 27, fontWeight: '800', letterSpacing: -1.6 }, eyebrow: { fontSize: 10, letterSpacing: 2, fontWeight: '800' },
   themeButton: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 10 },
-  hero: { paddingTop: 64, paddingBottom: 36, maxWidth: 790 },
+  nav: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  hidden: { display: 'none' },
+  hero: { paddingTop: 48, paddingBottom: 32, maxWidth: 790 },
   title: { fontSize: 48, lineHeight: 57, letterSpacing: -2.6, fontWeight: '800', paddingTop: 12 },
   description: { fontSize: 17, lineHeight: 26, maxWidth: 610, paddingTop: 16 },
   columns: { flexDirection: 'row', gap: 18, flexWrap: 'wrap' },

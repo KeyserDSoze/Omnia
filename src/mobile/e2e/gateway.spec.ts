@@ -5,28 +5,65 @@ test.skip(process.env.TAO_GATEWAY_E2E !== '1', 'Run via the gateway CI job.');
 const username = process.env.TAO_E2E_USER1 ?? '';
 const password = process.env.TAO_E2E_PASSWORD ?? '';
 
-test('single port: Keycloak /auth login, consent and note through /api', async ({ page }) => {
-  test.setTimeout(90_000);
+test('single port: chat-first setup saved in PostgreSQL, settings, deck and a note through /api', async ({ page }) => {
+  test.setTimeout(120_000);
   if (!username || !password) throw new Error('Missing disposable gateway account');
 
   await page.goto('/');
-  await page.getByTestId('auth-login').click();
+  await page.getByTestId('chat-login').click();
   // Same-origin OIDC: the authorization request never leaves the gateway origin.
   await expect(page).toHaveURL(/^http:\/\/localhost:59800\/auth\/realms\/tao\//);
   await page.locator('input[name="username"]').fill(username);
   await page.locator('input[name="password"]').fill(password);
   await page.locator('#kc-login').click();
-  await expect(page.getByTestId('auth-status')).toContainText('Sessione autenticata', { timeout: 45_000 });
-  await expect(page.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
 
-  // Daily deck and work connections are served by the same API through /api.
-  await expect(page.getByTestId('today-panel')).toBeVisible();
-  await expect(page.getByTestId('today-empty-accounts')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('connections-panel')).toContainText('Microsoft 365');
+  // A new user lands on the chat with the magic button; the setup is scripted (no AI).
+  await expect(page.getByTestId('setup-start')).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByTestId('chat-tao').nth(1)).toContainText('configuriamo insieme');
+  await page.getByTestId('setup-start').click();
+  await page.getByTestId('chat-input').fill('Gateway');
+  await page.getByTestId('chat-send').click();
+  await page.getByTestId('setup-choice-work').click();
+  await page.getByTestId('setup-choice-outlook').click();
+  await page.getByTestId('setup-choice-teams').click();
+  await page.getByTestId('setup-confirm').click();
+  await page.getByTestId('setup-choice-no').click();
+  await page.getByTestId('setup-choice-no').click();
+  await page.getByTestId('setup-choice-none').click();
+  await page.getByTestId('setup-choice-08:00').click();
+  await page.getByTestId('setup-choice-17:00').click();
+  await page.getByTestId('setup-choice-read_only').click();
+  await page.getByTestId('setup-choice-save').click();
+  await expect(page.getByTestId('chat-tao').filter({ hasText: 'Configurazione salvata' })).toBeVisible({ timeout: 15_000 });
+  // Connectors are not configured in this stack: Tao says so instead of opening a broken popup.
+  await expect(page.getByTestId('chat-tao').last()).toContainText('docs/connectors.md');
+
+  // Settings (top right) show the account and what the agent may do per account, from PostgreSQL.
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByTestId('settings-panel')).toBeVisible();
+  await expect(page.getByTestId('settings-account')).toContainText('Microsoft 365 di lavoro');
+  await expect(page.getByTestId('delegation-chats.read')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('delegation-tasks.read')).toHaveAttribute('aria-pressed', 'false');
+  await page.getByTestId('delegation-tasks.read').click();
+  await expect(page.getByTestId('settings-message')).toContainText('Attività attivato', { timeout: 15_000 });
   await expect(page.getByTestId('connections-panel')).toContainText('Google Workspace');
-  // Without LLM_ENDPOINT the assistant says so explicitly; nothing is sent anywhere.
+  await page.reload();
+  await page.getByTestId('chat-login').click();
+  await expect(page.getByTestId('chat-tao').first()).toContainText('Gateway', { timeout: 45_000 });
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByTestId('delegation-tasks.read')).toHaveAttribute('aria-pressed', 'true');
+
+  // The chat drives the deck and the (unconfigured) assistant without any AI.
+  await page.getByTestId('open-chat').click();
+  await page.getByTestId('chat-hint-today').click();
+  await expect(page.getByTestId('today-empty-accounts')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('chat-input').fill('fammi il piano');
+  await page.getByTestId('chat-send').click();
   await expect(page.getByTestId('briefing-unconfigured')).toBeVisible();
 
+  await page.getByTestId('open-memory').click();
+  await expect(page.getByTestId('auth-status')).toContainText('Sessione autenticata');
+  await expect(page.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
   await page.getByTestId('consent-accept').click();
   await page.getByTestId('grant-consent').click();
   await expect(page.getByTestId('consent-state')).toContainText('Autorizzazione attiva', { timeout: 15_000 });

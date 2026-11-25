@@ -3,10 +3,8 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   CloudApiError, type ConnectorAccountDto, type ConnectorProviderDto, type ConnectorsDto, type MemoryApi
 } from '../services/memoryApi';
-import { stateFromAuthorizationUrl, waitForConnectorCallback } from '../services/connectorCallback';
+import { connectInPopup, openConnectPopup } from '../services/connectFlow';
 import type { Palette } from './TodayPanel';
-
-const AUTHORIZATION_TIMEOUT_MS = 10 * 60_000;
 
 const capabilityLabels: Record<string, string> = {
   'calendar.read': 'calendario', 'mail.read': 'email', 'tasks.read': 'attività',
@@ -17,10 +15,11 @@ const capabilityLabels: Record<string, string> = {
  * Connected work accounts. OAuth runs in a popup; the API (confidential client) redeems the
  * code. Tokens never reach the browser and are stored sealed on the server.
  */
-export function ConnectionsPanel({ api, p, onChanged }: {
+export function ConnectionsPanel({ api, p, onChanged, onConnected }: {
   api: MemoryApi;
   p: Palette;
   onChanged: (connectors: ConnectorsDto) => void;
+  onConnected?: (account: ConnectorAccountDto) => void;
 }) {
   const [data, setData] = useState<ConnectorsDto | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -50,9 +49,9 @@ export function ConnectionsPanel({ api, p, onChanged }: {
   }, [api]);
 
   async function connect(provider: ConnectorProviderDto) {
-    if (pending || Platform.OS !== 'web' || typeof window === 'undefined') return;
+    if (pending || Platform.OS !== 'web') return;
     // Open synchronously inside the click handler, otherwise popup blockers intervene.
-    const popup = window.open('', 'tao-connector', 'popup=yes,width=520,height=720');
+    const popup = openConnectPopup();
     if (!popup) {
       setMessage('Il browser ha bloccato la finestra di accesso: consenti i popup per questo sito.');
       return;
@@ -62,23 +61,14 @@ export function ConnectionsPanel({ api, p, onChanged }: {
     setPending(provider.id);
     setMessage('Completa l’accesso a ' + provider.displayName + ' nella finestra aperta…');
     try {
-      const { authorizationUrl } = await api.authorizeConnector(provider.id);
-      const state = stateFromAuthorizationUrl(authorizationUrl);
-      if (!state) throw new Error('invalid_authorization_url');
-      const callback = waitForConnectorCallback(state, {
-        origin: window.location.origin, timeoutMs: AUTHORIZATION_TIMEOUT_MS,
-        signal: controller.signal, target: window
-      });
-      popup.location.href = authorizationUrl;
-      const result = await callback;
+      const account = await connectInPopup(api, provider.id, popup, controller.signal);
       if (!live.current) return;
-      if (result.error || !result.code) {
+      if (!account) {
         setMessage('Accesso a ' + provider.displayName + ' annullato o negato.');
         return;
       }
-      const account = await api.completeConnector(result.state, result.code);
-      if (!live.current) return;
       setMessage(account.displayName + ' collegato.');
+      onConnected?.(account);
       await load();
     } catch (e) {
       if (!live.current) return;
@@ -87,7 +77,6 @@ export function ConnectionsPanel({ api, p, onChanged }: {
         e instanceof Error && e.message === 'aborted' ? 'Collegamento annullato.' :
         'Collegamento non riuscito. Riprova.');
     } finally {
-      if (!popup.closed) popup.close();
       if (abort.current === controller) abort.current = null;
       if (live.current) setPending(null);
     }

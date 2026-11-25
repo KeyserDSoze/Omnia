@@ -9,7 +9,15 @@ const user2 = process.env.TAO_E2E_USER2 ?? '';
 const user3 = process.env.TAO_E2E_USER3 ?? '';
 const password = process.env.TAO_E2E_PASSWORD ?? '';
 
+// The home is a chat; notes, consents and privacy live in the "Note e privacy" view.
+async function openMemory(page: import('@playwright/test').Page) {
+  const toggle = page.getByTestId('open-memory');
+  await expect(toggle).toBeVisible({ timeout: 30_000 });
+  if ((await toggle.textContent())?.includes('Note e privacy')) await toggle.click();
+}
+
 async function browserLogin(page: import('@playwright/test').Page, username: string) {
+  await openMemory(page);
   await expect(page.getByTestId('auth-login')).toBeVisible({ timeout: 30_000 });
   const outgoing = page.waitForRequest(req =>
     req.url().includes('/protocol/openid-connect/auth?'), { timeout: 30_000 });
@@ -35,7 +43,15 @@ async function browserLogin(page: import('@playwright/test').Page, username: str
     // Never swallow failures from clicking or submitting the real form.
     await page.locator('#kc-login').click();
   }
-  await expect(page.getByTestId('auth-status')).toContainText('Sessione autenticata', { timeout: 45_000 });
+  // Back from Keycloak the page reloads on the chat; with an SSO cookie the old page may still
+  // be visible for a moment, so keep opening the memory view until the new session shows up.
+  await expect.poll(async () => {
+    const status = page.getByTestId('auth-status');
+    if (await status.isVisible()) return (await status.textContent()) ?? '';
+    const toggle = page.getByTestId('open-memory');
+    if (await toggle.isVisible() && (await toggle.textContent())?.includes('Note e privacy')) await toggle.click();
+    return '';
+  }, { timeout: 45_000 }).toContain('Sessione autenticata');
   // A successful OIDC callback is not sufficient: the API must accept the
   // signed access token with unique sub/tenant_id/aud before we proceed.
   await expect(page.getByTestId('consent-state')).toBeVisible({ timeout: 15_000 });

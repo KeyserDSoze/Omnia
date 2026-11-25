@@ -1,5 +1,7 @@
 import type { WebCloudConfig } from './config';
 import type { ReturnTypeMemo } from '../domain/tags';
+import type { SettingsDto } from './setupFlow';
+import type { DayRecapDto } from './chatScript';
 
 export type ConsentDto = {
   id: string;
@@ -112,6 +114,27 @@ export type BriefingDto = {
 export const ASSISTANT_SOURCE = 'assistant';
 export const ASSISTANT_PURPOSE = 'assistant.briefing';
 
+/** Settings composed by the guided setup plus what can be connected. */
+export type SettingsResponseDto = {
+  settings: SettingsDto | null;
+  providers: ConnectorProviderDto[];
+  accounts: ConnectorAccountDto[];
+};
+
+/** Public, pre-login: which social identity providers Keycloak offers. */
+export async function loginOptions(apiBaseUrl: string): Promise<ConnectorProviderId[]> {
+  try {
+    const response = await fetch(apiBaseUrl + '/api/login-options',
+      { redirect: 'error', cache: 'no-store', credentials: 'omit' });
+    if (!response.ok) return [];
+    const body = await response.json() as { providers?: unknown };
+    return Array.isArray(body.providers)
+      ? body.providers.filter((p): p is ConnectorProviderId => p === 'microsoft' || p === 'google') : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Content-free API error codes mapped to user messages (provider text is never shown). */
 const errorMessages: Record<string, string> = {
   connector_not_configured: 'Connettore non configurato sul server.',
@@ -137,6 +160,8 @@ const errorMessages: Record<string, string> = {
   model_rate_limited: 'Il modello AI sta limitando le richieste. Riprova pi\u00f9 tardi.',
   invalid_model_output: 'Il modello AI ha risposto in un formato non valido. Riprova.',
   invalid_time_zone: 'Fuso orario non riconosciuto.',
+  delegation_required: 'Non hai autorizzato Tao a fare questa azione su questo account: puoi cambiarlo nelle impostazioni.',
+  invalid_settings: 'Impostazioni non valide: controlla i dati inseriti.',
   not_found: 'Elemento o account non trovato.'
 };
 
@@ -198,7 +223,7 @@ export class MemoryApi {
     return bearer;
   }
 
-  private async request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
     const epoch = this.session?.currentEpoch() ?? 0;
     const bearer = await this.bearerFor(epoch);
     let response: Response;
@@ -347,6 +372,16 @@ export class MemoryApi {
   briefing(from: Date, to: Date, timeZone: string): Promise<BriefingDto> {
     return this.request('POST', '/api/v1/today/briefing',
       { from: from.toISOString(), to: to.toISOString(), timeZone });
+  }
+  recap(days: number, timeZone: string): Promise<{ days: DayRecapDto[] }> {
+    return this.request('GET', '/api/v1/today/recap?days=' + encodeURIComponent(String(days)) +
+      '&timeZone=' + encodeURIComponent(timeZone));
+  }
+  settings(): Promise<SettingsResponseDto> {
+    return this.request('GET', '/api/v1/settings');
+  }
+  saveSettings(body: Omit<SettingsDto, 'onboardingCompletedAt'> & { completeOnboarding: boolean }): Promise<SettingsDto> {
+    return this.request('PUT', '/api/v1/settings', body);
   }
 
   save(entry: ReturnTypeMemo): Promise<RemoteMemory> {

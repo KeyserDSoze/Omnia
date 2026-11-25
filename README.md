@@ -16,7 +16,7 @@ avvengono solo quando le confermi, e restano in un audit.
 | **Chat** | La schermata iniziale. Tao apre con una domanda, oppure con spunti dai giorni precedenti (carte fatte o rimandate). Capisce poche richieste fisse per parole chiave (*oggi*, *piano*, *nota*, *impostazioni*): niente AI. |
 | **Configurazione guidata** | Il bottone ✨ fa domande fisse, senza AI: account Microsoft o Google (lavoro o personale), Outlook, Teams, To Do, Gmail, Calendar e Tasks, altri account, CRM, orari, modalità dell'agente. Le risposte diventano le impostazioni, salvate sigillate su PostgreSQL. Alla fine Tao propone di collegare ogni account. |
 | **Impostazioni e deleghe** | In alto a destra: il tuo account Tao, la configurazione e, per ogni account, cosa l'agente può leggere o fare per tuo conto. Le categorie non delegate non vengono mai lette dal provider. |
-| **Accesso con Google o Microsoft** | Opzionale (`TAO_SOCIAL_LOGIN`), tramite Keycloak e solo su invito: entra chi ha già un utente Tao con la stessa e-mail, confermando la prima volta con la password. |
+| **Accesso con Google o Microsoft** | Opzionale (`TAO_SOCIAL_LOGIN`), tramite Keycloak: il primo accesso crea l'utente, riconosciuto poi dalla sua e-mail. Un secondo provider con la stessa e-mail si collega solo dopo una prova. `TAO_SOCIAL_SIGNUP=invite` limita l'accesso agli utenti già esistenti. |
 | **Oggi** (deck) | Una carta alla volta, ordinata per priorità deterministica e spiegabile (niente AI). Swipe a destra = fatto, a sinistra = non fatto; *Dopo* la rimette in coda dopo 2 ore. |
 | **Connettori** | Microsoft 365 (Graph: calendario, posta non letta/contrassegnata, To Do, chat Teams) e Google Workspace (Calendar, Gmail, Tasks). OAuth con PKCE, client confidenziale lato server, token sigillati (AES-256-GCM). |
 | **Azioni con conferma** | Completare un'attività su Microsoft To Do / Google Tasks solo con la spunta esplicita sulla carta; ogni tentativo è registrato. |
@@ -97,8 +97,9 @@ Valuta Cloudflare Access davanti a Tao come secondo fattore.
 - Accesso con Google o Microsoft sull'account Tao: `TAO_SOCIAL_LOGIN=google,microsoft` in
   `docker/.env`, con le stesse app dei connettori. Aggiungi il redirect URI
   `${TAO_PUBLIC_URL}/auth/realms/tao/broker/<google|microsoft>/endpoint`. Il servizio
-  `keycloak-config` applica la configurazione a ogni avvio. Gli utenti vanno comunque creati prima
-  in Keycloak (vedi [docs/security.md](docs/security.md)).
+  `keycloak-config` applica la configurazione a ogni avvio. Di default (`TAO_SOCIAL_SIGNUP=open`) il
+  primo accesso crea l'utente; con `invite` servono utenti già creati in Keycloak. Opzioni:
+  `GOOGLE_HOSTED_DOMAIN`, `MICROSOFT_TENANT` (vedi [docs/security.md](docs/security.md) e ADR 0104).
 - Configurazione e privacy del piano del giorno: [docs/assistant.md](docs/assistant.md).
 
 ## Sviluppo

@@ -69,7 +69,7 @@ jobs:
       TAO_WEB_BASE_PATH: /Tao
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -137,7 +137,7 @@ jobs:
           kc create users -r tao -s username=tao-ci-gateway -s enabled=true -s emailVerified=true \
             -s email=tao-ci-gateway@example.test -s firstName=Tao -s lastName=CI
           kc set-password -r tao --username tao-ci-gateway --new-password "$password"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm

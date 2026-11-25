@@ -26,7 +26,10 @@ public sealed class GoogleWorkspaceConnector(HttpClient http, GoogleConnectorOpt
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/tasks"
     ];
-    private const int MaxMessages = 20;
+    private const int MaxMessages = 40;
+    private const int MailPageSize = 20;
+    private const int PageSize = 50;
+    private const int MaxItemsPerList = 150;
 
     public string Id => ConnectorProviders.Google;
     public string DisplayName => "Google Workspace";
@@ -73,12 +76,13 @@ public sealed class GoogleWorkspaceConnector(HttpClient http, GoogleConnectorOpt
     {
         Task<IReadOnlyList<WorkItem>> When(string capability, Func<Task<IReadOnlyList<WorkItem>>> load) =>
             capabilities.Contains(capability) ? load() : Task.FromResult<IReadOnlyList<WorkItem>>([]);
-        var events = When(ConnectorCapabilities.CalendarRead, () => EventsAsync(accountId, accessToken, from, to, ct));
+        var names = new AddressDirectory();
+        var events = When(ConnectorCapabilities.CalendarRead, () => EventsAsync(accountId, accessToken, from, to, names, ct));
         var mail = When(ConnectorCapabilities.MailRead,
-            () => OptionalAsync(() => MailAsync(accountId, identity, accessToken, from, ct)));
+            () => OptionalAsync(() => MailAsync(accountId, identity, accessToken, from, names, ct)));
         var tasks = When(ConnectorCapabilities.TasksRead, () => OptionalAsync(() => TasksAsync(accountId, accessToken, to, ct)));
         await Task.WhenAll(events, mail, tasks);
-        return [.. events.Result, .. mail.Result, .. tasks.Result];
+        return [.. events.Result.Select(names.Resolve), .. mail.Result.Select(names.Resolve), .. tasks.Result];
     }
 
     public Task CompleteTaskAsync(string accessToken, string externalTaskId, CancellationToken ct)
@@ -100,13 +104,21 @@ public sealed class GoogleWorkspaceConnector(HttpClient http, GoogleConnectorOpt
     }
 
     private async Task<IReadOnlyList<WorkItem>> EventsAsync(Guid accountId, string token, DateTimeOffset from,
-        DateTimeOffset to, CancellationToken ct)
+        DateTimeOffset to, AddressDirectory names, CancellationToken ct)
     {
-        using var json = await GetJsonAsync(http, "https://www.googleapis.com/calendar/v3/calendars/primary/events?" +
+        var url = "https://www.googleapis.com/calendar/v3/calendars/primary/events?" +
             Query(("timeMin", from.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ")),
                 ("timeMax", to.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ")),
-                ("singleEvents", "true"), ("orderBy", "startTime"), ("maxResults", "50")), token, ct);
-        return Items(json, "items")
+                ("singleEvents", "true"), ("orderBy", "startTime"), ("maxResults", PageSize.ToString()));
+        var events = await GetPagedAsync(http, url, token, ct, "items", GoogleNextPage(url), MaxItemsPerList);
+        foreach (var e in events)
+        {
+            names.Learn(String(Child(e, "organizer"), "email"), String(Child(e, "organizer"), "displayName"));
+            if (Child(e, "attendees").ValueKind == System.Text.Json.JsonValueKind.Array)
+                foreach (var attendee in Child(e, "attendees").EnumerateArray())
+                    names.Learn(String(attendee, "email"), String(attendee, "displayName"));
+        }
+        return events
             .Where(e => String(e, "status") != "cancelled" &&
                 !(Child(e, "attendees").ValueKind == System.Text.Json.JsonValueKind.Array &&
                   Child(e, "attendees").EnumerateArray().Any(a =>
@@ -123,12 +135,13 @@ public sealed class GoogleWorkspaceConnector(HttpClient http, GoogleConnectorOpt
     }
 
     private async Task<IReadOnlyList<WorkItem>> MailAsync(Guid accountId, ConnectedIdentity identity,
-        string token, DateTimeOffset from, CancellationToken ct)
+        string token, DateTimeOffset from, AddressDirectory names, CancellationToken ct)
     {
-        using var list = await GetJsonAsync(http, "https://gmail.googleapis.com/gmail/v1/users/me/messages?" +
+        var listUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages?" +
             Query(("q", $"in:inbox after:{from.ToUnixTimeSeconds()} (is:unread OR is:important OR is:starred)"),
-                ("maxResults", MaxMessages.ToString())), token, ct);
-        var ids = Items(list, "messages").Select(m => String(m, "id")).OfType<string>().Take(MaxMessages).ToArray();
+                ("maxResults", MailPageSize.ToString()));
+        var listed = await GetPagedAsync(http, listUrl, token, ct, "messages", GoogleNextPage(listUrl), MaxMessages);
+        var ids = listed.Select(m => String(m, "id")).OfType<string>().Take(MaxMessages).ToArray();
         using var gate = new SemaphoreSlim(5);
         var messages = await Task.WhenAll(ids.Select(async id =>
         {
@@ -149,10 +162,12 @@ public sealed class GoogleWorkspaceConnector(HttpClient http, GoogleConnectorOpt
                         StringComparison.OrdinalIgnoreCase)).Select(h => String(h, "value")).FirstOrDefault()
                     : null;
                 var thread = String(root, "threadId") ?? id;
+                var sender = Header("From");
+                LearnSender(names, sender);
                 return new WorkItem(Id, accountId, WorkItemKind.Mail, id,
                     Clip(Header("Subject") ?? "(nessun oggetto)", MaxTitleLength),
                     Detail: PlainText(String(root, "snippet"), MaxDetailLength),
-                    Counterpart: SenderName(Header("From")),
+                    Counterpart: SenderName(sender),
                     StartsAt: long.TryParse(String(root, "internalDate"), out var ms)
                         ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : null,
                     Important: labels.Contains("IMPORTANT") || labels.Contains("STARRED"),
@@ -175,10 +190,10 @@ public sealed class GoogleWorkspaceConnector(HttpClient http, GoogleConnectorOpt
             .Where(l => !string.IsNullOrEmpty(l.Id)).Take(10).ToArray();
         var perList = await Task.WhenAll(listIds.Select(async list =>
         {
-            using var tasks = await GetJsonAsync(http,
-                $"https://tasks.googleapis.com/tasks/v1/lists/{Uri.EscapeDataString(list.Id!)}/tasks?" + Query(
-                    ("showCompleted", "false"), ("showHidden", "false"), ("maxResults", "50")), token, ct);
-            return Items(tasks, "items")
+            var tasksUrl = $"https://tasks.googleapis.com/tasks/v1/lists/{Uri.EscapeDataString(list.Id!)}/tasks?" + Query(
+                ("showCompleted", "false"), ("showHidden", "false"), ("maxResults", PageSize.ToString()));
+            var tasks = await GetPagedAsync(http, tasksUrl, token, ct, "items", GoogleNextPage(tasksUrl), MaxItemsPerList);
+            return tasks
                 .Where(t => String(t, "status") != "completed" && String(t, "id") is { Length: > 0 })
                 .Select(t => new WorkItem(Id, accountId, WorkItemKind.Task, $"{list.Id}|{String(t, "id")}",
                     Clip(String(t, "title") is { Length: > 0 } title ? title : "(senza titolo)", MaxTitleLength),
@@ -191,6 +206,17 @@ public sealed class GoogleWorkspaceConnector(HttpClient http, GoogleConnectorOpt
                 .ToArray();
         }));
         return perList.SelectMany(x => x).ToArray();
+    }
+
+    private static void LearnSender(AddressDirectory names, string? from)
+    {
+        if (string.IsNullOrWhiteSpace(from)) return;
+        try
+        {
+            var address = new MailAddress(from);
+            names.Learn(address.Address, address.DisplayName);
+        }
+        catch (FormatException) { }
     }
 
     private static string? SenderName(string? from)

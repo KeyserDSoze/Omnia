@@ -79,13 +79,15 @@ public sealed class MicrosoftGraphConnector(HttpClient http, MicrosoftConnectorO
     {
         Task<IReadOnlyList<WorkItem>> When(string capability, Func<Task<IReadOnlyList<WorkItem>>> load) =>
             capabilities.Contains(capability) ? load() : Task.FromResult<IReadOnlyList<WorkItem>>([]);
-        var events = When(ConnectorCapabilities.CalendarRead, () => EventsAsync(accountId, accessToken, from, to, ct));
-        var mail = When(ConnectorCapabilities.MailRead, () => OptionalAsync(() => MailAsync(accountId, accessToken, from, ct)));
+        var names = new AddressDirectory();
+        var events = When(ConnectorCapabilities.CalendarRead, () => EventsAsync(accountId, accessToken, from, to, names, ct));
+        var mail = When(ConnectorCapabilities.MailRead, () => OptionalAsync(() => MailAsync(accountId, accessToken, from, names, ct)));
         var tasks = When(ConnectorCapabilities.TasksRead, () => OptionalAsync(() => TasksAsync(accountId, accessToken, to, ct)));
         var chats = When(ConnectorCapabilities.ChatsRead,
             () => OptionalAsync(() => ChatsAsync(accountId, identity, accessToken, from, ct)));
         await Task.WhenAll(events, mail, tasks, chats);
-        return [.. events.Result, .. mail.Result, .. tasks.Result, .. chats.Result];
+        return [.. events.Result.Select(names.Resolve), .. mail.Result.Select(names.Resolve), .. tasks.Result,
+            .. chats.Result];
     }
 
     public Task CompleteTaskAsync(string accessToken, string externalTaskId, CancellationToken ct)
@@ -102,14 +104,25 @@ public sealed class MicrosoftGraphConnector(HttpClient http, MicrosoftConnectorO
     // consent from https://myapps.microsoft.com. Tao deletes its sealed tokens.
     public Task RevokeAsync(OAuthTokens tokens, CancellationToken ct) => Task.CompletedTask;
 
+    private const int PageSize = 50;
+    private const int MaxItemsPerList = 150;
+
     private async Task<IReadOnlyList<WorkItem>> EventsAsync(Guid accountId, string token, DateTimeOffset from,
-        DateTimeOffset to, CancellationToken ct)
+        DateTimeOffset to, AddressDirectory names, CancellationToken ct)
     {
-        using var json = await GetJsonAsync(http, $"{GraphBase}/me/calendarView?" + Query(
+        var events = await GetPagedAsync(http, $"{GraphBase}/me/calendarView?" + Query(
             ("startDateTime", from.UtcDateTime.ToString("O")), ("endDateTime", to.UtcDateTime.ToString("O")),
-            ("$select", "id,subject,start,end,isCancelled,webLink,organizer,location,responseStatus,onlineMeeting"),
-            ("$orderby", "start/dateTime"), ("$top", "50")), token, ct, "outlook.timezone=\"UTC\"");
-        return Items(json, "value")
+            ("$select", "id,subject,start,end,isCancelled,webLink,organizer,attendees,location,responseStatus,onlineMeeting"),
+            ("$orderby", "start/dateTime"), ("$top", PageSize.ToString())), token, ct, "value", GraphNextLink,
+            MaxItemsPerList, "outlook.timezone=\"UTC\"");
+        foreach (var e in events)
+        {
+            Learn(names, Child(Child(e, "organizer"), "emailAddress"));
+            if (Child(e, "attendees").ValueKind == JsonValueKind.Array)
+                foreach (var attendee in Child(e, "attendees").EnumerateArray())
+                    Learn(names, Child(attendee, "emailAddress"));
+        }
+        return events
             .Where(e => !Bool(e, "isCancelled") &&
                 String(Child(e, "responseStatus"), "response") != "declined")
             .Select(e => new WorkItem(Id, accountId, WorkItemKind.Event, String(e, "id") ?? "",
@@ -123,15 +136,19 @@ public sealed class MicrosoftGraphConnector(HttpClient http, MicrosoftConnectorO
             .ToArray();
     }
 
+    private static void Learn(AddressDirectory names, JsonElement emailAddress) =>
+        names.Learn(String(emailAddress, "address"), String(emailAddress, "name"));
+
     private async Task<IReadOnlyList<WorkItem>> MailAsync(Guid accountId, string token, DateTimeOffset from,
-        CancellationToken ct)
+        AddressDirectory names, CancellationToken ct)
     {
-        using var json = await GetJsonAsync(http, $"{GraphBase}/me/mailFolders/inbox/messages?" + Query(
+        var messages = await GetPagedAsync(http, $"{GraphBase}/me/mailFolders/inbox/messages?" + Query(
             ("$filter", $"receivedDateTime ge {from.UtcDateTime:yyyy-MM-ddTHH:mm:ssZ}"),
             ("$orderby", "receivedDateTime desc"),
             ("$select", "id,subject,from,receivedDateTime,isRead,importance,bodyPreview,webLink,flag"),
-            ("$top", "25")), token, ct);
-        return Items(json, "value")
+            ("$top", PageSize.ToString())), token, ct, "value", GraphNextLink, MaxItemsPerList);
+        foreach (var m in messages) Learn(names, Child(Child(m, "from"), "emailAddress"));
+        return messages
             .Select(m => new WorkItem(Id, accountId, WorkItemKind.Mail, String(m, "id") ?? "",
                 Clip(String(m, "subject") ?? "(nessun oggetto)", MaxTitleLength),
                 Detail: NullIfEmpty(Clip(String(m, "bodyPreview"), MaxDetailLength)),
@@ -154,10 +171,11 @@ public sealed class MicrosoftGraphConnector(HttpClient http, MicrosoftConnectorO
             .Where(l => !string.IsNullOrEmpty(l.Id)).Take(10).ToArray();
         var perList = await Task.WhenAll(listIds.Select(async list =>
         {
-            using var tasks = await GetJsonAsync(http,
+            var tasks = await GetPagedAsync(http,
                 $"{GraphBase}/me/todo/lists/{Uri.EscapeDataString(list.Id!)}/tasks?" + Query(
-                    ("$filter", "status ne 'completed'"), ("$top", "50")), token, ct);
-            return Items(tasks, "value")
+                    ("$filter", "status ne 'completed'"), ("$top", PageSize.ToString())), token, ct, "value",
+                GraphNextLink, MaxItemsPerList);
+            return tasks
                 .Select(t => new WorkItem(Id, accountId, WorkItemKind.Task, $"{list.Id}|{String(t, "id")}",
                     Clip(String(t, "title") ?? "(senza titolo)", MaxTitleLength),
                     Detail: list.Name,

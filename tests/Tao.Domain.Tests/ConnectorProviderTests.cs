@@ -224,6 +224,114 @@ public sealed class ConnectorProviderTests
     }
 
     [Fact]
+    public async Task MicrosoftFollowsNextLinksOnlyOnGraphAndStopsAtTheCap()
+    {
+        var (graph, http) = Microsoft();
+        var mailOnly = new HashSet<string> { ConnectorCapabilities.MailRead };
+        http.Respond = request => request.RequestUri!.Query.Contains("skiptoken=p2")
+            ? (HttpStatusCode.OK, """
+                {"value":[{"id":"m2","subject":"Due","isRead":false}],"@odata.nextLink":"https://evil.example/steal?x=1"}
+                """)
+            : (HttpStatusCode.OK, """
+                {"value":[{"id":"m1","subject":"Uno","isRead":false}],
+                 "@odata.nextLink":"https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$skiptoken=p2"}
+                """);
+
+        var items = await graph.GetWorkItemsAsync(Account, Me, "access", Now.AddHours(-8), Now.AddHours(16), mailOnly, default);
+
+        Assert.Equal(["m1", "m2"], items.Select(i => i.ExternalId));
+        // The bearer token is never sent to a host the provider's response points at.
+        Assert.All(http.Requests, r => Assert.Equal("graph.microsoft.com", r.Uri.Host));
+        Assert.Equal(2, http.Requests.Count);
+
+        // A provider that never stops paging cannot make Tao fetch without bound.
+        http.Requests.Clear();
+        var page = 0;
+        http.Respond = _ =>
+        {
+            var n = Interlocked.Increment(ref page);
+            var rows = string.Join(',', Enumerable.Range(0, 50).Select(i => $$"""{"id":"m{{n}}-{{i}}","subject":"S","isRead":false}"""));
+            return (HttpStatusCode.OK, $$"""
+                {"value":[{{rows}}],"@odata.nextLink":"https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$skiptoken=n{{n}}"}
+                """);
+        };
+        var many = await graph.GetWorkItemsAsync(Account, Me, "access", Now.AddHours(-8), Now.AddHours(16), mailOnly, default);
+        Assert.Equal(150, many.Count);
+        Assert.Equal(3, http.Requests.Count);
+    }
+
+    [Fact]
+    public async Task GooglePagesCalendarAndGmailWithPageTokens()
+    {
+        var (google, http) = Google();
+        http.Respond = request =>
+        {
+            var query = request.RequestUri!.Query;
+            return request.RequestUri.AbsolutePath switch
+            {
+                "/calendar/v3/calendars/primary/events" => query.Contains("pageToken=ev2")
+                    ? (HttpStatusCode.OK, """{"items":[{"id":"g2","summary":"Due","start":{"dateTime":"2026-11-25T12:00:00Z"}}]}""")
+                    : (HttpStatusCode.OK, """{"items":[{"id":"g1","summary":"Uno","start":{"dateTime":"2026-11-25T10:00:00Z"}}],"nextPageToken":"ev2"}"""),
+                "/gmail/v1/users/me/messages" => query.Contains("pageToken=ms2")
+                    ? (HttpStatusCode.OK, """{"messages":[{"id":"x2"}]}""")
+                    : (HttpStatusCode.OK, """{"messages":[{"id":"x1"}],"nextPageToken":"ms2"}"""),
+                var path when path.StartsWith("/gmail/v1/users/me/messages/") => (HttpStatusCode.OK,
+                    """{"id":"x","labelIds":["UNREAD"],"payload":{"headers":[{"name":"Subject","value":"M"}]}}"""),
+                _ => (HttpStatusCode.NotFound, "{}")
+            };
+        };
+
+        var items = await google.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(16),
+            new HashSet<string> { ConnectorCapabilities.CalendarRead, ConnectorCapabilities.MailRead }, default);
+
+        Assert.Equal(["g1", "g2"], items.Where(i => i.Kind == WorkItemKind.Event).Select(i => i.ExternalId));
+        Assert.Equal(["x1", "x2"], items.Where(i => i.Kind == WorkItemKind.Mail).Select(i => i.ExternalId));
+    }
+
+    [Fact]
+    public async Task AddressesAreResolvedToNamesTheSameFetchAlreadyContains()
+    {
+        var (graph, http) = Microsoft();
+        http.Respond = request => request.RequestUri!.AbsolutePath switch
+        {
+            "/v1.0/me/calendarView" => (HttpStatusCode.OK, """
+                {"value":[{"id":"e1","subject":"Review","start":{"dateTime":"2026-11-25T09:00:00"},
+                  "organizer":{"emailAddress":{"name":"Bob","address":"bob@example.test"}},
+                  "attendees":[{"emailAddress":{"name":"Dave Ferri","address":"dave@example.test"}}]}]}
+                """),
+            "/v1.0/me/mailFolders/inbox/messages" => (HttpStatusCode.OK, """
+                {"value":[
+                  {"id":"m1","subject":"A","isRead":false,"from":{"emailAddress":{"address":"DAVE@example.test"}}},
+                  {"id":"m2","subject":"B","isRead":false,"from":{"emailAddress":{"address":"stranger@example.test"}}}]}
+                """),
+            _ => (HttpStatusCode.OK, """{"value":[]}""")
+        };
+        var items = await graph.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(8),
+            new HashSet<string> { ConnectorCapabilities.CalendarRead, ConnectorCapabilities.MailRead }, default);
+        Assert.Equal(["Bob", "Dave Ferri", "stranger@example.test"], items.Select(i => i.Counterpart));
+
+        var (google, gHttp) = Google();
+        gHttp.Respond = request => request.RequestUri!.AbsolutePath switch
+        {
+            "/calendar/v3/calendars/primary/events" => (HttpStatusCode.OK, """
+                {"items":[{"id":"g1","summary":"Sync","start":{"dateTime":"2026-11-25T10:00:00Z"},
+                  "organizer":{"email":"boss@example.test"},
+                  "attendees":[{"email":"boss@example.test","displayName":"Anna Boss"},
+                               {"email":"mario@example.test","displayName":"Mario Rossi"}]}]}
+                """),
+            "/gmail/v1/users/me/messages" => (HttpStatusCode.OK, """{"messages":[{"id":"x1"}]}"""),
+            "/gmail/v1/users/me/messages/x1" => (HttpStatusCode.OK, """
+                {"id":"x1","labelIds":["UNREAD"],"payload":{"headers":[{"name":"Subject","value":"Ciao"},
+                 {"name":"From","value":"<mario@example.test>"}]}}
+                """),
+            _ => (HttpStatusCode.NotFound, "{}")
+        };
+        var google1 = await google.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(16),
+            new HashSet<string> { ConnectorCapabilities.CalendarRead, ConnectorCapabilities.MailRead }, default);
+        Assert.Equal(["Anna Boss", "Mario Rossi"], google1.Select(i => i.Counterpart));
+    }
+
+    [Fact]
     public async Task GoogleDisconnectRevokesTheRefreshToken()
     {
         var (google, http) = Google();

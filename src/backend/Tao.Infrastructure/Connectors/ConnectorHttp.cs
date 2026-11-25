@@ -52,6 +52,44 @@ internal static partial class ConnectorHttp
         return JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync(ct));
     }
 
+    /// <summary>At most this many pages are followed per list: a provider cannot make Tao fetch without bound.</summary>
+    public const int MaxPages = 3;
+
+    /// <summary>
+    /// Follows the provider's pagination and returns the items of every page (cloned, so no document
+    /// stays alive). <paramref name="next"/> returns the URL of the next page or null; it must only ever
+    /// return a URL on the provider's own host, because the bearer token goes with the request.
+    /// </summary>
+    public static async Task<IReadOnlyList<JsonElement>> GetPagedAsync(HttpClient http, string url,
+        string accessToken, CancellationToken ct, string itemsProperty, Func<JsonElement, string?> next,
+        int maxItems, string? prefer = null)
+    {
+        var all = new List<JsonElement>();
+        var page = url;
+        for (var i = 0; i < MaxPages && page is not null && all.Count < maxItems; i++)
+        {
+            using var json = await GetJsonAsync(http, page, accessToken, ct, prefer);
+            foreach (var item in Items(json, itemsProperty))
+            {
+                if (all.Count >= maxItems) break;
+                all.Add(item.Clone());
+            }
+            page = next(json.RootElement);
+        }
+        return all;
+    }
+
+    /// <summary>A Graph next link, only when it stays on https://graph.microsoft.com.</summary>
+    public static string? GraphNextLink(JsonElement page) =>
+        String(page, "@odata.nextLink") is { Length: > 0 } link &&
+        Uri.TryCreate(link, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps &&
+        uri.Host == "graph.microsoft.com" && uri.UserInfo.Length == 0 ? link : null;
+
+    /// <summary>The next page of a Google list: the same request with the page token.</summary>
+    public static Func<JsonElement, string?> GoogleNextPage(string url) => page =>
+        String(page, "nextPageToken") is { Length: > 0 } token
+            ? url + "&pageToken=" + Uri.EscapeDataString(token) : null;
+
     public static async Task PatchJsonAsync(HttpClient http, string url, string accessToken, string json,
         CancellationToken ct)
     {

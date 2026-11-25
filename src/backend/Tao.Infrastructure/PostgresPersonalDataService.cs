@@ -115,10 +115,128 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
             }
         }
         writer.WriteEndArray();
+        await WriteWorkStateAsync(writer, actor, tenantId, ownerSubject, ct);
         writer.WriteEndObject();
         await writer.FlushAsync(ct);
         // COMMIT must not happen before the entire export was serialized.
         await actor.CommitAsync(ct);
+    }
+
+    /// <summary>Connected accounts (identity and scopes, never tokens), decisions and audit.</summary>
+    private async Task WriteWorkStateAsync(Utf8JsonWriter writer, PostgresActorScope actor,
+        string tenantId, string ownerSubject, CancellationToken ct)
+    {
+        writer.WritePropertyName("connectorAccounts");
+        writer.WriteStartArray();
+        await using (var command = Command(actor, tenantId, ownerSubject, """
+            SELECT id, provider, sealed_credentials, connected_at, updated_at FROM connector_accounts
+            WHERE tenant_id = @tenant AND owner_sub = @owner ORDER BY connected_at, id
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                var id = reader.GetGuid(0);
+                var plain = crypto.Open(reader.GetFieldValue<byte[]>(2),
+                    PostgresConnectorStore.CredentialScope(tenantId, ownerSubject, id));
+                try
+                {
+                    using var credentials = JsonDocument.Parse(plain);
+                    var identity = credentials.RootElement.GetProperty("Identity");
+                    writer.WriteStartObject();
+                    writer.WriteString("id", id);
+                    writer.WriteString("provider", reader.GetString(1));
+                    writer.WriteString("externalAccountId", identity.GetProperty("ExternalId").GetString());
+                    writer.WriteString("displayName", identity.GetProperty("DisplayName").GetString());
+                    writer.WritePropertyName("email");
+                    identity.GetProperty("Email").WriteTo(writer);
+                    writer.WritePropertyName("scopes");
+                    credentials.RootElement.GetProperty("Tokens").GetProperty("Scopes").WriteTo(writer);
+                    writer.WriteString("tokens", "sealed-not-exported");
+                    writer.WriteString("connectedAt", reader.GetFieldValue<DateTimeOffset>(3));
+                    writer.WriteString("updatedAt", reader.GetFieldValue<DateTimeOffset>(4));
+                    writer.WriteEndObject();
+                }
+                finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(plain); }
+            }
+        }
+        writer.WriteEndArray();
+
+        writer.WritePropertyName("pendingConnectorAuthorizations");
+        writer.WriteStartArray();
+        await using (var command = Command(actor, tenantId, ownerSubject, """
+            SELECT provider, expires_at FROM connector_authorizations
+            WHERE tenant_id = @tenant AND owner_sub = @owner ORDER BY expires_at
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("provider", reader.GetString(0));
+                writer.WriteString("expiresAt", reader.GetFieldValue<DateTimeOffset>(1));
+                writer.WriteEndObject();
+            }
+        }
+        writer.WriteEndArray();
+
+        writer.WritePropertyName("triageDecisions");
+        writer.WriteStartArray();
+        await using (var command = Command(actor, tenantId, ownerSubject, """
+            SELECT item_key, decision, decided_at, snoozed_until, applied_to_source, expires_at
+            FROM triage_decisions
+            WHERE tenant_id = @tenant AND owner_sub = @owner ORDER BY decided_at, item_key
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            var rows = 0;
+            while (await reader.ReadAsync(ct))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("itemKey", reader.GetString(0));
+                writer.WriteString("decision", reader.GetString(1));
+                writer.WriteString("decidedAt", reader.GetFieldValue<DateTimeOffset>(2));
+                if (reader.IsDBNull(3)) writer.WriteNull("snoozedUntil");
+                else writer.WriteString("snoozedUntil", reader.GetFieldValue<DateTimeOffset>(3));
+                writer.WriteBoolean("appliedToSource", reader.GetBoolean(4));
+                writer.WriteString("expiresAt", reader.GetFieldValue<DateTimeOffset>(5));
+                writer.WriteEndObject();
+                if (++rows % 50 == 0) await writer.FlushAsync(ct);
+            }
+        }
+        writer.WriteEndArray();
+
+        writer.WritePropertyName("connectorActions");
+        writer.WriteStartArray();
+        await using (var command = Command(actor, tenantId, ownerSubject, """
+            SELECT id, account_id, action, outcome, requested_at FROM connector_actions
+            WHERE tenant_id = @tenant AND owner_sub = @owner ORDER BY requested_at, id
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            var rows = 0;
+            while (await reader.ReadAsync(ct))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("id", reader.GetGuid(0));
+                writer.WriteString("accountId", reader.GetGuid(1));
+                writer.WriteString("action", reader.GetString(2));
+                writer.WriteString("outcome", reader.GetString(3));
+                writer.WriteString("requestedAt", reader.GetFieldValue<DateTimeOffset>(4));
+                writer.WriteEndObject();
+                if (++rows % 50 == 0) await writer.FlushAsync(ct);
+            }
+        }
+        writer.WriteEndArray();
+    }
+
+    private static NpgsqlCommand Command(PostgresActorScope actor, string tenantId, string ownerSubject,
+        string sql)
+    {
+        var command = new NpgsqlCommand(sql, actor.Connection, actor.Transaction);
+        command.Parameters.AddWithValue("tenant", tenantId);
+        command.Parameters.AddWithValue("owner", ownerSubject);
+        return command;
     }
 
     public async Task<PersonalDataErasureResult> EraseAsync(string tenantId,
@@ -144,7 +262,19 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
         memoryDelete.Parameters.AddWithValue("owner", ownerSubject);
         var memories = await memoryDelete.ExecuteNonQueryAsync(ct);
 
+        int accounts;
+        await using (var accountDelete = Command(actor, tenantId, ownerSubject,
+            "DELETE FROM connector_accounts WHERE tenant_id = @tenant AND owner_sub = @owner"))
+            accounts = await accountDelete.ExecuteNonQueryAsync(ct);
+        var workState = 0;
+        foreach (var table in new[] { "connector_authorizations", "triage_decisions", "connector_actions" })
+        {
+            await using var delete = Command(actor, tenantId, ownerSubject,
+                $"DELETE FROM {table} WHERE tenant_id = @tenant AND owner_sub = @owner");
+            workState += await delete.ExecuteNonQueryAsync(ct);
+        }
+
         await actor.CommitAsync(ct);
-        return new PersonalDataErasureResult(memories, consents, DateTimeOffset.UtcNow);
+        return new PersonalDataErasureResult(memories, consents, DateTimeOffset.UtcNow, accounts, workState);
     }
 }

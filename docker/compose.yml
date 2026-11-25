@@ -91,7 +91,7 @@ services:
       Tao__PublicBaseUrl: ${TAO_PUBLIC_URL}
       Connectors__Microsoft__ClientId: ${MICROSOFT_CLIENT_ID:-}
       Connectors__Microsoft__ClientSecret: ${MICROSOFT_CLIENT_SECRET:-}
-      Connectors__Microsoft__Tenant: ${MICROSOFT_TENANT:-common}
+      Connectors__Microsoft__Tenant: ${MICROSOFT_TENANT:-organizations}
       Connectors__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
       Connectors__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
       Llm__Endpoint: ${LLM_ENDPOINT:-}

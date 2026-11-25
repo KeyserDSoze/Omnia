@@ -8,27 +8,33 @@ namespace Tao.Infrastructure;
 /// </summary>
 public static class PostgresRuntimeGuard
 {
+    /// <summary>Every actor-scoped table that holds personal data or derived state.</summary>
+    public static readonly IReadOnlyList<string> PersonalTables =
+    [
+        "memory_entries", "consent_grants", "connector_authorizations", "connector_accounts",
+        "triage_decisions", "connector_actions"
+    ];
+
     public static async Task VerifyAsync(NpgsqlDataSource runtime, CancellationToken ct = default)
     {
         await using var command = runtime.CreateCommand("""
             SELECT r.rolsuper, r.rolbypassrls,
-              pg_has_role((SELECT oid FROM pg_roles WHERE rolname = current_user), (SELECT relowner FROM pg_class
-                  WHERE oid = 'public.memory_entries'::regclass), 'MEMBER'),
-              pg_has_role((SELECT oid FROM pg_roles WHERE rolname = current_user), (SELECT relowner FROM pg_class
-                  WHERE oid = 'public.consent_grants'::regclass), 'MEMBER'),
-              (SELECT bool_and(c.relrowsecurity AND c.relforcerowsecurity)
-                  FROM pg_class c WHERE c.oid IN
-                    ('public.memory_entries'::regclass, 'public.consent_grants'::regclass)
-              ) AS rls_forced,
-              has_table_privilege(current_user, 'public.memory_entries', 'TRUNCATE')
-                OR has_table_privilege(current_user, 'public.consent_grants', 'TRUNCATE')
-            FROM pg_roles r WHERE r.rolname = current_user
+              bool_or(pg_has_role(r.oid, c.relowner, 'MEMBER')),
+              bool_and(c.relrowsecurity AND c.relforcerowsecurity),
+              bool_or(has_table_privilege(r.oid, c.oid, 'TRUNCATE')),
+              count(c.oid)
+            FROM pg_roles r
+            CROSS JOIN pg_class c
+            WHERE r.rolname = current_user
+              AND c.relnamespace = 'public'::regnamespace AND c.relname = ANY(@tables)
+            GROUP BY r.rolsuper, r.rolbypassrls
             """);
+        command.Parameters.AddWithValue("tables", PersonalTables.ToArray());
         await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct) || reader.IsDBNull(4) ||
-            reader.GetBoolean(0) || reader.GetBoolean(1) ||
-            reader.GetBoolean(2) || reader.GetBoolean(3) ||
-            !reader.GetBoolean(4) || reader.GetBoolean(5))
+        if (!await reader.ReadAsync(ct) ||
+            reader.GetBoolean(0) || reader.GetBoolean(1) || reader.GetBoolean(2) ||
+            !reader.GetBoolean(3) || reader.GetBoolean(4) ||
+            reader.GetInt64(5) != PersonalTables.Count)
             throw new InvalidOperationException(
                 "The data role requires non-owner, non-superuser privileges without BYPASSRLS " +
                 "or TRUNCATE, and FORCE RLS on all personal tables.");

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Tao.Api;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -158,6 +159,9 @@ builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddScoped<IConsentService, ConsentService>();
 builder.Services.AddScoped<IMemoryCatalog, MemoryCatalog>();
 builder.Services.AddScoped<IPersonalDataService, PostgresPersonalDataService>();
+builder.Services.AddTaoConnectors(builder.Configuration, builder.Environment);
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(
+    new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower)));
 builder.Services.AddSingleton(sp => new PostgresMigrator(
     sp.GetRequiredKeyedService<NpgsqlDataSource>("migrations"), runtimeUser, retentionUser));
 var provider = (builder.Configuration["Embeddings:Provider"] ?? "none").ToLowerInvariant();
@@ -360,22 +364,35 @@ privacy.MapGet("/export", (IPersonalDataService service, ClaimsPrincipal user,
 });
 
 privacy.MapPost("/erase", async (EraseMyDataCommand input,
-    IPersonalDataService service, ClaimsPrincipal user, HttpContext context,
+    IPersonalDataService service, ConnectorService connectors, ClaimsPrincipal user, HttpContext context,
     CancellationToken ct) =>
 {
     var identity = Identity(user);
     if (identity is null) return Results.Forbid();
     if (input.Confirmation != "ERASE_MY_DATA")
         return Results.BadRequest(new { error = "explicit_confirmation_required" });
+    // Best effort: revoke provider grants while Tao still holds the tokens. The erasure
+    // below deletes every connector row whether or not a provider answered.
+    var disconnected = 0;
+    try
+    {
+        foreach (var account in await connectors.ListAccountsAsync(
+            identity.Value.Tenant, identity.Value.Subject, ct))
+            if (await connectors.DisconnectAsync(identity.Value.Tenant, identity.Value.Subject, account.Id, ct))
+                disconnected++;
+    }
+    catch (Exception e) when (e is not OperationCanceledException) { }
     var result = await service.EraseAsync(identity.Value.Tenant, identity.Value.Subject, ct);
     context.Response.Headers.CacheControl = "no-store";
     return Results.Ok(new
     {
         result.DeletedMemories, result.DeletedConsents, result.CompletedAt,
+        DeletedConnectorAccounts = result.DeletedConnectorAccounts + disconnected, result.DeletedWorkState,
         scope = "tao-postgresql-primary",
         backupAndExternalPropagation = "not_included"
     });
 });
+app.MapTaoConnectors();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -387,16 +404,7 @@ using (var scope = app.Services.CreateScope())
 }
 await app.RunAsync();
 
-static (string Tenant, string Subject)? Identity(ClaimsPrincipal principal)
-{
-    var subjects = principal.FindAll("sub").Select(c => c.Value).ToArray();
-    var tenants = principal.FindAll("tenant_id").Select(c => c.Value).ToArray();
-    if (subjects.Length != 1 || tenants.Length != 1 ||
-        string.IsNullOrWhiteSpace(subjects[0]) || string.IsNullOrWhiteSpace(tenants[0]) ||
-        subjects[0].Length > 255 || tenants[0].Length > 128)
-        return null;
-    return (tenants[0], subjects[0]);
-}
+static (string Tenant, string Subject)? Identity(ClaimsPrincipal principal) => ApiIdentity.Of(principal);
 
 public partial class Program { }
 

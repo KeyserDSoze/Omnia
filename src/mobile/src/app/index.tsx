@@ -12,9 +12,15 @@ import { filterLoadedByTag, tagOptions } from '../services/timelineTagFilter';
 import { groupTimelineByLocalDay } from '../services/timelineDayGrouping';
 import { dayOptions, filterLoadedByLocalDay } from '../services/timelineDayFilter';
 import { filterLoadedByText } from '../services/timelineTextFilter';
+import { TodayPanel } from '../components/TodayPanel';
+import { ConnectionsPanel } from '../components/ConnectionsPanel';
+import type { ConnectorProviderDto } from '../services/memoryApi';
+import { createDemoToday, demoProviders } from '../services/demoToday';
 
 type LocalMemo = { id: string; source: string; occurredAt: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
+// Public demo only: synthetic cards, no network and no storage.
+const demoToday = webMode.kind === 'demo' ? createDemoToday() : null;
 const activeManualGrant = (grants: ConsentDto[]) =>
   grants.find(item => item.source === 'manual' && item.purpose === 'memory.capture' && item.active) ?? null;
 const timelineMemo = (item: RemoteMemory): LocalMemo => ({
@@ -31,7 +37,11 @@ const palettes: Record<'dark' | 'light', Palette> = {
 export default function Home() {
   const device = useColorScheme();
   const [override, setOverride] = useState<'light' | 'dark' | null>(null);
-  const mode = override ?? (device === 'dark' ? 'dark' : 'light');
+  // The static export is rendered without a device: keep the first client render identical
+  // (light) and switch after hydration, otherwise React reports a text mismatch (#418).
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => { setHydrated(true); }, []);
+  const mode = override ?? (hydrated && device === 'dark' ? 'dark' : 'light');
   const p = palettes[mode];
   const [draft, setDraft] = useState('');
   const [memos, setMemos] = useState<LocalMemo[]>([]);
@@ -82,6 +92,9 @@ export default function Home() {
   const [recording, setRecording] = useState(false);
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [connectorProviders, setConnectorProviders] = useState<ConnectorProviderDto[]>([]);
+  const [todayKey, setTodayKey] = useState(0);
+  const accountsSignatureRef = useRef<string | null>(null);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   // Keep every consent-history page and its opaque cursor confined to the
@@ -122,6 +135,8 @@ export default function Home() {
     setEraseAcknowledged(false);
     setDraft('');
     retryRef.current = null;
+    setConnectorProviders([]);
+    accountsSignatureRef.current = null;
     // Release a pending mutation's disabled controls after API 401/logout.
     setBusy(false);
   }
@@ -503,7 +518,7 @@ export default function Home() {
     <ScrollView style={{ flex: 1, backgroundColor: p.bg }} contentContainerStyle={styles.page}>
       <View style={styles.top}>
         <View style={styles.brand}>
-          <View style={[styles.mark, { backgroundColor: p.accent }]}><Text style={{ color: p.accentText, fontWeight: '900', fontSize: 19 }}>O</Text></View>
+          <View style={[styles.mark, { backgroundColor: p.accent }]}><Text style={{ color: p.accentText, fontWeight: '900', fontSize: 21 }}>道</Text></View>
           <View><Text style={[styles.brandName, heading]}>tao</Text><Text style={[styles.eyebrow, { color: p.subtle }]}>PERSONAL INTELLIGENCE</Text></View>
         </View>
         <Pressable testID="theme-toggle" accessibilityRole="button" accessibilityLabel="Cambia tema" onPress={() => setOverride(mode === 'dark' ? 'light' : 'dark')} style={[styles.themeButton, { borderColor: p.border, backgroundColor: p.surface }]}>
@@ -515,6 +530,20 @@ export default function Home() {
         <Text style={[styles.title, heading]}>La tua giornata.{"\n"}Più chiara, ogni giorno.</Text>
         <Text style={[styles.description, { color: p.subtle }]}>Un posto per raccogliere i tuoi momenti, collegare i puntini e costruire una memoria che controlli tu.</Text>
       </View>
+      {demoToday && <TodayPanel api={demoToday} providers={demoProviders} p={p} demo />}
+      {webMode.kind === 'cloud' && authState === 'signed-in' && apiRef.current && (
+        <>
+          <TodayPanel key={todayKey} api={apiRef.current} providers={connectorProviders} p={p} />
+          <ConnectionsPanel api={apiRef.current} p={p} onChanged={connectors => {
+            setConnectorProviders(connectors.providers);
+            // Reload the deck only when accounts actually changed (connect/disconnect).
+            const signature = connectors.accounts.map(a => a.id).sort().join(',');
+            if (accountsSignatureRef.current !== null && accountsSignatureRef.current !== signature)
+              setTodayKey(k => k + 1);
+            accountsSignatureRef.current = signature;
+          }} />
+        </>
+      )}
       <View style={[styles.card, cardStyle, { minHeight: 0, marginBottom: 20 }]}>
         <Text style={[styles.kicker, { color: p.subtle }]}>ACCESSO E DATI</Text>
         <Text testID="auth-status" style={[styles.hint, heading]}>
@@ -914,16 +943,16 @@ export default function Home() {
       </View>
       <View style={styles.features}>
         {[
-          { icon: '◈', title: 'Connetti', detail: 'Le tue app, i tuoi device e i tuoi servizi', state: 'IN ROADMAP' },
-          { icon: '✧', title: 'Comprendi', detail: 'Relazioni, thread e ricerca semantica', state: 'IN ROADMAP' },
-          { icon: '◇', title: 'Agisci', detail: 'Suggerimenti e azioni con il tuo consenso', state: 'IN ROADMAP' }
+          { icon: '◈', title: 'Connetti', detail: 'Microsoft 365 e Google Workspace: calendario, email, attività, chat', state: webMode.kind === 'cloud' ? 'ATTIVO' : 'SERVER ON-PREM' },
+          { icon: '✧', title: 'Smista', detail: 'Una carta alla volta: fatto, non fatto, dopo, scarta', state: webMode.kind === 'cloud' ? 'ATTIVO' : 'SERVER ON-PREM' },
+          { icon: '◇', title: 'Agisci', detail: 'Azioni sulle tue app solo con conferma esplicita e audit', state: 'CON CONFERMA' }
         ].map(feature => <View key={feature.title} style={[styles.feature, { borderColor: p.border }]}>
           <Text style={{ color: p.accent, fontSize: 25 }}>{feature.icon}</Text>
           <View style={{ flex: 1 }}><Text style={[styles.featureTitle, heading]}>{feature.title}</Text><Text style={[styles.hint, { color: p.subtle }]}>{feature.detail}</Text></View>
           <Text style={[styles.featureState, { color: p.subtle }]}>{feature.state}</Text>
         </View>)}
       </View>
-      <Text style={[styles.footer, { color: p.subtle }]}>TAO · FOUNDATION 0.2 · PRIVACY BY DESIGN · NESSUNA AUTOMAZIONE ATTIVA</Text>
+      <Text style={[styles.footer, { color: p.subtle }]}>TAO · 0.3 · PRIVACY BY DESIGN · NESSUNA AZIONE SENZA LA TUA CONFERMA</Text>
     </ScrollView>
   );
 }

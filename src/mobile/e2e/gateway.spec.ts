@@ -19,6 +19,12 @@ test('single port: Keycloak /auth login, consent and note through /api', async (
   await expect(page.getByTestId('auth-status')).toContainText('Sessione autenticata', { timeout: 45_000 });
   await expect(page.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
 
+  // Daily deck and work connections are served by the same API through /api.
+  await expect(page.getByTestId('today-panel')).toBeVisible();
+  await expect(page.getByTestId('today-empty-accounts')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('connections-panel')).toContainText('Microsoft 365');
+  await expect(page.getByTestId('connections-panel')).toContainText('Google Workspace');
+
   await page.getByTestId('consent-accept').click();
   await page.getByTestId('grant-consent').click();
   await expect(page.getByTestId('consent-state')).toContainText('Autorizzazione attiva', { timeout: 15_000 });

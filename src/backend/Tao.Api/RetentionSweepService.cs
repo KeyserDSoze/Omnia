@@ -43,8 +43,17 @@ public sealed class RetentionSweepService(
                 deleted += count;
                 if (count < BatchSize) break;
             }
-            if (deleted > 0)
-                logger.LogInformation("Retention sweep removed {Count} expired database notes.", deleted);
+            var workState = 0;
+            for (var batch = 0; batch < MaxBatchesPerCycle; batch++)
+            {
+                var count = await repository.PurgeWorkStateBatchAsync(BatchSize, ct);
+                workState += count;
+                if (count == 0) break;
+            }
+            if (deleted > 0 || workState > 0)
+                logger.LogInformation(
+                    "Retention sweep removed {Count} expired notes and {WorkState} expired work-state rows.",
+                    deleted, workState);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception e)

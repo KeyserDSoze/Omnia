@@ -73,7 +73,9 @@ public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = 
             await using var grant = new NpgsqlCommand($"""
                 GRANT USAGE ON SCHEMA public TO {quoted};
                 GRANT SELECT, INSERT, UPDATE, DELETE
-                    ON TABLE public.memory_entries, public.consent_grants TO {quoted};
+                    ON TABLE public.memory_entries, public.consent_grants,
+                       public.connector_authorizations, public.connector_accounts,
+                       public.triage_decisions, public.connector_actions TO {quoted};
                 """, conn, tx);
             await grant.ExecuteNonQueryAsync(ct);
         }
@@ -96,6 +98,8 @@ public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = 
             await using var grant = new NpgsqlCommand($"""
                 GRANT USAGE ON SCHEMA public TO {quoted};
                 GRANT EXECUTE ON FUNCTION public.tao_purge_expired_memories(integer)
+                    TO {quoted};
+                GRANT EXECUTE ON FUNCTION public.tao_purge_expired_work_state(integer)
                     TO {quoted};
                 """, conn, tx);
             await grant.ExecuteNonQueryAsync(ct);

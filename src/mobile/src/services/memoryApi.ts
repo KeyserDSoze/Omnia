@@ -36,13 +36,103 @@ export type MemoryPageDto = {
 export type ErasureReceipt = {
   deletedMemories: number;
   deletedConsents: number;
+  deletedConnectorAccounts?: number;
+  deletedWorkState?: number;
   completedAt: string;
   scope: string;
   backupAndExternalPropagation: string;
 };
 
+export type ConnectorProviderId = 'microsoft' | 'google';
+export type ConnectorProviderDto = {
+  id: ConnectorProviderId;
+  displayName: string;
+  configured: boolean;
+  capabilities: string[];
+};
+export type ConnectorAccountDto = {
+  id: string;
+  provider: ConnectorProviderId;
+  displayName: string;
+  email: string | null;
+  connectedAt: string;
+  scopes: string[];
+};
+export type ConnectorsDto = { providers: ConnectorProviderDto[]; accounts: ConnectorAccountDto[] };
+
+export type WorkItemKind = 'event' | 'mail' | 'task' | 'chat';
+export type WorkItemDto = {
+  key: string;
+  provider: ConnectorProviderId;
+  accountId: string;
+  kind: WorkItemKind;
+  externalId: string;
+  title: string;
+  detail: string | null;
+  counterpart: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  dueAt: string | null;
+  important: boolean;
+  unread: boolean;
+  webLink: string | null;
+};
+export type TriageDecision = 'done' | 'not_done' | 'later' | 'dismissed';
+export type TriageDto = {
+  decision: TriageDecision;
+  decidedAt: string;
+  snoozedUntil: string | null;
+  appliedToSource: boolean;
+};
+export type TodayItemDto = { key: string; item: WorkItemDto; priority: number; triage: TriageDto | null };
+export type AccountStatusDto = {
+  accountId: string;
+  provider: ConnectorProviderId;
+  displayName: string;
+  status: 'ok' | 'reconnect_required' | 'unavailable';
+};
+/** Live provider signals (never stored by Tao) plus the user's own swipe decisions. */
+export type TodayDto = { from: string; to: string; items: TodayItemDto[]; accounts: AccountStatusDto[] };
+export type TriageResultDto = {
+  key: string;
+  decision: TriageDecision;
+  snoozedUntil: string | null;
+  appliedToSource: boolean;
+};
+
+/** Content-free API error codes mapped to user messages (provider text is never shown). */
+const errorMessages: Record<string, string> = {
+  connector_not_configured: 'Connettore non configurato sul server.',
+  reconnect_required: 'Account da ricollegare: l’accesso al provider è scaduto o revocato.',
+  unknown_state: 'Collegamento scaduto o già usato. Riprova.',
+  expired_state: 'Collegamento scaduto. Riprova.',
+  invalid_request: 'Risposta del provider non valida. Riprova.',
+  authorization_failed: 'Il provider non ha concesso l’accesso.',
+  invalid_identity: 'Il provider non ha restituito un’identità valida.',
+  provider_error: 'Il provider non risponde. Riprova più tardi.',
+  rate_limited: 'Il provider sta limitando le richieste. Riprova più tardi.',
+  permission_missing: 'Permesso mancante sul provider.',
+  apply_failed: 'Il provider non ha confermato l’azione: nulla è stato segnato come fatto.',
+  apply_not_supported: 'Azione non disponibile per questo elemento.',
+  invalid_item: 'Elemento non valido.',
+  invalid_decision: 'Decisione non valida.',
+  invalid_snooze: 'Intervallo di rinvio non valido.',
+  invalid_window: 'Intervallo di date non valido.',
+  not_found: 'Elemento o account non trovato.'
+};
+
+async function errorCode(response: Response): Promise<string | undefined> {
+  if (typeof response.json !== 'function') return undefined;
+  try {
+    const body = await response.json() as { error?: unknown };
+    return typeof body?.error === 'string' && /^[a-z_]{1,64}$/.test(body.error) ? body.error : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class CloudApiError extends Error {
-  constructor(message: string, public readonly status: number) { super(message); }
+  constructor(message: string, public readonly status: number, public readonly code?: string) { super(message); }
 }
 
 /** A prior login's HTTP result cannot be delivered into a newer session. */
@@ -117,11 +207,16 @@ export class MemoryApi {
         this.notifyUnauthorized(epoch);
         throw new CloudApiError('Sessione non valida. Accedi di nuovo.', 401);
       }
-      if (response.status === 403) throw new CloudApiError('Consenso o permesso mancante.', 403);
+      const code = await errorCode(response);
+      this.assertCurrent(epoch);
+      if (code && code in errorMessages && code !== 'not_found')
+        throw new CloudApiError(errorMessages[code], response.status, code);
+      if (response.status === 403) throw new CloudApiError('Consenso o permesso mancante.', 403, code);
       if (response.status === 409) throw new CloudApiError(
-        'ID nota già usato per contenuto differente. Nota originale non sovrascritta.', 409);
-      if (response.status === 429) throw new CloudApiError('Troppe richieste. Attendi e riprova.', 429);
-      throw new CloudApiError('Errore del server (' + response.status + '). Nessuna conferma di salvataggio.', response.status);
+        'ID nota già usato per contenuto differente. Nota originale non sovrascritta.', 409, code);
+      if (response.status === 429) throw new CloudApiError('Troppe richieste. Attendi e riprova.', 429, code);
+      if (response.status === 404) throw new CloudApiError(errorMessages.not_found, 404, code);
+      throw new CloudApiError('Errore del server (' + response.status + '). Nessuna conferma di salvataggio.', response.status, code);
     }
     if (response.status === 204) return undefined as T;
     const result = await response.json() as T;
@@ -191,6 +286,32 @@ export class MemoryApi {
 
   erasePersonalData(confirmation: string): Promise<ErasureReceipt> {
     return this.request('POST', '/api/v1/privacy/erase', { confirmation });
+  }
+
+  connectors(): Promise<ConnectorsDto> {
+    return this.request('GET', '/api/v1/connectors');
+  }
+  authorizeConnector(provider: ConnectorProviderId): Promise<{ authorizationUrl: string }> {
+    if (provider !== 'microsoft' && provider !== 'google') throw new Error('Provider non supportato.');
+    // Empty JSON body: every authenticated POST goes through the JSON body budget.
+    return this.request('POST', '/api/v1/connectors/' + provider + '/authorize', {});
+  }
+  completeConnector(state: string, code: string): Promise<ConnectorAccountDto> {
+    return this.request('POST', '/api/v1/connectors/complete', { state, code });
+  }
+  disconnectConnector(accountId: string): Promise<void> {
+    if (!/^[a-f0-9-]{36}$/i.test(accountId)) throw new Error('Identificativo account non valido.');
+    return this.request('DELETE', '/api/v1/connectors/accounts/' + encodeURIComponent(accountId));
+  }
+  today(from: Date, to: Date): Promise<TodayDto> {
+    return this.request('GET', '/api/v1/today?from=' + encodeURIComponent(from.toISOString()) +
+      '&to=' + encodeURIComponent(to.toISOString()));
+  }
+  decide(key: string, decision: TriageDecision,
+    options: { snoozeMinutes?: number; applyToSource?: boolean } = {}): Promise<TriageResultDto> {
+    return this.request('POST', '/api/v1/today/decisions', {
+      key, decision, snoozeMinutes: options.snoozeMinutes ?? null, applyToSource: options.applyToSource === true
+    });
   }
 
   save(entry: ReturnTypeMemo): Promise<RemoteMemory> {

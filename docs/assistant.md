@@ -29,8 +29,17 @@ poi `docker compose ... exec ollama ollama pull <modello>`.
   di 140 caratteri, flag importante/non letto. Le carte vengono dallo stesso deck, quindi solo
   dalle categorie delegate nelle impostazioni.
 - Mai inviati: identificativi, chiavi delle carte, link, indirizzi email completi, token.
-- Senza carte aperte il modello non viene chiamato.
+- Senza carte aperte il modello non viene chiamato e il riepilogo è vuoto: la lingua dell'utente
+  la dice il client.
 - Il risultato non viene salvato: resta nella pagina finché non ricarichi.
+
+## Lingua
+
+- Il piano è scritto nella lingua scelta dall'utente nell'app (21 lingue, [ADR 0103](../adr/0103-internationalization-21-languages.md)).
+- Il client invia `language` con un codice (`it`, `en`, `ar`, ...). Il server accetta solo codici
+  di un elenco fisso (`AssistantLanguages`) e al prompt passa solo il nome inglese preso da lì:
+  il testo libero non arriva mai al prompt. Senza codice: italiano.
+- Le date sono formattate con la cultura della lingua ma sempre nel calendario gregoriano.
 
 ## Sicurezza
 
@@ -46,4 +55,4 @@ poi `docker compose ... exec ollama ollama pull <modello>`.
 | Metodo | Percorso | Note |
 |---|---|---|
 | GET | `/api/v1/assistant` | `{ configured, model, host }` |
-| POST | `/api/v1/today/briefing` | `{ from?, to?, timeZone? }` (IANA, es. `Europe/Rome`) → `{ summary, suggestions[{key, preAction}], model, generatedAt, cardsSent }`; 403 `assistant_consent_required`, 409 `assistant_not_configured`, 400 `invalid_time_zone` |
+| POST | `/api/v1/today/briefing` | `{ from?, to?, timeZone?, language? }` (IANA, es. `Europe/Rome`; `language` da elenco, es. `en`) → `{ summary, suggestions[{key, preAction}], model, generatedAt, cardsSent }`; 403 `assistant_consent_required`, 409 `assistant_not_configured`, 400 `invalid_time_zone`, 400 `invalid_language` |

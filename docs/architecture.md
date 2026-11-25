@@ -2,7 +2,9 @@
 
 Stato: v0.4 (prima release on-prem). Decisioni: [ADR 0098](../adr/0098-tao-pivot-onprem-first-release.md),
 [0099](../adr/0099-work-connectors-and-daily-deck.md), [0100](../adr/0100-assistant-briefing-openai-compatible.md),
-[0101](../adr/0101-chat-first-scripted-setup-and-delegations.md).
+[0101](../adr/0101-chat-first-scripted-setup-and-delegations.md),
+[0102](../adr/0102-immersive-chat-ai-router-and-browser-speech.md),
+[0103](../adr/0103-internationalization-21-languages.md).
 
 ## Vista d'insieme
 

@@ -7,7 +7,7 @@ Questo documento descrive i controlli presenti su `main` e i rischi residui; non
 
 | Ingresso | Protezione |
 |---|---|
-| `:59800` (nginx) | legato a `127.0.0.1` di default; header di sicurezza (CSP stretta, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy`), HSTS solo dietro tunnel HTTPS; console Keycloak `/auth/admin` e realm `master` bloccati (404) |
+| `:59800` (nginx) | legato a `127.0.0.1` di default; header di sicurezza (CSP stretta, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` con `microphone=(self)` per la dettatura nel browser, camera e geolocalizzazione negate), HSTS solo dietro tunnel HTTPS; console Keycloak `/auth/admin` e realm `master` bloccati (404) |
 | `:59801` | console admin Keycloak, solo host |
 | `/api/v1/*` | JWT obbligatorio (issuer, audience `tao-api`, firma, scadenza), `sub` e `tenant_id` unici; rate limit per attore e per tenant; budget del body JSON (dimensione, tempo, concorrenza); limiti header Kestrel; `Cache-Control: no-store` |
 

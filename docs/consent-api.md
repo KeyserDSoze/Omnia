@@ -8,6 +8,7 @@ Purposes accepted by this release:
 |---|---|---|
 | `memory.capture` | e.g. `manual` | saving notes from that source |
 | `assistant.briefing` | `assistant` | sending minimized open cards to the configured model ([assistant.md](assistant.md), ADR 0100) |
+| `speech.browser` | `voice` | the browser's speech services (dictation, online voice), which may send audio or text to the browser vendor (ADR 0102) |
 
 A grant for one purpose never authorizes another (tested at API level).
 

@@ -3,8 +3,8 @@ WORKDIR /workspace
 COPY global.json ./
 # Reject an unexpectedly different SDK in the actual image, not just the tag.
 RUN test "$(dotnet --version)" = "10.0.404"
-# NuGet locked graph and CI policy are repository-root MSBuild properties.
-COPY Directory.Build.props ./
+# NuGet locked graph, CI policy and central package versions are repository-root MSBuild files.
+COPY Directory.Build.props Directory.Packages.props ./
 COPY src/backend/Tao.Domain/ src/backend/Tao.Domain/
 COPY src/backend/Tao.Application/ src/backend/Tao.Application/
 COPY src/backend/Tao.Infrastructure/ src/backend/Tao.Infrastructure/

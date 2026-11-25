@@ -141,6 +141,26 @@ cambi `TAO_HTTP_BIND`), aggiornamenti del sistema operativo e un controllo ester
 e l'accesso web registra solo il percorso, mai la query. I log di errore di nginx possono comunque citare
 la richiesta intera: non condividerli senza averli letti.
 
+### Demo su Azure
+
+Il front end resta su GitHub Pages; il back end è tutto PaaS di Azure, creato da Terraform (`infra/terraform`,
+moduli per gruppo di risorse, identità, registry, PostgreSQL, Key Vault, piano App Service, web app in
+container, monitoraggio, allarmi e budget). Decisioni e costo stimato (circa 55 euro al mese): ADR 0110.
+
+- Workflow `.github/workflows/azure.yml`: Terraform, database, immagini, Keycloak e prova dall'esterno.
+  Segreti del repository: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
+  (il service principal Owner della sottoscrizione, da non usare per altro). Variabili opzionali:
+  `TAO_ALERT_EMAIL`, `TAO_MICROSOFT_CLIENT_ID`, `TAO_GOOGLE_CLIENT_ID`; segreti opzionali:
+  `TAO_MICROSOFT_CLIENT_SECRET`, `TAO_GOOGLE_CLIENT_SECRET`.
+- Gli stessi passi girano da un computer con `az`, Terraform e Docker: `infra/scripts/tf-init.sh`, poi
+  `terraform -chdir=infra/terraform/environments/demo apply`, `bootstrap-db.sh`, `build-push.sh`,
+  `restart-and-wait.sh`, `configure-keycloak.sh`, `smoke.sh`.
+- L'accesso Microsoft usa una **seconda** app registration (non il service principal di deploy), con redirect
+  `https://<keycloak>/auth/realms/tao/broker/microsoft/endpoint` e
+  `https://keyserdsoze.github.io/Tao/connections/callback`. Le variabili `TAO_CLOUD_ISSUER` e `TAO_CLOUD_API_URL`
+  fanno costruire a Pages la versione collegata al back end.
+- Application Insights non riceve query string né indirizzi dei client; la copia del key ring va tenuta fuori da Azure.
+
 ### Connettori, accesso social e assistente
 
 - Registrazione app Microsoft Entra e Google Cloud, permessi e redirect URI:

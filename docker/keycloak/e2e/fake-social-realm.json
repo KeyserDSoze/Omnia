@@ -1,0 +1,41 @@
+{
+  "realm": "fake-social",
+  "enabled": true,
+  "displayName": "Synthetic upstream for the social sign-up E2E (never deployed)",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "clients": [
+    {
+      "clientId": "tao-broker",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${FAKE_SOCIAL_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8081/realms/tao/broker/google/endpoint",
+        "http://localhost:8081/realms/tao/broker/microsoft/endpoint"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "ada@example.test",
+      "email": "ada@example.test",
+      "emailVerified": true,
+      "firstName": "Ada",
+      "lastName": "Synthetic",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "${FAKE_SOCIAL_PASSWORD}", "temporary": false }]
+    },
+    {
+      "username": "grace@example.test",
+      "email": "grace@example.test",
+      "emailVerified": true,
+      "firstName": "Grace",
+      "lastName": "Synthetic",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "${FAKE_SOCIAL_PASSWORD}", "temporary": false }]
+    }
+  ]
+}

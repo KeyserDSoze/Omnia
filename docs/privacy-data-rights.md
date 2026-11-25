@@ -14,6 +14,7 @@ Principi: consenso per scopo, minimizzazione, conservazione limitata, accesso e 
 | Decisioni sulle carte (`triage_decisions`) | uso del deck | 30 giorni | solo chiave e decisione, niente contenuti |
 | Audit azioni (`connector_actions`) | scritture confermate | 180 giorni | azione, esito, ora |
 | Impostazioni e deleghe (`user_settings`) | configurazione guidata, compilata dall'utente | fino a cancellazione | documento sigillato, FORCE RLS |
+| Uso dell'assistente (`assistant_usage`) | limite giornaliero di piani e token | 35 giorni | giorno, numero di chiamate, token; nessun testo; FORCE RLS |
 
 Contenuti di calendario, email, attività e chat **non vengono salvati**: sono letti al momento.
 Il piano del giorno AI non viene salvato. La configurazione guidata e la chat sono script fissi:

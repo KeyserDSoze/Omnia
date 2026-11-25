@@ -5,6 +5,7 @@
 | `memory_entries` | 30 giorni | da `received_at` (orario del server); un retry idempotente non la estende |
 | `triage_decisions` | 30 giorni | dall'ultima decisione sulla carta |
 | `connector_actions` | 180 giorni | dalla richiesta dell'azione |
+| `assistant_usage` | 35 giorni | dal giorno del contatore (solo chiamate e token, mai testi) |
 | `connector_authorizations` | 10 minuti | dall'avvio del collegamento; consumata al primo uso |
 
 Le righe scadute non sono più restituite dalle letture anche prima della pulizia; l'export include

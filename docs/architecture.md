@@ -52,7 +52,7 @@ flowchart TB
   `tao.tenant_id`/`tao.owner_sub`, impostati per transazione da `PostgresActorScope` con i valori
   del JWT. Le scritture concorrenti dello stesso attore sono serializzate da un advisory lock.
 - Tabelle: `memory_entries`, `consent_grants`, `connector_authorizations`, `connector_accounts`,
-  `triage_decisions`, `connector_actions`, `user_settings` (elenco in
+  `triage_decisions`, `connector_actions`, `user_settings`, `assistant_usage` (elenco in
   `PostgresRuntimeGuard.PersonalTables`).
 - **Sigillatura**: payload delle note, impostazioni, verifier PKCE e credenziali OAuth sono buste
   AES-256-GCM (DEK per record, KEK dal key ring `TAO1`), AAD = tenant + owner + scopo + id della riga.

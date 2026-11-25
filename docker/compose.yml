@@ -118,6 +118,8 @@ services:
       Llm__ApiKey: ${LLM_API_KEY:-}
       Llm__Model: ${LLM_MODEL:-}
       Llm__AuthHeader: ${LLM_AUTH_HEADER:-bearer}
+      Ai__SpeechToText: ${TAO_SPEECH_TO_TEXT:-browser}
+      Ai__TextToSpeech: ${TAO_TEXT_TO_SPEECH:-browser}
       Embeddings__Provider: ${EMBEDDINGS_PROVIDER:-none}
       Embeddings__Endpoint: ${EMBEDDINGS_ENDPOINT:-}
       Embeddings__Model: ${EMBEDDINGS_MODEL:-nomic-embed-text}

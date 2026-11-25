@@ -24,6 +24,50 @@ export function noteText(text: string): string {
 export type DayRecapDto = { day: string; done: number; notDone: number; later: number; dismissed: number };
 export type Hint = { id: ChatAction; label: string };
 
+/** Before sign-in Tao only says hello and asks to sign in. */
+export function welcomeLines(mode: 'signed-out' | 'demo'): [string, string] {
+  return mode === 'demo'
+    ? ['Ciao.', 'Questa è la demo di Tao: niente account veri, niente salvato. Entra come faresti con il tuo account.']
+    : ['Ciao.', 'Per cominciare, entra con il tuo account.'];
+}
+
+/** Shown before the browser's speech services are used: the browser, not Tao, does the work. */
+export const SPEECH_NOTICE =
+  'Per la voce uso i servizi vocali del tuo browser. La dettatura invia l’audio al fornitore del browser ' +
+  '(Google con Chrome, Microsoft con Edge, Apple con Safari) che lo trasforma in testo; se sul dispositivo ' +
+  'non c’è una voce italiana, anche il testo che leggo va alla sua voce online. ' +
+  'Tao non registra e non salva l’audio: riceve solo il testo, come se l’avessi scritto. ' +
+  'Attivo i servizi vocali per 30 giorni? Puoi revocarli quando vuoi dalle impostazioni.';
+
+/** Typewriter duration for a line: quick, proportional, capped. */
+export function typingMs(text: string): number {
+  return Math.min(1400, Math.max(220, text.length * 16));
+}
+
+const plain = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/[^a-z0-9: ]+/g, ' ').replace(/\s+/g, ' ').trim();
+/** The part of a label before ":" or "(" ("Outlook: posta…" -> "outlook"). */
+const keyOf = (label: string) => plain(label.split(/[:(]/)[0]);
+
+/** A spoken or typed answer for a single-choice step; null when unknown or ambiguous. */
+export function matchChoice(choices: readonly { id: string; label: string }[], text: string): string | null {
+  const said = plain(text).replace(/:/g, '');
+  if (!said) return null;
+  const exact = choices.filter(c => plain(c.id) === said || plain(c.label).replace(/:/g, '') === said);
+  if (exact.length === 1) return exact[0].id;
+  const close = choices.filter(c => {
+    const key = keyOf(c.label);
+    return key === said || key.startsWith(said + ' ') || said.startsWith(key + ' ');
+  });
+  return close.length === 1 ? close[0].id : null;
+}
+
+/** Choices named in a spoken or typed answer for a multiple-choice step. */
+export function matchChoices(choices: readonly { id: string; label: string }[], text: string): string[] {
+  const said = ' ' + plain(text) + ' ';
+  return choices.filter(c => said.includes(' ' + keyOf(c.label) + ' ')).map(c => c.id);
+}
+
 export function greeting(name: string | null, settings: SettingsDto | null, now: Date): string {
   const hour = now.getHours();
   const hello = hour < 12 ? 'Buongiorno' : hour < 18 ? 'Buon pomeriggio' : 'Buonasera';

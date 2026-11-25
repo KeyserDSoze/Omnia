@@ -113,12 +113,16 @@ export type BriefingDto = {
 };
 export const ASSISTANT_SOURCE = 'assistant';
 export const ASSISTANT_PURPOSE = 'assistant.briefing';
+export const SPEECH_SOURCE = 'voice';
+export const SPEECH_PURPOSE = 'speech.browser';
 
 /** Settings composed by the guided setup plus what can be connected. */
 export type SettingsResponseDto = {
   settings: SettingsDto | null;
   providers: ConnectorProviderDto[];
   accounts: ConnectorAccountDto[];
+  /** AI router table (validate with routesFrom). */
+  ai?: unknown;
 };
 
 /** Public, pre-login: which social identity providers Keycloak offers. */
@@ -372,6 +376,15 @@ export class MemoryApi {
   briefing(from: Date, to: Date, timeZone: string): Promise<BriefingDto> {
     return this.request('POST', '/api/v1/today/briefing',
       { from: from.toISOString(), to: to.toISOString(), timeZone });
+  }
+  grantBrowserSpeech(): Promise<ConsentDto> {
+    return this.request('POST', '/api/v1/consents', {
+      source: SPEECH_SOURCE,
+      purpose: SPEECH_PURPOSE,
+      policyVersion: 'speech-v1',
+      expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+      accepted: true
+    });
   }
   recap(days: number, timeZone: string): Promise<{ days: DayRecapDto[] }> {
     return this.request('GET', '/api/v1/today/recap?days=' + encodeURIComponent(String(days)) +

@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { useColorScheme, Platform, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AccessibilityInfo, useColorScheme, useWindowDimensions, Platform, Pressable, ScrollView, Text, TextInput, View, StyleSheet
+} from 'react-native';
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { normalizeMemo } from '../domain/tags';
 import { configuredWebMode, type WebMode } from '../services/config';
@@ -14,8 +16,12 @@ import { dayOptions, filterLoadedByLocalDay } from '../services/timelineDayFilte
 import { filterLoadedByText } from '../services/timelineTextFilter';
 import { ChatHome } from '../components/ChatHome';
 import { SettingsPanel } from '../components/SettingsPanel';
+import { Backdrop } from '../components/Backdrop';
+import { themes } from '../components/theme';
 import { loginOptions, type ConnectorProviderId } from '../services/memoryApi';
 import { createDemoToday } from '../services/demoToday';
+import { createAiRouter, defaultRoutes, noAiRouter, type AiRoutesDto } from '../services/aiRouter';
+import { browserEngines } from '../services/browserSpeech';
 
 type LocalMemo = { id: string; source: string; occurredAt: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
@@ -28,21 +34,30 @@ const timelineMemo = (item: RemoteMemory): LocalMemo => ({
   content: item.summary, tags: item.tags,
   time: new Date(item.occurredAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
 });
-type Palette = { bg: string; surface: string; text: string; subtle: string; border: string; accent: string; accentText: string; card2: string };
-const palettes: Record<'dark' | 'light', Palette> = {
-  dark: { bg: '#0D1421', surface: '#172234', text: '#F5F8FF', subtle: '#9BA9BB', border: '#29374A', accent: '#A5E6D4', accentText: '#092D2A', card2: '#203246' },
-  light: { bg: '#F5F8FA', surface: '#FFFFFF', text: '#152537', subtle: '#53657B', border: '#DFE7EB', accent: '#176F68', accentText: '#FFFFFF', card2: '#E9F3F1' }
-};
 
 export default function Home() {
   const device = useColorScheme();
   const [override, setOverride] = useState<'light' | 'dark' | null>(null);
   // The static export is rendered without a device: keep the first client render identical
-  // (light) and switch after hydration, otherwise React reports a text mismatch (#418).
+  // (dark, no speech engines, wide layout) and adapt after hydration, otherwise React reports
+  // a mismatch (#418).
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => { setHydrated(true); }, []);
-  const mode = override ?? (hydrated && device === 'dark' ? 'dark' : 'light');
-  const p = palettes[mode];
+  const mode = override ?? (hydrated && device === 'light' ? 'light' : 'dark');
+  const p = themes[mode];
+  const { width, height } = useWindowDimensions();
+  const compact = hydrated && (width < 640 || height < 600);
+  const [still, setStill] = useState(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setStill).catch(() => undefined);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setStill);
+    return () => subscription.remove();
+  }, []);
+  const [aiRoutes, setAiRoutes] = useState<AiRoutesDto>(defaultRoutes);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const router = useMemo(() => hydrated && Platform.OS === 'web'
+    ? createAiRouter(aiRoutes, browserEngines) : noAiRouter, [hydrated, aiRoutes]);
+  const voice = useMemo(() => ({ router, on: voiceOn, setOn: setVoiceOn }), [router, voiceOn]);
   const [draft, setDraft] = useState('');
   const [memos, setMemos] = useState<LocalMemo[]>([]);
   // Source filters are intentionally limited to loaded, actor-scoped rows.
@@ -137,6 +152,7 @@ export default function Home() {
     setDraft('');
     retryRef.current = null;
     setProfile(null);
+    setVoiceOn(false);
     // Release a pending mutation's disabled controls after API 401/logout.
     setBusy(false);
   }
@@ -518,50 +534,60 @@ export default function Home() {
   const cardStyle = { backgroundColor: p.surface, borderColor: p.border };
   const heading = { color: p.text };
   const signedIn = webMode.kind === 'cloud' && authState === 'signed-in' && apiRef.current !== null;
-  const activeView = view === 'settings' && !signedIn ? 'chat' : view;
+  const canSettings = signedIn || webMode.kind === 'demo';
+  const activeView = view === 'settings' && !canSettings ? 'chat' : view;
   const chatMode = webMode.kind === 'demo' ? 'demo' : webMode.kind === 'invalid' ? 'invalid' :
     authState === 'signed-in' ? 'signed-in' : authState === 'checking' ? 'checking' : 'signed-out';
   const initials = (profile?.name ?? profile?.email ?? '').split(/[\s@.]+/).filter(Boolean).slice(0, 2)
-    .map(x => x[0]!.toUpperCase()).join('') || '⚙';
+    .map(x => x[0]!.toUpperCase()).join('') || '⚙︎';
+  const glass = { backgroundColor: p.mode === 'dark' ? 'rgba(20,22,30,0.55)' : 'rgba(255,255,255,0.7)' };
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: p.bg }} contentContainerStyle={styles.page}>
-      <View style={styles.top}>
-        <Pressable testID="open-chat" accessibilityRole="button" accessibilityLabel="Chat" onPress={() => setView('chat')} style={styles.brand}>
-          <View style={[styles.mark, { backgroundColor: p.accent }]}><Text style={{ color: p.accentText, fontWeight: '900', fontSize: 21 }}>道</Text></View>
-          <View><Text style={[styles.brandName, heading]}>tao</Text><Text style={[styles.eyebrow, { color: p.subtle }]}>IL TUO ASSISTENTE DI LAVORO</Text></View>
+    <View style={styles.app}>
+      <Backdrop theme={p} still={still} />
+      {/* A tiny header: the brand brings back the chat, the right button opens settings or the sign-in. */}
+      <View style={[styles.header, { paddingHorizontal: compact ? 14 : 22 }]}>
+        <Pressable testID="open-chat" accessibilityRole="button" accessibilityLabel="Torna alla chat"
+          onPress={() => setView('chat')} style={styles.brand}>
+          {activeView !== 'chat' && <Text style={[styles.back, { color: p.subtle }]}>‹</Text>}
+          <Text style={[styles.glyph, heading]}>道</Text>
+          <Text style={[styles.wordmark, heading]}>tao</Text>
         </Pressable>
-        <View style={styles.nav}>
-          <Pressable testID="open-memory" accessibilityRole="button" onPress={() => setView(activeView === 'memory' ? 'chat' : 'memory')}
-            style={[styles.themeButton, { borderColor: p.border, backgroundColor: activeView === 'memory' ? p.card2 : p.surface }]}>
-            <Text style={{ color: p.text }}>{activeView === 'memory' ? '← Chat' : 'Note e privacy'}</Text>
+        {canSettings ? (
+          <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Account e impostazioni"
+            onPress={() => setView(activeView === 'settings' ? 'chat' : 'settings')}
+            style={[styles.avatar, { borderColor: p.border }, glass, signedIn ? { backgroundColor: p.accent } : null]}>
+            <Text style={{ color: signedIn ? p.accentText : p.text, fontWeight: '800', fontSize: 12 }}>
+              {signedIn ? initials : '⚙︎'}
+            </Text>
           </Pressable>
-          <Pressable testID="theme-toggle" accessibilityRole="button" accessibilityLabel="Cambia tema" onPress={() => setOverride(mode === 'dark' ? 'light' : 'dark')} style={[styles.themeButton, { borderColor: p.border, backgroundColor: p.surface }]}>
-            <Text style={{ color: p.text }}>{mode === 'dark' ? '☀ Tema chiaro' : '☾ Tema scuro'}</Text>
+        ) : webMode.kind === 'cloud' && authState !== 'checking' ? (
+          <Pressable testID="header-login" accessibilityRole="button" accessibilityLabel="Accedi"
+            onPress={() => { void login(); }} style={[styles.pill, { borderColor: p.border }, glass]}>
+            <Text style={[styles.pillText, heading]}>Accedi</Text>
           </Pressable>
-          {signedIn && (
-            <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Account e impostazioni"
-              onPress={() => setView(activeView === 'settings' ? 'chat' : 'settings')}
-              style={[styles.avatar, { backgroundColor: p.accent }]}>
-              <Text style={{ color: p.accentText, fontWeight: '800' }}>{initials}</Text>
-            </Pressable>
-          )}
-        </View>
+        ) : <View style={styles.avatarSpace} />}
       </View>
       {/* The chat stays mounted so its conversation survives a visit to the other views. */}
-      <View style={activeView === 'chat' ? undefined : styles.hidden}>
-        <ChatHome p={p} mode={chatMode} invalidReason={webMode.kind === 'invalid' ? webMode.reason : undefined}
+      <View style={activeView === 'chat' ? styles.fill : styles.hidden}>
+        <ChatHome theme={p} mode={chatMode} invalidReason={webMode.kind === 'invalid' ? webMode.reason : undefined}
           api={signedIn ? apiRef.current : null} demo={demoToday} profileName={profile?.name ?? null}
           socialProviders={socialProviders} onLogin={idp => { void login(idp); }}
           onOpenMemory={prefill => { if (prefill !== undefined) setDraft(prefill); setView('memory'); }}
-          onOpenSettings={() => setView(signedIn ? 'settings' : 'memory')} setupRequest={setupRequest} />
+          onOpenSettings={() => setView(canSettings ? 'settings' : 'memory')} setupRequest={setupRequest}
+          voice={voice} onRoutes={setAiRoutes} still={still} compact={compact} />
       </View>
-      {activeView === 'settings' && signedIn && apiRef.current && (
-        <SettingsPanel api={apiRef.current} p={p} profile={profile ?? { name: null, email: null }}
-          accountConsoleUrl={webMode.kind === 'cloud' ? webMode.config.issuer + '/account' : null}
-          onLogout={() => { setView('chat'); void logout(); }} onOpenMemory={() => setView('memory')}
-          onRunSetup={() => { setView('chat'); setSetupRequest(n => n + 1); }} />
+      {activeView === 'settings' && (
+        <ScrollView style={styles.fill} contentContainerStyle={[styles.sheet, { paddingHorizontal: compact ? 14 : 22 }]}>
+          <SettingsPanel api={signedIn ? apiRef.current : null} theme={p}
+            profile={signedIn ? profile ?? { name: null, email: null } : null}
+            accountConsoleUrl={webMode.kind === 'cloud' ? webMode.config.issuer + '/account' : null}
+            onLogout={signedIn ? () => { setView('chat'); void logout(); } : null}
+            onOpenMemory={() => setView('memory')}
+            onRunSetup={() => { setView('chat'); setSetupRequest(n => n + 1); }}
+            onToggleTheme={() => setOverride(mode === 'dark' ? 'light' : 'dark')} voice={voice} />
+        </ScrollView>
       )}
-      {activeView === 'memory' && <>
+      {activeView === 'memory' && <ScrollView style={styles.fill} contentContainerStyle={[styles.page, { paddingHorizontal: compact ? 14 : 22 }]}>
       <View style={styles.hero}>
         <Text style={[styles.eyebrow, { color: p.accent }]}>MEMORIA E PRIVACY</Text>
         <Text style={[styles.title, heading]}>Le tue note.{"\n"}I tuoi dati.</Text>
@@ -975,22 +1001,28 @@ export default function Home() {
           <Text style={[styles.featureState, { color: p.subtle }]}>{feature.state}</Text>
         </View>)}
       </View>
-      </>}
-      <Text style={[styles.footer, { color: p.subtle }]}>TAO · 0.4 · PRIVACY BY DESIGN · NESSUNA AZIONE SENZA LA TUA CONFERMA</Text>
-    </ScrollView>
+      </ScrollView>}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { paddingHorizontal: 22, paddingTop: 32, paddingBottom: 44, width: '100%', maxWidth: 1120, alignSelf: 'center' },
-  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 12 }, mark: { width: 43, height: 43, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  brandName: { fontSize: 27, fontWeight: '800', letterSpacing: -1.6 }, eyebrow: { fontSize: 10, letterSpacing: 2, fontWeight: '800' },
-  themeButton: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 10 },
-  nav: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  app: { flex: 1 },
+  fill: { flex: 1 },
+  header: { height: 44, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 6 },
+  back: { fontSize: 22, lineHeight: 22, marginRight: 2 },
+  glyph: { fontSize: 17, fontWeight: '700' },
+  wordmark: { fontSize: 15, fontWeight: '700', letterSpacing: 1.5 },
+  avatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  avatarSpace: { width: 32, height: 32 },
+  pill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
+  pillText: { fontSize: 13, fontWeight: '700' },
   hidden: { display: 'none' },
-  hero: { paddingTop: 48, paddingBottom: 32, maxWidth: 790 },
+  sheet: { paddingTop: 8 },
+  page: { paddingTop: 8, paddingBottom: 44, width: '100%', maxWidth: 1120, alignSelf: 'center' },
+  eyebrow: { fontSize: 10, letterSpacing: 2, fontWeight: '800' },
+  hero: { paddingTop: 24, paddingBottom: 28, maxWidth: 790 },
   title: { fontSize: 48, lineHeight: 57, letterSpacing: -2.6, fontWeight: '800', paddingTop: 12 },
   description: { fontSize: 17, lineHeight: 26, maxWidth: 610, paddingTop: 16 },
   columns: { flexDirection: 'row', gap: 18, flexWrap: 'wrap' },
@@ -1009,6 +1041,5 @@ const styles = StyleSheet.create({
   memoTime: { fontSize: 11, fontWeight: '700' }, memoText: { fontSize: 15, marginTop: 7, lineHeight: 22 },
   features: { marginTop: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   feature: { flex: 1, minWidth: 250, borderWidth: 1, borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  featureTitle: { fontSize: 16, fontWeight: '700' }, featureState: { fontSize: 9, fontWeight: '800' },
-  footer: { fontSize: 10, letterSpacing: 1.5, textAlign: 'center', marginTop: 44 }
+  featureTitle: { fontSize: 16, fontWeight: '700' }, featureState: { fontSize: 9, fontWeight: '800' }
 });

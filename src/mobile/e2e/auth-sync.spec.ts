@@ -9,19 +9,14 @@ const user2 = process.env.TAO_E2E_USER2 ?? '';
 const user3 = process.env.TAO_E2E_USER3 ?? '';
 const password = process.env.TAO_E2E_PASSWORD ?? '';
 
-// The home is a chat; notes, consents and privacy live in the "Note e privacy" view.
-async function openMemory(page: import('@playwright/test').Page) {
-  const toggle = page.getByTestId('open-memory');
-  await expect(toggle).toBeVisible({ timeout: 30_000 });
-  if ((await toggle.textContent())?.includes('Note e privacy')) await toggle.click();
-}
-
+// The home is a chat that asks to sign in first; notes, consents and privacy live in the
+// "Note e privacy" view, which keeps its own sign-in button after a logout.
 async function browserLogin(page: import('@playwright/test').Page, username: string) {
-  await openMemory(page);
-  await expect(page.getByTestId('auth-login')).toBeVisible({ timeout: 30_000 });
+  const login = page.getByTestId('auth-login').or(page.getByTestId('chat-login')).filter({ visible: true });
+  await expect(login).toBeVisible({ timeout: 30_000 });
   const outgoing = page.waitForRequest(req =>
     req.url().includes('/protocol/openid-connect/auth?'), { timeout: 30_000 });
-  await page.getByTestId('auth-login').click();
+  await login.click();
   const request = new URL((await outgoing).url());
   expect(request.searchParams.get('response_type')).toBe('code');
   expect(request.searchParams.get('code_challenge_method')).toBe('S256');
@@ -44,12 +39,12 @@ async function browserLogin(page: import('@playwright/test').Page, username: str
     await page.locator('#kc-login').click();
   }
   // Back from Keycloak the page reloads on the chat; with an SSO cookie the old page may still
-  // be visible for a moment, so keep opening the memory view until the new session shows up.
+  // be visible for a moment, so keep opening the notes from the chat until the new session shows up.
   await expect.poll(async () => {
     const status = page.getByTestId('auth-status');
     if (await status.isVisible()) return (await status.textContent()) ?? '';
-    const toggle = page.getByTestId('open-memory');
-    if (await toggle.isVisible() && (await toggle.textContent())?.includes('Note e privacy')) await toggle.click();
+    const notes = page.getByTestId('chat-hint-memory');
+    if (await notes.isVisible()) await notes.click();
     return '';
   }, { timeout: 45_000 }).toContain('Sessione autenticata');
   // A successful OIDC callback is not sufficient: the API must accept the

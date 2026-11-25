@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   answer, currentStep, newId, startSetup, summary, toSaveBody, withDelegations, type SetupState
 } from '../../src/mobile/src/services/setupFlow';
-import { greeting, hints, intentOf, noteText, openingLines } from '../../src/mobile/src/services/chatScript';
+import {
+  SPEECH_NOTICE, greeting, hints, intentOf, matchChoice, matchChoices, noteText, openingLines, typingMs, welcomeLines
+} from '../../src/mobile/src/services/chatScript';
 
 let n = 0;
 const ids = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`;
@@ -108,5 +110,36 @@ describe('deterministic chat script', () => {
     ]);
     expect(hints(settings, false).map(h => h.id)).toEqual(['today', 'setup', 'note', 'settings']);
     expect(greeting('Ale', null, new Date(2026, 10, 25, 9))).toBe('Buongiorno, Ale!');
+  });
+
+  it('says hello and asks to sign in before anything else', () => {
+    expect(welcomeLines('signed-out')).toEqual(['Ciao.', 'Per cominciare, entra con il tuo account.']);
+    expect(welcomeLines('demo')[0]).toBe('Ciao.');
+    expect(welcomeLines('demo')[1]).toContain('demo');
+  });
+
+  it('tells where audio and text go before asking for the browser speech consent', () => {
+    expect(SPEECH_NOTICE).toMatch(/Google[\s\S]*Microsoft[\s\S]*Apple/);
+    expect(SPEECH_NOTICE).toContain('voce italiana');
+    expect(SPEECH_NOTICE).toContain('non registra');
+  });
+
+  it('types a line quickly: longer lines take longer, never more than 1.4 s', () => {
+    expect(typingMs('Ciao.')).toBeGreaterThan(0);
+    expect(typingMs('x'.repeat(40))).toBeGreaterThan(typingMs('Ciao.'));
+    expect(typingMs('x'.repeat(500))).toBe(1400);
+  });
+
+  it('maps a spoken answer to the scripted choices, and nothing when it is ambiguous', () => {
+    const microsoft = currentStep(run([''])).choices;
+    expect(matchChoice(microsoft, 'Sì, di lavoro')).toBe('work');
+    expect(matchChoice(microsoft, 'si di lavoro grazie')).toBe('work');
+    expect(matchChoice(microsoft, 'No.')).toBe('no');
+    expect(matchChoice(microsoft, 'non lo so')).toBeNull();
+    expect(matchChoice(microsoft, 'sì')).toBeNull();
+    expect(matchChoice(microsoft, 'forse')).toBeNull();
+    const tools = currentStep(answer(run(['']), 'work', ids)).choices;
+    expect(matchChoices(tools, 'Outlook e Teams')).toEqual(['outlook', 'teams']);
+    expect(matchChoices(tools, 'nessuno')).toEqual([]);
   });
 });

@@ -71,6 +71,7 @@ public static class ConnectorEndpoints
     {
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(SocialLoginOptions.Parse(configuration["Auth:SocialProviders"]));
+        services.AddSingleton(AiRouting.Parse(configuration["Ai:SpeechToText"], configuration["Ai:TextToSpeech"]));
         services.AddSingleton(new ConnectorSettings(
             RedirectUri(configuration["Tao:PublicBaseUrl"], environment.IsDevelopment())));
         services.AddSingleton(configuration.GetSection("Connectors:Microsoft").Get<MicrosoftConnectorOptions>()
@@ -166,12 +167,13 @@ public static class ConnectorEndpoints
 
         // Settings composed by the guided setup: the agent acts on behalf of the user only as declared here.
         var settings = app.MapGroup("/api/v1/settings").RequireAuthorization();
-        settings.MapGet("", (SettingsService service, ConnectorService connectors, ClaimsPrincipal user,
-            CancellationToken ct) => Run(user, async (tenant, subject) => Results.Ok(new
+        settings.MapGet("", (SettingsService service, ConnectorService connectors, AiRouting routing, IChatModel model,
+            ClaimsPrincipal user, CancellationToken ct) => Run(user, async (tenant, subject) => Results.Ok(new
         {
             settings = await service.GetAsync(tenant, subject, ct),
             providers = connectors.Providers(),
-            accounts = await connectors.ListAccountsAsync(tenant, subject, ct)
+            accounts = await connectors.ListAccountsAsync(tenant, subject, ct),
+            ai = routing.Routes(model.IsConfigured)
         })));
         settings.MapPut("", (SaveSettingsCommand input, SettingsService service, ClaimsPrincipal user,
             CancellationToken ct) => Run(user, async (tenant, subject) =>

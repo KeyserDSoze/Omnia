@@ -25,10 +25,20 @@ public sealed class ConsentTests
     [Theory]
     [InlineData("mail.read")]
     [InlineData("message.send")]
+    [InlineData("speech.recording")]
     [InlineData("")]
     public void UnsupportedPurposesFailClosed(string purpose) =>
         Assert.Throws<ArgumentException>(() => ConsentGrant.Issue("t", "u", "manual",
             purpose, "privacy-v1", Now, Now.AddDays(1)));
+
+    [Fact]
+    public void BrowserSpeechIsItsOwnPurpose()
+    {
+        var grant = ConsentGrant.Issue("t", "u", "voice", ConsentGrant.BrowserSpeech, "speech-v1",
+            Now, Now.AddDays(30));
+        Assert.Equal("speech.browser", grant.Purpose);
+        Assert.Equal("voice", grant.Source);
+    }
 
     [Fact]
     public void GrantCannotExceedNinetyDays() =>

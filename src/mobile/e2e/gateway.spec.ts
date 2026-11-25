@@ -1,15 +1,21 @@
 import { test, expect } from '@playwright/test';
+import { fakeBrowserSpeech } from './fake-speech';
 
 // Runs only against the on-prem docker compose stack (nginx :59800 -> web, /api, /auth).
 test.skip(process.env.TAO_GATEWAY_E2E !== '1', 'Run via the gateway CI job.');
 const username = process.env.TAO_E2E_USER1 ?? '';
 const password = process.env.TAO_E2E_PASSWORD ?? '';
 
-test('single port: chat-first setup saved in PostgreSQL, settings, deck and a note through /api', async ({ page }) => {
+test('single port: chat-first setup saved in PostgreSQL, settings, voice consent, deck and a note through /api', async ({ page }) => {
   test.setTimeout(120_000);
   if (!username || !password) throw new Error('Missing disposable gateway account');
+  await fakeBrowserSpeech(page);
 
   await page.goto('/');
+  // Signed out: Tao only says hello and asks to sign in; the tiny header offers the same.
+  await expect(page.getByTestId('chat-tao').first()).toHaveText('Ciao.');
+  await expect(page.getByTestId('header-login')).toBeVisible();
+  await expect(page.getByTestId('chat-input')).toHaveCount(0);
   await page.getByTestId('chat-login').click();
   // Same-origin OIDC: the authorization request never leaves the gateway origin.
   await expect(page).toHaveURL(/^http:\/\/localhost:59800\/auth\/realms\/tao\//);
@@ -38,9 +44,20 @@ test('single port: chat-first setup saved in PostgreSQL, settings, deck and a no
   // Connectors are not configured in this stack: Tao says so instead of opening a broken popup.
   await expect(page.getByTestId('chat-tao').last()).toContainText('docs/connectors.md');
 
+  // Dictation through the AI router: the browser-speech consent is stored by the API first.
+  await page.getByTestId('chat-mic').click();
+  await expect(page.getByTestId('chat-tao').last()).toContainText('servizi vocali del tuo browser', { timeout: 15_000 });
+  await page.getByTestId('voice-consent-accept').click();
+  await expect(page.getByTestId('chat-tao').filter({ hasText: 'Servizi vocali attivi per 30 giorni' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('chat-user').last()).toHaveText('cosa devo fare oggi');
+  await expect(page.getByTestId('today-empty-accounts')).toBeVisible({ timeout: 15_000 });
+
   // Settings (top right) show the account and what the agent may do per account, from PostgreSQL.
   await page.getByTestId('open-settings').click();
   await expect(page.getByTestId('settings-panel')).toBeVisible();
+  await expect(page.getByTestId('settings-speech')).toContainText('attivi fino al', { timeout: 15_000 });
+  await page.getByTestId('settings-speech-revoke').click();
+  await expect(page.getByTestId('settings-message')).toContainText('revocati', { timeout: 15_000 });
   await expect(page.getByTestId('settings-account')).toContainText('Microsoft 365 di lavoro');
   await expect(page.getByTestId('delegation-chats.read')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('delegation-tasks.read')).toHaveAttribute('aria-pressed', 'false');
@@ -61,7 +78,8 @@ test('single port: chat-first setup saved in PostgreSQL, settings, deck and a no
   await page.getByTestId('chat-send').click();
   await expect(page.getByTestId('briefing-unconfigured')).toBeVisible();
 
-  await page.getByTestId('open-memory').click();
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('settings-open-memory').click();
   await expect(page.getByTestId('auth-status')).toContainText('Sessione autenticata');
   await expect(page.getByTestId('consent-state')).toContainText('Nessun consenso attivo');
   await page.getByTestId('consent-accept').click();

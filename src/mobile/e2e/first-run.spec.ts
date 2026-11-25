@@ -1,29 +1,41 @@
 import { test, expect } from '@playwright/test';
+import { fakeBrowserSpeech, spokenLines } from './fake-speech';
 
 const appPath = `${(process.env.TAO_WEB_BASE_PATH ?? '').replace(/\/+$/, '')}/`;
 
-test('la home è una chat con il bottone di configurazione e le note restano raggiungibili', async ({ page }) => {
+test('la home è solo una chat: il simbolo dice ciao e chiede di entrare con Microsoft o Google', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  // A dark device differs from the (light) static render: the classic hydration trap.
-  await page.emulateMedia({ colorScheme: 'dark' });
+  // The static render is dark: a light device switches after hydration, the classic #418 trap.
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.goto(appPath);
   await expect(page.getByTestId('chat-home')).toBeVisible();
-  await expect(page.getByTestId('chat-tao').first()).toContainText('demo di Tao');
+  await expect(page.getByTestId('tao-avatar')).toBeVisible();
+  await expect(page.getByTestId('chat-tao').first()).toHaveText('Ciao.');
+  await expect(page.getByTestId('chat-tao').nth(1)).toContainText('demo di Tao');
+  await expect(page.getByTestId('chat-login-microsoft')).toContainText('Continua con Microsoft');
+  await expect(page.getByTestId('chat-login-google')).toContainText('Continua con Google');
+  // Nothing else before signing in: no composer, no hints.
+  await expect(page.getByTestId('chat-input')).toHaveCount(0);
+  await page.getByTestId('chat-login-microsoft').click();
+  await expect(page.getByTestId('chat-tao').filter({ hasText: 'Accesso simulato' })).toBeVisible();
   await expect(page.getByTestId('setup-start')).toBeVisible();
-  await expect(page.getByText('NESSUNA AZIONE SENZA LA TUA CONFERMA', { exact: false })).toBeVisible();
-  await page.getByTestId('open-memory').click();
+  await expect(page.getByTestId('chat-input')).toBeVisible();
+  // The tiny header leads to the settings, and from there to notes and privacy.
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByTestId('settings-panel')).toContainText('NESSUNA AZIONE SENZA LA TUA CONFERMA');
+  await page.getByTestId('settings-open-memory').click();
   await expect(page.getByTestId('memo-input')).toBeVisible();
-  await page.getByTestId('open-memory').click();
-  await expect(page.getByTestId('chat-home')).toBeVisible();
-  // Static export and first client render must agree (no React hydration error #418).
+  await page.getByTestId('open-chat').click();
+  await expect(page.getByTestId('setup-start')).toBeVisible();
   expect(errors.filter(e => /418|hydrat/i.test(e))).toEqual([]);
 });
 
 test('demo: la configurazione guidata fa domande fisse e compone le impostazioni', async ({ page }) => {
   test.skip(!!process.env.TAO_E2E_BASE_URL, 'The demo exists only in the static export.');
   await page.goto(appPath);
+  await page.getByTestId('chat-login-google').click();
   await page.getByTestId('setup-start').click();
   await expect(page.getByTestId('chat-tao').last()).toContainText('Come vuoi che ti chiami?');
   await page.getByTestId('chat-input').fill('Ale');
@@ -74,19 +86,37 @@ test('il callback dei connettori consegna state e code alla finestra Tao e li to
 
 test('tema e nota rapida funzionano senza simulare sincronizzazione', async ({ page }) => {
   await page.goto(appPath);
-  await page.getByTestId('open-memory').click();
-  const toggle = page.getByTestId('theme-toggle');
-  await toggle.click();
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('theme-toggle').click();
+  await page.getByTestId('settings-open-memory').click();
   await page.getByTestId('memo-input').fill('Riunione con il cliente');
   await page.getByTestId('save-memo').click();
   await expect(page.getByText('Riunione con il cliente', { exact: true })).toBeVisible();
   await expect(page.getByTestId('notice')).toContainText('questa sessione');
 });
 
+test('demo: dettatura e voce passano dal router AI del browser, con il consenso prima', async ({ page }) => {
+  test.skip(!!process.env.TAO_E2E_BASE_URL, 'Demo only.');
+  await fakeBrowserSpeech(page);
+  await page.goto(appPath);
+  await page.getByTestId('chat-login-microsoft').click();
+  // Dictation: first the notice and the consent, then the transcript drives the chat.
+  await page.getByTestId('chat-mic').click();
+  await expect(page.getByTestId('chat-tao').last()).toContainText('servizi vocali del tuo browser');
+  await page.getByTestId('voice-consent-accept').click();
+  await expect(page.getByTestId('chat-user').last()).toHaveText('cosa devo fare oggi');
+  await expect(page.getByTestId('today-card-title')).toBeVisible();
+  // Tao's voice: a voice installed on the device needs no consent; the symbol reads the latest line.
+  await page.getByTestId('tao-avatar').click();
+  await expect(page.getByTestId('tao-avatar')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => spokenLines(page)).toBeGreaterThan(0);
+});
+
 test('demo: il deck di oggi si smista con fatto, dopo, scarta e completamento esplicito', async ({ page }) => {
   // Only the static demo build shows synthetic cards; the on-prem build needs a signed session.
   test.skip(!!process.env.TAO_E2E_BASE_URL, 'Demo deck exists only in the static export.');
   await page.goto(appPath);
+  await page.getByTestId('chat-login').click();
   await page.getByTestId('chat-hint-today').click();
   const title = page.getByTestId('today-card-title');
   await expect(title).toHaveText('Rinnovare il dominio aziendale');
@@ -99,6 +129,7 @@ test('demo: il deck di oggi si smista con fatto, dopo, scarta e completamento es
   await page.getByTestId('today-later').click();
   await expect(title).toHaveText('Standup di team');
   const swipe = async (dx: number) => {
+    await page.getByTestId('today-card').scrollIntoViewIfNeeded();
     const box = (await page.getByTestId('today-card').boundingBox())!;
     const y = box.y + 40;
     await page.mouse.move(box.x + box.width / 2, y);

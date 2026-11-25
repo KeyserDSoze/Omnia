@@ -185,6 +185,9 @@ public sealed class ApiConnectorTests
             Assert.True(json.RootElement.GetProperty("configured").GetBoolean());
             Assert.Equal("scripted-model", json.RootElement.GetProperty("model").GetString());
         }
+        using (var routes = await Send(http, HttpMethod.Get, "/api/v1/settings", tenant))
+        using (var json = await Json(routes))
+            Assert.Equal("server", json.RootElement.GetProperty("ai").GetProperty("briefing").GetString());
         string state;
         using (var start = await Send(http, HttpMethod.Post, "/api/v1/connectors/microsoft/authorize", tenant, new { }))
         {
@@ -274,7 +277,23 @@ public sealed class ApiConnectorTests
             using var json = await Json(empty);
             Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("settings").ValueKind);
             Assert.Single(json.RootElement.GetProperty("providers").EnumerateArray());
+            // AI router table: speech runs in the browser today, the briefing needs a configured model.
+            var ai = json.RootElement.GetProperty("ai");
+            Assert.Equal("off", ai.GetProperty("briefing").GetString());
+            Assert.Equal("browser", ai.GetProperty("speechToText").GetString());
+            Assert.Equal("off", ai.GetProperty("textToSpeech").GetString());
         }
+        // The browser's speech services may send audio or text to the browser vendor: own consent.
+        using (var speech = await Send(http, HttpMethod.Post, "/api/v1/consents", tenant, new
+        {
+            source = "voice", purpose = "speech.browser", policyVersion = "speech-v1",
+            expiresAt = DateTimeOffset.UtcNow.AddDays(30), accepted = true
+        }))
+            Assert.Equal(HttpStatusCode.Created, speech.StatusCode);
+        using (var consents = await Send(http, HttpMethod.Get, "/api/v1/consents", tenant))
+        using (var json = await Json(consents))
+            Assert.Contains(json.RootElement.EnumerateArray(), g =>
+                g.GetProperty("purpose").GetString() == "speech.browser" && g.GetProperty("active").GetBoolean());
         string state;
         using (var start = await Send(http, HttpMethod.Post, "/api/v1/connectors/microsoft/authorize", tenant, new { }))
         {
@@ -406,6 +425,7 @@ public sealed class ApiConnectorTests
             ["Database:ConnectionString"] = runtime,
             ["Database:MigrationConnectionString"] = migration,
             ["Auth:SocialProviders"] = "google",
+            ["Ai:TextToSpeech"] = "off",
             ["Database:RetentionConnectionString"] = retention,
             ["Crypto:KeyRingPath"] = keyRing,
             ["Auth:Issuer"] = "http://localhost:8081/realms/tao",

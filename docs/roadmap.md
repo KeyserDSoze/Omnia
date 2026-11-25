@@ -16,6 +16,10 @@ Obiettivo: usare Tao ogni mattina sul proprio server per smistare la giornata di
 Criterio di uscita: una settimana d'uso reale con almeno un account collegato, backup provato,
 nessun dato personale nei log, test verdi in CI.
 
+Pronto per la messa online (ADR 0109): `docker/preflight.sh`, `docker/smoke.sh`, log senza query string,
+profilo `tunnel` e backup pianificato. Mancano la settimana d'uso reale e una CI verde (le Actions di
+GitHub non girano).
+
 ## R2 — Assistente sempre con te
 
 | Epic | Idea |

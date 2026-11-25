@@ -10,4 +10,5 @@ output "key_vault_name" { value = module.key_vault.name }
 output "postgres_name" { value = module.postgres.name }
 output "postgres_fqdn" { value = module.postgres.fqdn }
 output "app_url" { value = local.app_url }
+output "app_origin" { value = var.pages_origin }
 output "social_providers" { value = join(",", local.social) }

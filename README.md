@@ -26,7 +26,7 @@ avvengono solo quando le confermi, e restano in un audit.
 | **Voce** | Dettatura e voce di Tao nel browser (Web Speech API), instradate da un router AI: oggi `browser`, domani un motore sul server senza toccare la chat. Consenso dedicato `speech.browser`, perché il fornitore del browser può elaborare audio o testo fuori dal dispositivo ([ADR 0102](adr/0102-immersive-chat-ai-router-and-browser-speech.md)). |
 | **Lingue** | 21 lingue (italiano, inglese, spagnolo, francese, tedesco, portoghese, russo, polacco, olandese, turco, indonesiano, vietnamita, cinese, giapponese, coreano, thai, hindi, bengalese, arabo, urdu, persiano), anche da destra a sinistra. La scelta resta solo nel browser; il piano del giorno è scritto nella stessa lingua ([ADR 0103](adr/0103-internationalization-21-languages.md), [docs/i18n.md](docs/i18n.md)). |
 | **Effetti** | Il saluto esce dal fumo, i pulsanti emergono e pulsano, il simbolo gira, inverte e si capovolge a caso. Solo sul web e mai con il movimento ridotto. |
-| **Demo** | La build statica su [GitHub Pages](https://keyserdsoze.github.io/Tao/) mostra la chat, la configurazione guidata e il deck con dati di esempio, senza backend e senza salvare nulla. |
+| **Demo** | La build statica su [GitHub Pages](https://taoai.me/) mostra la chat, la configurazione guidata e il deck con dati di esempio, senza backend e senza salvare nulla. |
 
 Non ancora disponibile (vedi [docs/roadmap.md](docs/roadmap.md)): uso vocale in cuffia con motore sul server, ping e
 notifiche, memoria giornaliera da CRM/transcript, flussi di business definiti da te, profilo di
@@ -157,7 +157,7 @@ container, monitoraggio, allarmi e budget). Decisioni e costo stimato (circa 55 
   `restart-and-wait.sh`, `configure-keycloak.sh`, `smoke.sh`.
 - L'accesso Microsoft usa una **seconda** app registration (non il service principal di deploy), con redirect
   `https://<keycloak>/auth/realms/tao/broker/microsoft/endpoint` e
-  `https://keyserdsoze.github.io/Tao/connections/callback`. Le variabili `TAO_CLOUD_ISSUER` e `TAO_CLOUD_API_URL`
+  `https://taoai.me/connections/callback`. Le variabili `TAO_CLOUD_ISSUER` e `TAO_CLOUD_API_URL`
   fanno costruire a Pages la versione collegata al back end.
 - Application Insights non riceve query string né indirizzi dei client; la copia del key ring va tenuta fuori da Azure.
 

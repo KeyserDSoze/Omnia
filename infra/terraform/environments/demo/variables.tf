@@ -5,7 +5,7 @@ variable "subscription_id" {
 
 variable "location" {
   type    = string
-  default = "westeurope"
+  default = "northeurope"
 }
 
 variable "environment" {
@@ -14,14 +14,14 @@ variable "environment" {
 }
 
 variable "pages_origin" {
-  description = "Origin of the GitHub Pages site that hosts the web app."
+  description = "Origin of the site that hosts the web app (GitHub Pages with a custom domain)."
   type        = string
-  default     = "https://keyserdsoze.github.io"
+  default     = "https://taoai.me"
 }
 
 variable "pages_base_path" {
   type    = string
-  default = "/Tao"
+  default = ""
 }
 
 variable "app_service_sku" {

@@ -19,5 +19,6 @@ issuer=$(curl -fsS --max-time 30 "$kc/auth/realms/tao/.well-known/openid-configu
 cors=$(curl -s -D - -o /dev/null --max-time 30 -X OPTIONS -H "Origin: $origin" -H "Access-Control-Request-Method: GET" \
   -H "Access-Control-Request-Headers: authorization" "$api/api/v1/memories" | tr -d '\r' | grep -i '^access-control-allow-origin:' || true)
 [[ $cors == *"$origin"* ]] && ok "CORS allows $origin" || bad "CORS does not allow $origin"
-curl -s -D - -o /dev/null --max-time 30 "$api/api/v1/memories" | grep -qi '^cache-control:.*no-store' && ok "API answers are no-store" || bad "no-store missing"
+headers=$(curl -s -D - -o /dev/null --max-time 30 "$api/api/v1/memories" || true)
+grep -qi '^cache-control:.*no-store' <<<"$headers" && ok "API answers are no-store" || bad "no-store missing"
 exit "$failed"

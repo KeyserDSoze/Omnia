@@ -39,7 +39,7 @@ Terraform (not Bicep) split in modules, deployed by GitHub Actions with a client
   sign-in and Microsoft 365 connector use a separate app registration whose secret lives in Key Vault: a
   leak of the sign-in secret must not hand over the subscription.
 
-## Estimated cost (West Europe, list prices, per month)
+## Estimated cost (North Europe, list prices, per month)
 
 App Service B2 ~27 EUR, PostgreSQL B1ms with 32 GB ~17 EUR, Container Registry Basic ~4 EUR, Log Analytics and
 Application Insights ~2-5 EUR under the cap, Key Vault under 1 EUR: about 55 EUR, well under the 130 EUR ceiling.
@@ -60,3 +60,5 @@ Application Insights ~2-5 EUR under the cap, Key Vault under 1 EUR: about 55 EUR
   not verified by the client (`Trust Server Certificate`), because the CA bundle of the runtime image may
   lag Azure's rotation.
 - Losing the key ring (Terraform state, Key Vault) loses every sealed note: keep a copy outside Azure.
+- The web app is served from the custom domain https://taoai.me (GitHub Pages, base path empty). That origin is the only one the API allows (CORS), the one in `Tao__PublicBaseUrl` and the only redirect of the Keycloak `tao-web` client; `configure.sh` re-applies it at every deployment because the realm import runs once.
+- PostgreSQL Flexible Server is not available to this subscription in West Europe, so every resource is in North Europe.

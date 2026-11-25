@@ -21,6 +21,13 @@ kc config credentials --server "$server" --realm master \
 # Keycloak's own administration is a login too: lock out guessing, whether or not it is public.
 kc update realms/master -s bruteForceProtected=true -s failureFactor=5
 
+# The realm import runs once: keep the web client's address in step with the app's current origin.
+if [[ -n "${TAO_APP_URL:-}" ]]; then
+  web_client=$(kc get clients -r "$realm" -q clientId=tao-web --fields id --format csv --noquotes)
+  kc update "clients/$web_client" -r "$realm" -s "redirectUris=[\"${TAO_APP_URL%/}/*\"]" \
+    -s 'webOrigins=["+"]' -s "attributes.\"post.logout.redirect.uris\"=${TAO_APP_URL%/}/*"
+fi
+
 if enabled google || enabled microsoft; then
   if ! kc get authentication/flows -r "$realm" --fields alias --format csv --noquotes | grep -qx "$social_flow"; then
     kc create authentication/flows -r "$realm" -s alias="$social_flow" -s providerId=basic-flow \

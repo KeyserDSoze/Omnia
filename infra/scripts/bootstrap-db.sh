@@ -34,15 +34,19 @@ run_sql() { # <database> reads SQL from stdin
 run_sql postgres <<'SQL'
 SELECT format('CREATE ROLE tao_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE', :'app_password')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tao_app') \gexec
-SELECT format('ALTER ROLE tao_app PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE', :'app_password') \gexec
+SELECT format('ALTER ROLE tao_app PASSWORD %L', :'app_password') \gexec
 SELECT format('CREATE ROLE tao_retention LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT', :'retention_password')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tao_retention') \gexec
-SELECT format('ALTER ROLE tao_retention PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT', :'retention_password') \gexec
+SELECT format('ALTER ROLE tao_retention PASSWORD %L', :'retention_password') \gexec
 SELECT format('CREATE ROLE keycloak LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE', :'keycloak_password')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'keycloak') \gexec
 SELECT format('ALTER ROLE keycloak PASSWORD %L', :'keycloak_password') \gexec
 -- Keycloak owns its database; the admin must be a member of the role to hand the database over.
 SELECT format('GRANT keycloak TO %I', :'admin') \gexec
 ALTER DATABASE keycloak OWNER TO keycloak;
+SQL
+# PostgreSQL 15+ no longer lets ordinary roles create objects in the public schema.
+run_sql keycloak <<'SQL'
+ALTER SCHEMA public OWNER TO keycloak;
 SQL
 echo "Database roles are ready on $fqdn."

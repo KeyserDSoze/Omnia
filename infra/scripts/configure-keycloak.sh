@@ -13,7 +13,7 @@ admin_password=$(secret keycloak-admin-password)
 
 docker run --rm --entrypoint bash \
   -e KEYCLOAK_SERVER="${url%/}/auth" -e KEYCLOAK_ADMIN=tao-admin -e KEYCLOAK_ADMIN_PASSWORD="$admin_password" \
-  -e TAO_SOCIAL_LOGIN="$providers" \
+  -e TAO_SOCIAL_LOGIN="$providers" -e TAO_APP_URL="${TAO_APP_URL:-}" \
   -e MICROSOFT_CLIENT_ID="${MICROSOFT_CLIENT_ID:-}" -e MICROSOFT_CLIENT_SECRET="$(secret microsoft-client-secret)" \
   -e MICROSOFT_TENANT="${MICROSOFT_TENANT:-common}" \
   -e GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}" -e GOOGLE_CLIENT_SECRET="$(secret google-client-secret)" \

@@ -24,10 +24,10 @@ jobs:
           cache-dependency-path: src/mobile/package-lock.json
       # With the repository variables TAO_CLOUD_ISSUER and TAO_CLOUD_API_URL (set from the Azure deployment)
       # the bundle talks to the real back end; without them it runs in the local demo mode.
-      - name: Build Expo web for https://<owner>.github.io/Tao/
+      - name: Build Expo web for the custom domain (taoai.me)
         working-directory: src/mobile
         env:
-          TAO_WEB_BASE_PATH: /Tao
+          TAO_WEB_BASE_PATH: ''
           EXPO_PUBLIC_TAO_OIDC_ISSUER: ${{ vars.TAO_CLOUD_ISSUER }}
           EXPO_PUBLIC_TAO_OIDC_CLIENT_ID: ${{ vars.TAO_CLOUD_ISSUER != '' && 'tao-web' || '' }}
           EXPO_PUBLIC_TAO_API_URL: ${{ vars.TAO_CLOUD_API_URL }}

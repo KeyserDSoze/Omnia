@@ -14,15 +14,19 @@ Questo documento descrive i controlli presenti su `main` e i rischi residui; non
 ## Identità e autorizzazione
 
 - Keycloak in modalità produzione, registrazione disattivata, client pubblico `tao-web` con PKCE S256.
-- **Accesso con Google/Microsoft** (opzionale, `TAO_SOCIAL_LOGIN`, ADR 0104): con
-  `TAO_SOCIAL_SIGNUP=open` (default) il primo accesso crea l'utente in Keycloak con l'e-mail del
-  provider e gli accessi successivi lo riconoscono. Se l'e-mail appartiene già a un utente, il
-  collegamento di un secondo provider richiede una prova (password o provider già collegato):
-  `trustEmail` è disattivato, quindi un'e-mail dichiarata dal provider non basta a prendere un
-  account. Con `TAO_SOCIAL_SIGNUP=invite` il flusso `tao-invite-only-first-login` accetta solo utenti
-  già esistenti. `GOOGLE_HOSTED_DOMAIN` limita Google a un dominio Workspace; Microsoft usa il tenant
-  di `MICROSOFT_TENANT` (default `organizations`). Gli utenti restano solo in Keycloak, nessuna
-  tabella utenti Tao. L'API non cambia: accetta solo JWT del realm `tao`.
+- **Accesso solo con Google/Microsoft** (`TAO_SOCIAL_LOGIN`, ADR 0104 e 0105): non esiste una
+  password Tao. Con un provider abilitato il browser flow del realm (`tao-social-only-browser`) ha
+  solo il redirect al provider scelto dall'app (`kc_idp_hint`): nessun form di login. Il primo
+  accesso crea l'utente in Keycloak con l'e-mail del provider e gli accessi successivi lo
+  riconoscono. Se l'e-mail appartiene già a un utente, il collegamento di un secondo provider
+  richiede una prova (accesso col provider già collegato, o verifica e-mail con SMTP): `trustEmail`
+  è disattivato, quindi un'e-mail dichiarata dal provider non basta a prendere un account. Il
+  client secret di ogni app serve a Keycloak per riscattare il codice presso il provider; i token ID
+  Google sono verificati con le chiavi pubbliche di Google, l'identità Microsoft viene da Graph
+  `/me`. `GOOGLE_HOSTED_DOMAIN` limita Google a un dominio Workspace; Microsoft usa il tenant di
+  `MICROSOFT_TENANT` (default `organizations`). Senza provider configurati resta il login standard
+  di Keycloak. Gli utenti restano solo in Keycloak, nessuna tabella utenti Tao. L'API non cambia:
+  accetta solo JWT del realm `tao`.
   `GET /api/login-options` (pubblico) espone solo l'elenco dei provider abilitati.
 - Tenant e soggetto arrivano **solo** dal token validato; nessun parametro li sovrascrive.
 - Ogni query passa da `PostgresActorScope` (GUC per transazione) e da **FORCE RLS**; il ruolo
@@ -70,8 +74,8 @@ SDK .NET e immagini Docker fissati per digest.
 | Rischio | Mitigazione suggerita |
 |---|---|
 | Host compromesso = key ring + DB | disco cifrato, utente dedicato, backup cifrati, aggiornamenti |
-| Account Keycloak con password debole | MFA/OTP in Keycloak, Cloudflare Access davanti al tunnel |
-| Account Google/Microsoft dell'utente compromesso | con l'accesso social chi controlla l'account esterno entra in Tao: tenere MFA sul provider, restringere con `GOOGLE_HOSTED_DOMAIN`/`MICROSOFT_TENANT` o `TAO_SOCIAL_SIGNUP=invite`, o lasciare `TAO_SOCIAL_LOGIN` vuoto |
+| Account Keycloak con password debole | non ci sono password Tao con l'accesso social; MFA sul provider, Cloudflare Access davanti al tunnel |
+| Account Google/Microsoft dell'utente compromesso | chi controlla l'account esterno entra in Tao: tenere MFA sul provider, restringere con `GOOGLE_HOSTED_DOMAIN`/`MICROSOFT_TENANT` |
 | Furto del token di sessione nel browser | token solo in memoria, scadenze brevi, CSP; non usare estensioni non fidate |
 | Prompt injection da email/chat | output solo consultivo; nessuna azione automatica (mantenere) |
 | Nessun backup automatico | runbook in epic #221 |

@@ -31,8 +31,7 @@ flowchart TB
   console admin solo su `localhost:59801`. Il realm `tao` emette `tenant_id` (costante
   dell'installazione) e l'audience `tao-api`. Il servizio one-shot `keycloak-config` (kcadm,
   idempotente) abilita o disabilita a ogni avvio l'accesso con Google/Microsoft (`TAO_SOCIAL_LOGIN`)
-  con il flusso di primo accesso che crea l'utente alla prima volta (`TAO_SOCIAL_SIGNUP=open`, ADR 0104)
-  o solo su invito (`invite`).
+  con il flusso di primo accesso che crea l'utente alla prima volta (ADR 0104) e senza form di password (ADR 0105).
 - **API** valida i JWT (issuer pubblico, metadata via rete interna `http://keycloak:8080`).
 
 ## Backend: moduli

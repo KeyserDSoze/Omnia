@@ -100,6 +100,21 @@ describe('connector and today API calls', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it('asks for the assistant with a dedicated purpose and the device time zone', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    vi.stubGlobal('fetch', fetcher);
+    const api = new MemoryApi(cfg, async () => 'token');
+    await api.grantAssistantBriefing();
+    await api.briefing(new Date('2026-11-24T12:00:00Z'), new Date('2026-11-25T23:00:00Z'), 'Europe/Rome');
+    const grant = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(fetcher.mock.calls[0][0]).toBe('https://tao.example.test/api/v1/consents');
+    expect(grant).toMatchObject({ source: 'assistant', purpose: 'assistant.briefing', accepted: true });
+    expect(fetcher.mock.calls[1][0]).toBe('https://tao.example.test/api/v1/today/briefing');
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({
+      from: '2026-11-24T12:00:00.000Z', to: '2026-11-25T23:00:00.000Z', timeZone: 'Europe/Rome'
+    });
+  });
+
   it('maps content-free API error codes to user messages', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: 'reconnect_required' }) }));
     const api = new MemoryApi(cfg, async () => 'token');

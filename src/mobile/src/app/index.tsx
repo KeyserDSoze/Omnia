@@ -14,6 +14,7 @@ import { dayOptions, filterLoadedByLocalDay } from '../services/timelineDayFilte
 import { filterLoadedByText } from '../services/timelineTextFilter';
 import { TodayPanel } from '../components/TodayPanel';
 import { ConnectionsPanel } from '../components/ConnectionsPanel';
+import { BriefingPanel } from '../components/BriefingPanel';
 import type { ConnectorProviderDto } from '../services/memoryApi';
 import { createDemoToday, demoProviders } from '../services/demoToday';
 
@@ -94,6 +95,7 @@ export default function Home() {
   const [notice, setNotice] = useState('');
   const [connectorProviders, setConnectorProviders] = useState<ConnectorProviderDto[]>([]);
   const [todayKey, setTodayKey] = useState(0);
+  const [preActions, setPreActions] = useState<Record<string, string>>({});
   const accountsSignatureRef = useRef<string | null>(null);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
@@ -136,6 +138,7 @@ export default function Home() {
     setDraft('');
     retryRef.current = null;
     setConnectorProviders([]);
+    setPreActions({});
     accountsSignatureRef.current = null;
     // Release a pending mutation's disabled controls after API 401/logout.
     setBusy(false);
@@ -533,7 +536,9 @@ export default function Home() {
       {demoToday && <TodayPanel api={demoToday} providers={demoProviders} p={p} demo />}
       {webMode.kind === 'cloud' && authState === 'signed-in' && apiRef.current && (
         <>
-          <TodayPanel key={todayKey} api={apiRef.current} providers={connectorProviders} p={p} />
+          <TodayPanel key={todayKey} api={apiRef.current} providers={connectorProviders} p={p}
+            suggestions={preActions} />
+          <BriefingPanel api={apiRef.current} p={p} onSuggestions={setPreActions} />
           <ConnectionsPanel api={apiRef.current} p={p} onChanged={connectors => {
             setConnectorProviders(connectors.providers);
             // Reload the deck only when accounts actually changed (connect/disconnect).

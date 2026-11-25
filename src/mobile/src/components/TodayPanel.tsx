@@ -22,11 +22,13 @@ const kindIcons = { event: '◷', mail: '✉', task: '☐', chat: '💬' } as co
  * done, left = not done; buttons do the same plus "later" (back in the queue after 2h) and
  * "dismiss". A provider write (completing a task) happens ONLY with the explicit checkbox.
  */
-export function TodayPanel({ api, providers, p, demo = false }: {
+export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }: {
   api: TodaySource;
   providers: readonly ConnectorProviderDto[];
   p: Palette;
   demo?: boolean;
+  /** AI pre-actions by item key (from the opt-in briefing); displayed, never executed. */
+  suggestions?: Readonly<Record<string, string>>;
 }) {
   const [snapshot, setSnapshot] = useState<TodayDto | null>(null);
   const [loading, setLoading] = useState(false);
@@ -157,6 +159,12 @@ export function TodayPanel({ api, providers, p, demo = false }: {
             {whenLabel(card.item, now)}{card.item.counterpart ? ' · ' + card.item.counterpart : ''}
           </Text>
           {!!card.item.detail && <Text style={[styles.detail, heading]}>{card.item.detail}</Text>}
+          {!!suggestions[card.key] && (
+            <View testID="today-pre-action" style={[styles.preAction, { borderColor: p.accent }]}>
+              <Text style={[styles.kind, { color: p.accent }]}>PRE-AZIONE SUGGERITA · AI</Text>
+              <Text style={[styles.detail, heading, { marginTop: 4 }]}>{suggestions[card.key]}</Text>
+            </View>
+          )}
           {link && (
             <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(link); }}>
               <Text style={[styles.hint, { color: p.accent }]}>Apri nell’app di origine ↗</Text>
@@ -222,6 +230,7 @@ const styles = StyleSheet.create({
   kind: { fontSize: 11, fontWeight: '800', letterSpacing: 1 },
   cardTitle: { fontSize: 21, fontWeight: '700', marginTop: 8, lineHeight: 27 },
   detail: { fontSize: 14, lineHeight: 21, marginTop: 10 },
+  preAction: { borderLeftWidth: 3, paddingLeft: 10, marginTop: 12 },
   hint: { fontSize: 12, lineHeight: 18, marginTop: 8 },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
   check: { width: 22, height: 22, borderWidth: 1.5, borderRadius: 6, textAlign: 'center', fontWeight: '800', lineHeight: 19 },

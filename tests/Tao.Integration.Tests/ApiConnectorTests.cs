@@ -163,6 +163,96 @@ public sealed class ApiConnectorTests
     }
 
     [Fact]
+    public async Task BriefingRequiresItsOwnConsentAndAConfiguredModel()
+    {
+        var provider = new ScriptedProvider();
+        var model = new ScriptedModel();
+        using var environment = new TemporaryEnvironment(Settings().ToDictionary(
+            x => x.Key.Replace(":", "__"), x => x.Value));
+        using var host = Host(provider, model);
+        using var http = host.CreateClient();
+        var tenant = "api-brief-" + Guid.NewGuid().ToString("N");
+
+        using (var info = await Send(http, HttpMethod.Get, "/api/v1/assistant", tenant))
+        {
+            using var json = await Json(info);
+            Assert.True(json.RootElement.GetProperty("configured").GetBoolean());
+            Assert.Equal("scripted-model", json.RootElement.GetProperty("model").GetString());
+        }
+        string state;
+        using (var start = await Send(http, HttpMethod.Post, "/api/v1/connectors/microsoft/authorize", tenant, new { }))
+        {
+            using var json = await Json(start);
+            state = HttpUtility.ParseQueryString(
+                new Uri(json.RootElement.GetProperty("authorizationUrl").GetString()!).Query)["state"]!;
+        }
+        using (await Send(http, HttpMethod.Post, "/api/v1/connectors/complete", tenant, new { state, code = "c" })) { }
+
+        var briefing = new { timeZone = "Europe/Rome" };
+        using (var denied = await Send(http, HttpMethod.Post, "/api/v1/today/briefing", tenant, briefing))
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+            using var json = await Json(denied);
+            Assert.Equal("assistant_consent_required", json.RootElement.GetProperty("error").GetString());
+        }
+        Assert.Equal(0, model.Calls);
+        // Memory capture consent does not authorize the assistant.
+        using (await Send(http, HttpMethod.Post, "/api/v1/consents", tenant, new
+        {
+            source = "manual", purpose = "memory.capture", policyVersion = "privacy-v1",
+            expiresAt = DateTimeOffset.UtcNow.AddDays(3), accepted = true
+        })) { }
+        using (var stillDenied = await Send(http, HttpMethod.Post, "/api/v1/today/briefing", tenant, briefing))
+            Assert.Equal(HttpStatusCode.Forbidden, stillDenied.StatusCode);
+
+        using (var grant = await Send(http, HttpMethod.Post, "/api/v1/consents", tenant, new
+        {
+            source = "assistant", purpose = "assistant.briefing", policyVersion = "assistant-v1",
+            expiresAt = DateTimeOffset.UtcNow.AddDays(30), accepted = true
+        }))
+            Assert.Equal(HttpStatusCode.Created, grant.StatusCode);
+        using (var badZone = await Send(http, HttpMethod.Post, "/api/v1/today/briefing", tenant,
+            new { timeZone = "../../etc/passwd" }))
+            Assert.Equal(HttpStatusCode.BadRequest, badZone.StatusCode);
+        using (var ok = await Send(http, HttpMethod.Post, "/api/v1/today/briefing", tenant, briefing))
+        {
+            Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+            using var json = await Json(ok);
+            Assert.Equal("Prima il preventivo.", json.RootElement.GetProperty("summary").GetString());
+            var suggestion = Assert.Single(json.RootElement.GetProperty("suggestions").EnumerateArray());
+            Assert.EndsWith(":task:L|T1", suggestion.GetProperty("key").GetString());
+            Assert.Equal(2, json.RootElement.GetProperty("cardsSent").GetInt32());
+        }
+        Assert.DoesNotContain("alice@work.example", model.LastPrompt);
+
+        model.Configured = false;
+        using (var off = await Send(http, HttpMethod.Post, "/api/v1/today/briefing", tenant, briefing))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, off.StatusCode);
+            using var json = await Json(off);
+            Assert.Equal("assistant_not_configured", json.RootElement.GetProperty("error").GetString());
+        }
+    }
+
+    private sealed class ScriptedModel : IChatModel
+    {
+        private const string Reply =
+            """{"summary":"Prima il preventivo.","suggestions":[{"ref":"c1","preAction":"Apri il listino."}]}""";
+        public bool Configured { get; set; } = true;
+        public int Calls;
+        public string LastPrompt { get; private set; } = "";
+        public bool IsConfigured => Configured;
+        public string Model => "scripted-model";
+
+        public Task<string> CompleteJsonAsync(IReadOnlyList<ChatMessage> messages, CancellationToken ct)
+        {
+            Interlocked.Increment(ref Calls);
+            LastPrompt = string.Join("\n", messages.Select(m => m.Content));
+            return Task.FromResult(Reply);
+        }
+    }
+
+    [Fact]
     public void PublicBaseUrlMustBeHttpsOrLoopback()
     {
         Assert.Null(Tao.Api.ConnectorEndpoints.RedirectUri(null, development: false));
@@ -216,7 +306,7 @@ public sealed class ApiConnectorTests
         };
     }
 
-    private static WebApplicationFactory<Program> Host(ScriptedProvider provider)
+    private static WebApplicationFactory<Program> Host(ScriptedProvider provider, IChatModel? model = null)
     {
         var cfg = Settings();
         return new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
@@ -227,6 +317,11 @@ public sealed class ApiConnectorTests
             {
                 s.RemoveAll<IConnectorProvider>();
                 s.AddSingleton<IConnectorProvider>(provider);
+                if (model is not null)
+                {
+                    s.RemoveAll<IChatModel>();
+                    s.AddSingleton(model);
+                }
                 s.AddAuthentication(opt =>
                     {
                         opt.DefaultAuthenticateScheme = SignedFixture.SchemeName;

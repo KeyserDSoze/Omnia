@@ -97,6 +97,7 @@ services:
       Llm__Endpoint: ${LLM_ENDPOINT:-}
       Llm__ApiKey: ${LLM_API_KEY:-}
       Llm__Model: ${LLM_MODEL:-}
+      Llm__AuthHeader: ${LLM_AUTH_HEADER:-bearer}
       Embeddings__Provider: ${EMBEDDINGS_PROVIDER:-none}
       Embeddings__Endpoint: ${EMBEDDINGS_ENDPOINT:-}
       Embeddings__Model: ${EMBEDDINGS_MODEL:-nomic-embed-text}

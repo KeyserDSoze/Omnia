@@ -1,0 +1,140 @@
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ASSISTANT_PURPOSE, ASSISTANT_SOURCE, CloudApiError, type AssistantInfoDto, type BriefingDto, type MemoryApi
+} from '../services/memoryApi';
+import { deckWindow } from '../services/todayDeck';
+import type { Palette } from './TodayPanel';
+
+/**
+ * "Piano del giorno" (AI, opt-in). Separate consent from note capture; the disclosure states
+ * exactly what leaves Tao. The output is labeled as AI, kept in memory only, and never acted on.
+ */
+export function BriefingPanel({ api, p, onSuggestions }: {
+  api: MemoryApi;
+  p: Palette;
+  onSuggestions: (suggestions: Record<string, string>) => void;
+}) {
+  const [info, setInfo] = useState<AssistantInfoDto | null>(null);
+  const [consented, setConsented] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [briefing, setBriefing] = useState<BriefingDto | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const live = useRef(true);
+
+  useEffect(() => {
+    live.current = true;
+    void (async () => {
+      try {
+        const assistant = await api.assistant();
+        if (!live.current) return;
+        setInfo(assistant);
+        if (!assistant.configured) return;
+        const grants = await api.listConsents();
+        if (live.current)
+          setConsented(grants.some(g => g.source === ASSISTANT_SOURCE && g.purpose === ASSISTANT_PURPOSE && g.active));
+      } catch {
+        if (live.current) setMessage('Stato dell’assistente non disponibile.');
+      }
+    })();
+    return () => { live.current = false; };
+  }, [api]);
+
+  async function activate() {
+    if (busy || !acknowledged) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      await api.grantAssistantBriefing();
+      if (live.current) setConsented(true);
+    } catch (e) {
+      if (live.current) setMessage(e instanceof CloudApiError ? e.message : 'Attivazione non riuscita.');
+    } finally {
+      if (live.current) setBusy(false);
+    }
+  }
+
+  async function generate() {
+    if (busy) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const range = deckWindow(new Date());
+      const result = await api.briefing(range.from, range.to,
+        Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+      if (!live.current) return;
+      setBriefing(result);
+      onSuggestions(Object.fromEntries(result.suggestions.map(s => [s.key, s.preAction])));
+    } catch (e) {
+      if (!live.current) return;
+      if (e instanceof CloudApiError && e.code === 'assistant_consent_required') setConsented(false);
+      setMessage(e instanceof CloudApiError ? e.message : 'Piano non disponibile. Riprova.');
+    } finally {
+      if (live.current) setBusy(false);
+    }
+  }
+
+  if (!info) return null;
+  const heading = { color: p.text };
+  return (
+    <View testID="briefing-panel" style={[styles.card, { backgroundColor: p.surface, borderColor: p.border }]}>
+      <Text style={[styles.kicker, { color: p.subtle }]}>PIANO DEL GIORNO · AI</Text>
+      {!info.configured ? (
+        <Text testID="briefing-unconfigured" style={[styles.hint, { color: p.subtle }]}>
+          Assistente AI non configurato su questo server (LLM_ENDPOINT, LLM_MODEL). Il deck funziona anche senza.
+        </Text>
+      ) : !consented ? (
+        <>
+          <Text style={[styles.hint, heading]}>
+            Su richiesta, Tao invia al modello {info.model} ({info.host}) solo tipo, titolo, orario, nome
+            dell’interlocutore e un’anteprima di 140 caratteri delle carte ancora aperte: niente indirizzi email,
+            link o identificativi. Il risultato non viene salvato. Puoi revocare dal registro dei consensi.
+          </Text>
+          <Pressable testID="briefing-acknowledge" accessibilityRole="checkbox" aria-checked={acknowledged}
+            onPress={() => setAcknowledged(v => !v)} style={styles.checkRow}>
+            <Text style={[styles.check, { borderColor: p.text, color: p.text }]}>{acknowledged ? '✓' : ' '}</Text>
+            <Text style={[styles.hint, heading, { flex: 1, marginTop: 0 }]}>Ho capito cosa viene inviato al modello.</Text>
+          </Pressable>
+          <Pressable testID="briefing-activate" accessibilityRole="button" disabled={!acknowledged || busy}
+            onPress={() => { void activate(); }}
+            style={[styles.button, { backgroundColor: p.card2, opacity: acknowledged && !busy ? 1 : 0.5 }]}>
+            <Text style={[styles.buttonText, heading]}>Attiva l’assistente (30 giorni)</Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <Pressable testID="briefing-generate" accessibilityRole="button" disabled={busy}
+            onPress={() => { void generate(); }}
+            style={[styles.button, { backgroundColor: p.accent, opacity: busy ? 0.5 : 1 }]}>
+            <Text style={[styles.buttonText, { color: p.accentText }]}>
+              {busy ? 'Sto preparando il piano…' : briefing ? 'Rigenera il piano del giorno' : 'Genera il piano del giorno'}
+            </Text>
+          </Pressable>
+          {briefing && (
+            <View testID="briefing-result">
+              <Text style={[styles.summary, heading]}>{briefing.summary}</Text>
+              <Text style={[styles.hint, { color: p.subtle }]}>
+                Generato da {briefing.model} su {briefing.cardsSent} carte · L’AI può sbagliare: verifica prima di agire.
+                {briefing.suggestions.length > 0 ? ' Le pre-azioni suggerite compaiono sulle carte.' : ''}
+              </Text>
+            </View>
+          )}
+        </>
+      )}
+      {!!message && <Text accessibilityRole="alert" testID="briefing-message" style={[styles.hint, heading]}>{message}</Text>}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { borderWidth: 1, borderRadius: 25, padding: 26, marginBottom: 20 },
+  kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+  hint: { fontSize: 12, lineHeight: 18, marginTop: 8 },
+  summary: { fontSize: 16, lineHeight: 24, marginTop: 14, fontWeight: '600' },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+  check: { width: 22, height: 22, borderWidth: 1.5, borderRadius: 6, textAlign: 'center', fontWeight: '800', lineHeight: 19 },
+  button: { minHeight: 44, paddingHorizontal: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+    marginTop: 14, alignSelf: 'flex-start' },
+  buttonText: { fontSize: 14, fontWeight: '700' }
+});

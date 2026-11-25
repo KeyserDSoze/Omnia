@@ -4,6 +4,7 @@ using Tao.Application;
 using Tao.Domain;
 using Tao.Infrastructure;
 using Tao.Infrastructure.Connectors;
+using Tao.Infrastructure.Assistant;
 
 namespace Tao.Api;
 
@@ -25,6 +26,8 @@ public static class ApiIdentity
 public sealed record CompleteConnectorCommand(string? State, string? Code);
 
 public sealed record TriageDecisionCommand(string? Key, string? Decision, int? SnoozeMinutes, bool ApplyToSource);
+
+public sealed record BriefingCommand(DateTimeOffset? From, DateTimeOffset? To, string? TimeZone);
 
 /// <summary>
 /// Work connectors (Microsoft 365, Google Workspace) and the daily deck. OAuth runs as a
@@ -70,6 +73,18 @@ public static class ConnectorEndpoints
         services.AddScoped<ITriageStore, PostgresTriageStore>();
         services.AddScoped<ConnectorService>();
         services.AddScoped<TodayService>();
+
+        // Fail fast on an unsafe model endpoint; an empty endpoint simply disables the assistant.
+        var llm = configuration.GetSection("Llm").Get<LlmOptions>() ?? new LlmOptions();
+        LlmOptions.ValidatedEndpoint(llm.Endpoint);
+        services.AddSingleton(llm);
+        services.AddHttpClient<OpenAiCompatibleChatModel>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(90);
+            client.MaxResponseContentBufferSize = 1024 * 1024;
+        });
+        services.AddTransient<IChatModel>(sp => sp.GetRequiredService<OpenAiCompatibleChatModel>());
+        services.AddScoped<DailyBriefingService>();
         return services;
     }
 
@@ -112,6 +127,30 @@ public static class ConnectorEndpoints
             Results.Ok(await service.DecideAsync(tenant, subject,
                 new TriageCommand(input.Key ?? "", input.Decision ?? "", input.SnoozeMinutes, input.ApplyToSource),
                 ct))));
+        today.MapPost("/briefing", (BriefingCommand input, DailyBriefingService service, TimeProvider time,
+            ClaimsPrincipal user, CancellationToken ct) => Run(user, async (tenant, subject) =>
+        {
+            if (!TryTimeZone(input.TimeZone, out var zone))
+                return Results.BadRequest(new { error = "invalid_time_zone" });
+            var start = input.From ?? time.GetUtcNow().AddHours(-12);
+            return Results.Ok(await service.GenerateAsync(tenant, subject, start, input.To ?? start.AddHours(36),
+                zone, ct));
+        }));
+
+        app.MapGet("/api/v1/assistant", (IChatModel model, LlmOptions options) => Results.Ok(new
+        {
+            configured = model.IsConfigured,
+            model = model.IsConfigured ? model.Model : null,
+            host = model.IsConfigured ? LlmOptions.ValidatedEndpoint(options.Endpoint)?.Host : null
+        })).RequireAuthorization();
+    }
+
+    private static bool TryTimeZone(string? id, out TimeZoneInfo zone)
+    {
+        zone = TimeZoneInfo.Utc;
+        if (string.IsNullOrEmpty(id)) return true;
+        return id.Length <= 64 && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '_' or '-' or '+') &&
+            TimeZoneInfo.TryFindSystemTimeZoneById(id, out zone!);
     }
 
     /// <summary>Stable, content-free error codes; provider messages are never echoed.</summary>
@@ -135,6 +174,18 @@ public static class ConnectorEndpoints
         catch (KeyNotFoundException)
         {
             return Results.NotFound(new { error = "not_found" });
+        }
+        catch (AssistantNotConfiguredException)
+        {
+            return Results.Json(new { error = "assistant_not_configured" }, statusCode: StatusCodes.Status409Conflict);
+        }
+        catch (ConsentRequiredException)
+        {
+            return Results.Json(new { error = "assistant_consent_required" }, statusCode: StatusCodes.Status403Forbidden);
+        }
+        catch (AssistantUnavailableException e)
+        {
+            return Results.Json(new { error = e.Code }, statusCode: StatusCodes.Status502BadGateway);
         }
         catch (ArgumentException e) when (e.Message is "invalid_window" or "invalid_item" or "invalid_decision"
             or "invalid_snooze" or "apply_not_supported" or "invalid_task")

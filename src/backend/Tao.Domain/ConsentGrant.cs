@@ -9,6 +9,8 @@ namespace Tao.Domain;
 public sealed record ConsentGrant
 {
     public const string MemoryCapture = "memory.capture";
+    /// <summary>Sending minimized daily cards to the configured language model for a briefing.</summary>
+    public const string AssistantBriefing = "assistant.briefing";
     public Guid Id { get; }
     public string TenantId { get; }
     public string OwnerSubject { get; }
@@ -53,7 +55,7 @@ public sealed record ConsentGrant
         if (!Regex.IsMatch(source, "^[a-z][a-z0-9._:-]{0,119}$",
                 RegexOptions.CultureInvariant) || source.Contains("..", StringComparison.Ordinal))
             throw new ArgumentException("Invalid source identifier.", nameof(source));
-        if (purpose != MemoryCapture)
+        if (purpose is not (MemoryCapture or AssistantBriefing))
             throw new ArgumentException("Purpose is not supported by this release.", nameof(purpose));
         if (!Regex.IsMatch(policyVersion, "^[a-z0-9][a-z0-9._-]{0,63}$",
                 RegexOptions.CultureInvariant))

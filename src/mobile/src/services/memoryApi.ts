@@ -100,6 +100,18 @@ export type TriageResultDto = {
   appliedToSource: boolean;
 };
 
+export type AssistantInfoDto = { configured: boolean; model: string | null; host: string | null };
+/** AI output: shown with an explicit label and never stored by Tao. */
+export type BriefingDto = {
+  summary: string;
+  suggestions: { key: string; preAction: string }[];
+  model: string;
+  generatedAt: string;
+  cardsSent: number;
+};
+export const ASSISTANT_SOURCE = 'assistant';
+export const ASSISTANT_PURPOSE = 'assistant.briefing';
+
 /** Content-free API error codes mapped to user messages (provider text is never shown). */
 const errorMessages: Record<string, string> = {
   connector_not_configured: 'Connettore non configurato sul server.',
@@ -118,6 +130,13 @@ const errorMessages: Record<string, string> = {
   invalid_decision: 'Decisione non valida.',
   invalid_snooze: 'Intervallo di rinvio non valido.',
   invalid_window: 'Intervallo di date non valido.',
+  assistant_not_configured: 'Assistente AI non configurato su questo server.',
+  assistant_consent_required: 'Attiva prima l\u2019assistente: serve un consenso dedicato.',
+  model_error: 'Il modello AI ha restituito un errore. Riprova pi\u00f9 tardi.',
+  model_unreachable: 'Il modello AI non \u00e8 raggiungibile.',
+  model_rate_limited: 'Il modello AI sta limitando le richieste. Riprova pi\u00f9 tardi.',
+  invalid_model_output: 'Il modello AI ha risposto in un formato non valido. Riprova.',
+  invalid_time_zone: 'Fuso orario non riconosciuto.',
   not_found: 'Elemento o account non trovato.'
 };
 
@@ -312,6 +331,22 @@ export class MemoryApi {
     return this.request('POST', '/api/v1/today/decisions', {
       key, decision, snoozeMinutes: options.snoozeMinutes ?? null, applyToSource: options.applyToSource === true
     });
+  }
+  assistant(): Promise<AssistantInfoDto> {
+    return this.request('GET', '/api/v1/assistant');
+  }
+  grantAssistantBriefing(): Promise<ConsentDto> {
+    return this.request('POST', '/api/v1/consents', {
+      source: ASSISTANT_SOURCE,
+      purpose: ASSISTANT_PURPOSE,
+      policyVersion: 'assistant-v1',
+      expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+      accepted: true
+    });
+  }
+  briefing(from: Date, to: Date, timeZone: string): Promise<BriefingDto> {
+    return this.request('POST', '/api/v1/today/briefing',
+      { from: from.toISOString(), to: to.toISOString(), timeZone });
   }
 
   save(entry: ReturnTypeMemo): Promise<RemoteMemory> {

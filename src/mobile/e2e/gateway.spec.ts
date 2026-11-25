@@ -24,6 +24,8 @@ test('single port: Keycloak /auth login, consent and note through /api', async (
   await expect(page.getByTestId('today-empty-accounts')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('connections-panel')).toContainText('Microsoft 365');
   await expect(page.getByTestId('connections-panel')).toContainText('Google Workspace');
+  // Without LLM_ENDPOINT the assistant says so explicitly; nothing is sent anywhere.
+  await expect(page.getByTestId('briefing-unconfigured')).toBeVisible();
 
   await page.getByTestId('consent-accept').click();
   await page.getByTestId('grant-consent').click();

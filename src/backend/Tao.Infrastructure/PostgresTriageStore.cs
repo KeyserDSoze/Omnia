@@ -88,4 +88,31 @@ public sealed class PostgresTriageStore(NpgsqlDataSource db) : ITriageStore
         await command.ExecuteNonQueryAsync(ct);
         await actor.CommitAsync(ct);
     }
+
+    public async Task<IReadOnlyList<TriageRecord>> RecentAsync(string tenantId, string ownerSubject,
+        DateTimeOffset since, CancellationToken ct)
+    {
+        await using var actor = await PostgresActorScope.OpenAsync(db, tenantId, ownerSubject, ct);
+        await using var command = new NpgsqlCommand("""
+            SELECT decision, decided_at, snoozed_until, applied_to_source FROM triage_decisions
+            WHERE tenant_id = @tenant AND owner_sub = @owner AND decided_at >= @since AND expires_at > now()
+            ORDER BY decided_at DESC
+            LIMIT 2000
+            """, actor.Connection, actor.Transaction);
+        command.Parameters.AddWithValue("tenant", tenantId);
+        command.Parameters.AddWithValue("owner", ownerSubject);
+        command.Parameters.AddWithValue("since", since.ToUniversalTime());
+        var records = new List<TriageRecord>();
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                if (!TriageDecisions.TryParse(reader.GetString(0), out var decision)) continue;
+                records.Add(new TriageRecord(decision, reader.GetFieldValue<DateTimeOffset>(1),
+                    reader.IsDBNull(2) ? null : reader.GetFieldValue<DateTimeOffset>(2), reader.GetBoolean(3)));
+            }
+        }
+        await actor.CommitAsync(ct);
+        return records;
+    }
 }

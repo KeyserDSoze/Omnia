@@ -126,6 +126,18 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
     private async Task WriteWorkStateAsync(Utf8JsonWriter writer, PostgresActorScope actor,
         string tenantId, string ownerSubject, CancellationToken ct)
     {
+        writer.WritePropertyName("settings");
+        await using (var command = Command(actor, tenantId, ownerSubject, """
+            SELECT sealed_settings FROM user_settings WHERE tenant_id = @tenant AND owner_sub = @owner
+            """))
+        {
+            if (await command.ExecuteScalarAsync(ct) is byte[] envelope)
+                JsonSerializer.Serialize(writer,
+                    PostgresSettingsStore.Open(crypto, envelope, tenantId, ownerSubject), PostgresSettingsStore.Json);
+            else
+                writer.WriteNullValue();
+        }
+
         writer.WritePropertyName("connectorAccounts");
         writer.WriteStartArray();
         await using (var command = Command(actor, tenantId, ownerSubject, """
@@ -267,7 +279,7 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
             "DELETE FROM connector_accounts WHERE tenant_id = @tenant AND owner_sub = @owner"))
             accounts = await accountDelete.ExecuteNonQueryAsync(ct);
         var workState = 0;
-        foreach (var table in new[] { "connector_authorizations", "triage_decisions", "connector_actions" })
+        foreach (var table in new[] { "connector_authorizations", "triage_decisions", "connector_actions", "user_settings" })
         {
             await using var delete = Command(actor, tenantId, ownerSubject,
                 $"DELETE FROM {table} WHERE tenant_id = @tenant AND owner_sub = @owner");

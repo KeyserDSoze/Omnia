@@ -241,7 +241,8 @@ public sealed class ConnectorServiceTests
             Task.FromResult(new ConnectedIdentity("graph-user-1", "Alice", "alice@example.test"));
 
         public Task<IReadOnlyList<WorkItem>> GetWorkItemsAsync(Guid accountId, ConnectedIdentity identity,
-            string accessToken, DateTimeOffset from, DateTimeOffset to, CancellationToken ct) =>
+            string accessToken, DateTimeOffset from, DateTimeOffset to, IReadOnlySet<string> capabilities,
+            CancellationToken ct) =>
             Task.FromResult(Items(accountId));
 
         public Task CompleteTaskAsync(string accessToken, string externalTaskId, CancellationToken ct)
@@ -350,6 +351,12 @@ public sealed class ConnectorServiceTests
             Audit.Add((accountId, action, outcome));
             return Task.CompletedTask;
         }
+
+        public Task<IReadOnlyList<TriageRecord>> RecentAsync(string tenantId, string ownerSubject,
+            DateTimeOffset since, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<TriageRecord>>(_records
+                .Where(r => r.Key.Item1 == tenantId && r.Key.Item2 == ownerSubject && r.Value.DecidedAt >= since)
+                .Select(r => r.Value).ToArray());
     }
 
     private sealed class ManualClock : TimeProvider

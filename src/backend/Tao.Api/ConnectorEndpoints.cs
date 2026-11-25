@@ -29,6 +29,9 @@ public sealed record TriageDecisionCommand(string? Key, string? Decision, int? S
 
 public sealed record BriefingCommand(DateTimeOffset? From, DateTimeOffset? To, string? TimeZone);
 
+public sealed record SaveSettingsCommand(string? DisplayName, string? WorkStart, string? WorkEnd, WorkTools? Tools,
+    IReadOnlyList<DeclaredAccount>? Accounts, AgentMode? AgentMode, bool CompleteOnboarding);
+
 /// <summary>
 /// Work connectors (Microsoft 365, Google Workspace) and the daily deck. OAuth runs as a
 /// confidential client on the API: the browser only relays the one-time code and the state,
@@ -71,6 +74,8 @@ public static class ConnectorEndpoints
         services.AddTransient<IConnectorProvider>(sp => sp.GetRequiredService<GoogleWorkspaceConnector>());
         services.AddScoped<IConnectorStore, PostgresConnectorStore>();
         services.AddScoped<ITriageStore, PostgresTriageStore>();
+        services.AddScoped<ISettingsStore, PostgresSettingsStore>();
+        services.AddScoped<SettingsService>();
         services.AddScoped<ConnectorService>();
         services.AddScoped<TodayService>();
 
@@ -136,6 +141,30 @@ public static class ConnectorEndpoints
             return Results.Ok(await service.GenerateAsync(tenant, subject, start, input.To ?? start.AddHours(36),
                 zone, ct));
         }));
+        today.MapGet("/recap", (TodayService service, ClaimsPrincipal user, int? days, string? timeZone,
+            CancellationToken ct) => Run(user, async (tenant, subject) =>
+            !TryTimeZone(timeZone, out var zone)
+                ? Results.BadRequest(new { error = "invalid_time_zone" })
+                : Results.Ok(new { days = await service.RecapAsync(tenant, subject, days ?? 3, zone, ct) })));
+
+        // Settings composed by the guided setup: the agent acts on behalf of the user only as declared here.
+        var settings = app.MapGroup("/api/v1/settings").RequireAuthorization();
+        settings.MapGet("", (SettingsService service, ConnectorService connectors, ClaimsPrincipal user,
+            CancellationToken ct) => Run(user, async (tenant, subject) => Results.Ok(new
+        {
+            settings = await service.GetAsync(tenant, subject, ct),
+            providers = connectors.Providers(),
+            accounts = await connectors.ListAccountsAsync(tenant, subject, ct)
+        })));
+        settings.MapPut("", (SaveSettingsCommand input, SettingsService service, ClaimsPrincipal user,
+            CancellationToken ct) => Run(user, async (tenant, subject) =>
+        {
+            if (input.Tools is null || input.Accounts is null || input.AgentMode is null)
+                return Results.BadRequest(new { error = "invalid_settings" });
+            var saved = await service.SaveAsync(tenant, subject, new UserSettings(input.DisplayName, input.WorkStart,
+                input.WorkEnd, input.Tools, input.Accounts, input.AgentMode.Value), input.CompleteOnboarding, ct);
+            return Results.Ok(saved);
+        }));
 
         app.MapGet("/api/v1/assistant", (IChatModel model, LlmOptions options) => Results.Ok(new
         {
@@ -186,6 +215,14 @@ public static class ConnectorEndpoints
         catch (AssistantUnavailableException e)
         {
             return Results.Json(new { error = e.Code }, statusCode: StatusCodes.Status502BadGateway);
+        }
+        catch (DelegationRequiredException)
+        {
+            return Results.Json(new { error = "delegation_required" }, statusCode: StatusCodes.Status403Forbidden);
+        }
+        catch (SettingsValidationException e)
+        {
+            return Results.BadRequest(new { error = "invalid_settings", field = e.Field });
         }
         catch (ArgumentException e) when (e.Message is "invalid_window" or "invalid_item" or "invalid_decision"
             or "invalid_snooze" or "apply_not_supported" or "invalid_task")

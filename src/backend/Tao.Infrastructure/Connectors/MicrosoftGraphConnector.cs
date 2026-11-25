@@ -32,8 +32,7 @@ public sealed class MicrosoftGraphConnector(HttpClient http, MicrosoftConnectorO
     public string DisplayName => "Microsoft 365";
     public bool IsConfigured => !string.IsNullOrWhiteSpace(options.ClientId) &&
         !string.IsNullOrWhiteSpace(options.ClientSecret) && !string.IsNullOrWhiteSpace(options.Tenant);
-    public IReadOnlyList<string> Capabilities =>
-        ["calendar.read", "mail.read", "tasks.read", "tasks.complete", "chats.read"];
+    public IReadOnlyList<string> Capabilities => ConnectorCapabilities.Microsoft;
 
     private string Authority =>
         $"https://login.microsoftonline.com/{Uri.EscapeDataString(options.Tenant)}/oauth2/v2.0";
@@ -75,12 +74,16 @@ public sealed class MicrosoftGraphConnector(HttpClient http, MicrosoftConnectorO
     }
 
     public async Task<IReadOnlyList<WorkItem>> GetWorkItemsAsync(Guid accountId, ConnectedIdentity identity,
-        string accessToken, DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
+        string accessToken, DateTimeOffset from, DateTimeOffset to, IReadOnlySet<string> capabilities,
+        CancellationToken ct)
     {
-        var events = EventsAsync(accountId, accessToken, from, to, ct);
-        var mail = OptionalAsync(() => MailAsync(accountId, accessToken, from, ct));
-        var tasks = OptionalAsync(() => TasksAsync(accountId, accessToken, to, ct));
-        var chats = OptionalAsync(() => ChatsAsync(accountId, identity, accessToken, from, ct));
+        Task<IReadOnlyList<WorkItem>> When(string capability, Func<Task<IReadOnlyList<WorkItem>>> load) =>
+            capabilities.Contains(capability) ? load() : Task.FromResult<IReadOnlyList<WorkItem>>([]);
+        var events = When(ConnectorCapabilities.CalendarRead, () => EventsAsync(accountId, accessToken, from, to, ct));
+        var mail = When(ConnectorCapabilities.MailRead, () => OptionalAsync(() => MailAsync(accountId, accessToken, from, ct)));
+        var tasks = When(ConnectorCapabilities.TasksRead, () => OptionalAsync(() => TasksAsync(accountId, accessToken, to, ct)));
+        var chats = When(ConnectorCapabilities.ChatsRead,
+            () => OptionalAsync(() => ChatsAsync(accountId, identity, accessToken, from, ct)));
         await Task.WhenAll(events, mail, tasks, chats);
         return [.. events.Result, .. mail.Result, .. tasks.Result, .. chats.Result];
     }

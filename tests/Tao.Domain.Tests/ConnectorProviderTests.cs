@@ -14,6 +14,7 @@ public sealed class ConnectorProviderTests
     private static readonly Uri Redirect = new("https://tao.example.test/connections/callback");
     private static readonly Guid Account = Guid.Parse("7c9e6679-7425-40de-944b-e07fc1f90ae7");
     private static readonly ConnectedIdentity Me = new("me-id", "Alice", "alice@example.test");
+    private static readonly IReadOnlySet<string> AllMicrosoft = ConnectorCapabilities.Microsoft.ToHashSet();
 
     [Fact]
     public void MicrosoftAuthorizationRequestsDelegatedScopesWithPkce()
@@ -107,7 +108,7 @@ public sealed class ConnectorProviderTests
             _ => (HttpStatusCode.NotFound, "{}")
         };
 
-        var items = await graph.GetWorkItemsAsync(Account, Me, "access", Now.AddHours(-8), Now.AddHours(16), default);
+        var items = await graph.GetWorkItemsAsync(Account, Me, "access", Now.AddHours(-8), Now.AddHours(16), AllMicrosoft, default);
 
         Assert.Equal(["e1", "m1", "m3", "L1|T1", "L1|T3", "c1|p1"], items.Select(i => i.ExternalId));
         var standup = items[0];
@@ -133,13 +134,28 @@ public sealed class ConnectorProviderTests
             "/v1.0/me/chats" => (HttpStatusCode.Forbidden, """{"error":{"code":"Forbidden"}}"""),
             _ => (HttpStatusCode.OK, """{"value":[]}""")
         };
-        Assert.Equal(["e1"], (await graph.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(8), default))
+        Assert.Equal(["e1"], (await graph.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(8), AllMicrosoft, default))
             .Select(i => i.ExternalId));
 
         http.Respond = _ => (HttpStatusCode.Unauthorized, "{}");
         var error = await Assert.ThrowsAsync<ConnectorUnavailableException>(() =>
-            graph.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(8), default));
+            graph.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(8), AllMicrosoft, default));
         Assert.Equal("reconnect_required", error.Code);
+    }
+
+    [Fact]
+    public async Task UndelegatedCategoriesAreNeverRequested()
+    {
+        var (graph, http) = Microsoft();
+        http.Respond = _ => (HttpStatusCode.OK, """{"value":[]}""");
+        await graph.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(8),
+            new HashSet<string> { ConnectorCapabilities.CalendarRead, ConnectorCapabilities.TasksComplete }, default);
+        Assert.Equal(["/v1.0/me/calendarView"], http.Requests.Select(r => r.Uri.AbsolutePath));
+
+        var (google, gHttp) = Google();
+        gHttp.Respond = _ => (HttpStatusCode.OK, "{}");
+        await google.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(8), new HashSet<string>(), default);
+        Assert.Empty(gHttp.Requests);
     }
 
     [Fact]
@@ -194,7 +210,8 @@ public sealed class ConnectorProviderTests
             _ => (HttpStatusCode.NotFound, "{}")
         };
 
-        var items = await google.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(16), default);
+        var items = await google.GetWorkItemsAsync(Account, Me, "access", Now, Now.AddHours(16),
+            ConnectorCapabilities.Google.ToHashSet(), default);
 
         Assert.Equal(["g1", "x1", "GL|GT"], items.Select(i => i.ExternalId));
         Assert.Equal(new DateTimeOffset(2026, 11, 25, 9, 0, 0, TimeSpan.Zero), items[0].StartsAt);

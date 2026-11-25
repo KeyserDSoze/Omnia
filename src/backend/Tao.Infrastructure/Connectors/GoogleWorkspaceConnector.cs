@@ -32,7 +32,7 @@ public sealed class GoogleWorkspaceConnector(HttpClient http, GoogleConnectorOpt
     public string DisplayName => "Google Workspace";
     public bool IsConfigured => !string.IsNullOrWhiteSpace(options.ClientId) &&
         !string.IsNullOrWhiteSpace(options.ClientSecret);
-    public IReadOnlyList<string> Capabilities => ["calendar.read", "mail.read", "tasks.read", "tasks.complete"];
+    public IReadOnlyList<string> Capabilities => ConnectorCapabilities.Google;
 
     public Uri BuildAuthorizationUri(string state, string codeChallenge, Uri redirectUri) =>
         new("https://accounts.google.com/o/oauth2/v2/auth?" + Query(
@@ -68,11 +68,15 @@ public sealed class GoogleWorkspaceConnector(HttpClient http, GoogleConnectorOpt
     }
 
     public async Task<IReadOnlyList<WorkItem>> GetWorkItemsAsync(Guid accountId, ConnectedIdentity identity,
-        string accessToken, DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
+        string accessToken, DateTimeOffset from, DateTimeOffset to, IReadOnlySet<string> capabilities,
+        CancellationToken ct)
     {
-        var events = EventsAsync(accountId, accessToken, from, to, ct);
-        var mail = OptionalAsync(() => MailAsync(accountId, identity, accessToken, from, ct));
-        var tasks = OptionalAsync(() => TasksAsync(accountId, accessToken, to, ct));
+        Task<IReadOnlyList<WorkItem>> When(string capability, Func<Task<IReadOnlyList<WorkItem>>> load) =>
+            capabilities.Contains(capability) ? load() : Task.FromResult<IReadOnlyList<WorkItem>>([]);
+        var events = When(ConnectorCapabilities.CalendarRead, () => EventsAsync(accountId, accessToken, from, to, ct));
+        var mail = When(ConnectorCapabilities.MailRead,
+            () => OptionalAsync(() => MailAsync(accountId, identity, accessToken, from, ct)));
+        var tasks = When(ConnectorCapabilities.TasksRead, () => OptionalAsync(() => TasksAsync(accountId, accessToken, to, ct)));
         await Task.WhenAll(events, mail, tasks);
         return [.. events.Result, .. mail.Result, .. tasks.Result];
     }

@@ -51,8 +51,10 @@ public interface IConnectorProvider
     Task<OAuthTokens> ExchangeCodeAsync(string code, string codeVerifier, Uri redirectUri, CancellationToken ct);
     Task<OAuthTokens> RefreshAsync(string refreshToken, CancellationToken ct);
     Task<ConnectedIdentity> GetIdentityAsync(string accessToken, CancellationToken ct);
+    /// <summary>Fetches only the categories whose read capability is in <paramref name="capabilities"/>.</summary>
     Task<IReadOnlyList<WorkItem>> GetWorkItemsAsync(Guid accountId, ConnectedIdentity identity,
-        string accessToken, DateTimeOffset from, DateTimeOffset to, CancellationToken ct);
+        string accessToken, DateTimeOffset from, DateTimeOffset to, IReadOnlySet<string> capabilities,
+        CancellationToken ct);
     Task CompleteTaskAsync(string accessToken, string externalTaskId, CancellationToken ct);
     Task RevokeAsync(OAuthTokens tokens, CancellationToken ct);
 }

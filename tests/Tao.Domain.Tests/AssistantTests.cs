@@ -198,7 +198,8 @@ public sealed class AssistantTests
         public Task RevokeAsync(OAuthTokens tokens, CancellationToken ct) => Task.CompletedTask;
 
         public Task<IReadOnlyList<WorkItem>> GetWorkItemsAsync(Guid accountId, ConnectedIdentity identity,
-            string accessToken, DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
+            string accessToken, DateTimeOffset from, DateTimeOffset to, IReadOnlySet<string> capabilities,
+            CancellationToken ct)
         {
             Interlocked.Increment(ref Fetches);
             if (Empty) return Task.FromResult<IReadOnlyList<WorkItem>>([]);
@@ -244,6 +245,8 @@ public sealed class AssistantTests
             Task.CompletedTask;
         public Task AuditAsync(string t, string o, Guid a, string action, string outcome, CancellationToken ct) =>
             Task.CompletedTask;
+        public Task<IReadOnlyList<TriageRecord>> RecentAsync(string t, string o, DateTimeOffset since,
+            CancellationToken ct) => Task.FromResult<IReadOnlyList<TriageRecord>>([]);
     }
 
     private sealed class FixedClock : TimeProvider

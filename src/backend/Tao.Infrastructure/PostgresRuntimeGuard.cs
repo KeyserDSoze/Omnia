@@ -12,7 +12,7 @@ public static class PostgresRuntimeGuard
     public static readonly IReadOnlyList<string> PersonalTables =
     [
         "memory_entries", "consent_grants", "connector_authorizations", "connector_accounts",
-        "triage_decisions", "connector_actions"
+        "triage_decisions", "connector_actions", "user_settings"
     ];
 
     public static async Task VerifyAsync(NpgsqlDataSource runtime, CancellationToken ct = default)

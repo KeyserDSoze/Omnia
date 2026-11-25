@@ -253,6 +253,107 @@ public sealed class ApiConnectorTests
     }
 
     [Fact]
+    public async Task GuidedSettingsDriveWhatTheAgentReadsAndDoesOnBehalfOfTheUser()
+    {
+        var provider = new ScriptedProvider();
+        using var environment = new TemporaryEnvironment(Settings().ToDictionary(
+            x => x.Key.Replace(":", "__"), x => x.Value));
+        using var host = Host(provider);
+        using var http = host.CreateClient();
+        var tenant = "api-settings-" + Guid.NewGuid().ToString("N");
+
+        using (var empty = await Send(http, HttpMethod.Get, "/api/v1/settings", tenant))
+        {
+            Assert.Equal(HttpStatusCode.OK, empty.StatusCode);
+            using var json = await Json(empty);
+            Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("settings").ValueKind);
+            Assert.Single(json.RootElement.GetProperty("providers").EnumerateArray());
+        }
+        string state;
+        using (var start = await Send(http, HttpMethod.Post, "/api/v1/connectors/microsoft/authorize", tenant, new { }))
+        {
+            using var json = await Json(start);
+            state = HttpUtility.ParseQueryString(
+                new Uri(json.RootElement.GetProperty("authorizationUrl").GetString()!).Query)["state"]!;
+        }
+        Guid accountId;
+        using (var complete = await Send(http, HttpMethod.Post, "/api/v1/connectors/complete", tenant, new { state, code = "c" }))
+        using (var json = await Json(complete))
+            accountId = json.RootElement.GetProperty("id").GetGuid();
+
+        object Body(string[] delegations, string agentMode = "act_with_confirmation") => new
+        {
+            displayName = "Ale", workStart = "08:30", workEnd = "18:00",
+            tools = new { outlook = true, teams = true, microsoftTodo = true, gmail = false, googleCalendar = false,
+                googleTasks = false, crm = "hubspot" },
+            accounts = new[]
+            {
+                new { id = Guid.NewGuid(), provider = "microsoft", usage = "work", label = "ACME",
+                    connectedAccountId = (Guid?)accountId, delegations },
+                new { id = Guid.NewGuid(), provider = "google", usage = "personal", label = "Gmail",
+                    connectedAccountId = (Guid?)null, delegations = new[] { "mail.read" } }
+            },
+            agentMode, completeOnboarding = true
+        };
+
+        using (var invalid = await Send(http, HttpMethod.Put, "/api/v1/settings", tenant, Body(["chats.write"])))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+            using var json = await Json(invalid);
+            Assert.Equal("accounts.delegations", json.RootElement.GetProperty("field").GetString());
+        }
+        using (var saved = await Send(http, HttpMethod.Put, "/api/v1/settings", tenant, Body(["mail.read", "tasks.read"])))
+        {
+            Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+            using var json = await Json(saved);
+            Assert.False(json.RootElement.GetProperty("onboardingCompletedAt").ValueKind == JsonValueKind.Null);
+        }
+        using (var others = await Send(http, HttpMethod.Get, "/api/v1/settings", tenant, subject: "bob"))
+        using (var json = await Json(others))
+            Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("settings").ValueKind);
+
+        var taskKey = WorkItemKey.Format(ConnectorProviders.Microsoft, accountId, WorkItemKind.Task, "L|T1");
+        using (var today = await Send(http, HttpMethod.Get, "/api/v1/today", tenant))
+        using (var json = await Json(today))
+            Assert.Equal(["mail", "task"], json.RootElement.GetProperty("items").EnumerateArray()
+                .Select(i => i.GetProperty("item").GetProperty("kind").GetString()).Order());
+        using (var denied = await Send(http, HttpMethod.Post, "/api/v1/today/decisions", tenant,
+            new { key = taskKey, decision = "done", applyToSource = true }))
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+            using var json = await Json(denied);
+            Assert.Equal("delegation_required", json.RootElement.GetProperty("error").GetString());
+        }
+        Assert.Empty(provider.Completed);
+
+        using (await Send(http, HttpMethod.Put, "/api/v1/settings", tenant, Body(["tasks.read"]))) { }
+        using (var tasksOnly = await Send(http, HttpMethod.Get, "/api/v1/today", tenant))
+        using (var json = await Json(tasksOnly))
+            Assert.Equal(["task"], json.RootElement.GetProperty("items").EnumerateArray()
+                .Select(i => i.GetProperty("item").GetProperty("kind").GetString()));
+        using (await Send(http, HttpMethod.Put, "/api/v1/settings", tenant, Body([]))) { }
+        using (var paused = await Send(http, HttpMethod.Get, "/api/v1/today", tenant))
+        using (var json = await Json(paused))
+            Assert.Equal("paused", Assert.Single(json.RootElement.GetProperty("accounts").EnumerateArray())
+                .GetProperty("status").GetString());
+
+        using (await Send(http, HttpMethod.Put, "/api/v1/settings", tenant, Body(["tasks.read", "tasks.complete"]))) { }
+        using (var done = await Send(http, HttpMethod.Post, "/api/v1/today/decisions", tenant,
+            new { key = taskKey, decision = "done", applyToSource = true }))
+            Assert.Equal(HttpStatusCode.OK, done.StatusCode);
+        Assert.Equal(["L|T1"], provider.Completed);
+
+        using (var recap = await Send(http, HttpMethod.Get, "/api/v1/today/recap?days=3&timeZone=Europe/Rome", tenant))
+        {
+            Assert.Equal(HttpStatusCode.OK, recap.StatusCode);
+            using var json = await Json(recap);
+            var days = json.RootElement.GetProperty("days").EnumerateArray().ToArray();
+            Assert.Equal(3, days.Length);
+            Assert.Equal(1, days[^1].GetProperty("done").GetInt32());
+        }
+    }
+
+    [Fact]
     public void PublicBaseUrlMustBeHttpsOrLoopback()
     {
         Assert.Null(Tao.Api.ConnectorEndpoints.RedirectUri(null, development: false));
@@ -381,7 +482,8 @@ public sealed class ApiConnectorTests
             Task.FromResult(new ConnectedIdentity("work-1", "Alice Work", "alice@work.example"));
 
         public Task<IReadOnlyList<WorkItem>> GetWorkItemsAsync(Guid accountId, ConnectedIdentity identity,
-            string accessToken, DateTimeOffset from, DateTimeOffset to, CancellationToken ct) =>
+            string accessToken, DateTimeOffset from, DateTimeOffset to, IReadOnlySet<string> capabilities,
+            CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<WorkItem>>(
             [
                 new WorkItem(Id, accountId, WorkItemKind.Mail, "m1", "Nota", Unread: true),

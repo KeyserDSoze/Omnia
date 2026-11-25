@@ -75,7 +75,7 @@ public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = 
                 GRANT SELECT, INSERT, UPDATE, DELETE
                     ON TABLE public.memory_entries, public.consent_grants,
                        public.connector_authorizations, public.connector_accounts,
-                       public.triage_decisions, public.connector_actions TO {quoted};
+                       public.triage_decisions, public.connector_actions, public.user_settings TO {quoted};
                 """, conn, tx);
             await grant.ExecuteNonQueryAsync(ct);
         }

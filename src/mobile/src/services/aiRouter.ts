@@ -27,10 +27,10 @@ export interface SpeechToTextEngine {
 
 export interface TextToSpeechEngine {
   readonly engine: AiEngine;
-  /** 'local': a voice installed on the device; 'online': only a vendor voice (the text leaves the device). */
-  availability(): Promise<'local' | 'online' | 'none'>;
-  /** Chooses the voice (an online one only when allowed); false when none is suitable. */
-  ready(allowOnline: boolean): Promise<boolean>;
+  /** For a BCP 47 tag: 'local' = a voice installed on the device; 'online' = only a vendor voice (the text leaves the device). */
+  availability(lang: string): Promise<'local' | 'online' | 'none'>;
+  /** Chooses the voice for the tag (an online one only when allowed); false when none is suitable. */
+  ready(allowOnline: boolean, lang: string): Promise<boolean>;
   speak(text: string, events?: { onStart?: () => void; onEnd?: () => void }): void;
   cancel(): void;
 }

@@ -72,24 +72,40 @@ describe('Tao voice', () => {
     { name: 'Samantha', lang: 'en-US', localService: true, default: true }
   ];
 
-  it('prefers Italian voices installed on the device; an online voice only when allowed', () => {
-    expect(pickVoice(voices)?.name).toBe('Alice');
-    expect(pickVoice(voices, true)?.name).toBe('Alice');
+  it('prefers voices of the language installed on the device; an online voice only when allowed', () => {
+    expect(pickVoice(voices, false, 'it-IT')?.name).toBe('Alice');
+    expect(pickVoice(voices, true, 'it-IT')?.name).toBe('Alice');
     const online = voices.filter(v => v.name !== 'Alice');
-    expect(pickVoice(online)).toBeNull();
-    expect(pickVoice(online, true)?.name).toBe('Google italiano');
-    expect(pickVoice([{ name: 'Elsa', lang: 'it_IT', localService: true, default: false }])?.name).toBe('Elsa');
+    expect(pickVoice(online, false, 'it-IT')).toBeNull();
+    expect(pickVoice(online, true, 'it-IT')?.name).toBe('Google italiano');
+    expect(pickVoice([{ name: 'Elsa', lang: 'it_IT', localService: true, default: false }], false, 'it-IT')?.name).toBe('Elsa');
+    expect(pickVoice(voices, false, 'en-US')?.name).toBe('Samantha');
+  });
+
+  it('matches the primary language and prefers the region of the locale', () => {
+    const portuguese = [
+      { name: 'Joana', lang: 'pt-PT', localService: true, default: true },
+      { name: 'Luciana', lang: 'pt-BR', localService: true, default: false },
+      { name: 'Ting-Ting', lang: 'zh-CN', localService: true, default: false },
+      { name: 'Mei-Jia', lang: 'zh-TW', localService: true, default: false }
+    ];
+    expect(pickVoice(portuguese, false, 'pt-BR')?.name).toBe('Luciana');
+    expect(pickVoice(portuguese, false, 'pt-PT')?.name).toBe('Joana');
+    expect(pickVoice(portuguese.filter(v => v.lang !== 'zh-CN'), false, 'zh-CN')?.name).toBe('Mei-Jia');
+    // "it" must not match "id" and vice versa.
+    expect(pickVoice([{ name: 'Damayanti', lang: 'id-ID', localService: true, default: true }], false, 'it-IT')).toBeNull();
   });
 
   it('tells whether the voice is local, online only, or missing', async () => {
     const engine = (list: typeof voices) => createBrowserTextToSpeech({
       speechSynthesis: { getVoices: () => list, speak: vi.fn(), cancel: vi.fn() }, SpeechSynthesisUtterance: class { }
     })!;
-    expect(await engine(voices).availability()).toBe('local');
-    expect(await engine(voices.filter(v => v.name !== 'Alice')).availability()).toBe('online');
-    expect(await engine(voices.filter(v => v.lang === 'en-US')).availability()).toBe('none');
-    expect(await engine(voices.filter(v => v.name !== 'Alice')).ready(false)).toBe(false);
-    expect(await engine(voices.filter(v => v.name !== 'Alice')).ready(true)).toBe(true);
+    expect(await engine(voices).availability('it-IT')).toBe('local');
+    expect(await engine(voices.filter(v => v.name !== 'Alice')).availability('it-IT')).toBe('online');
+    expect(await engine(voices.filter(v => v.lang === 'en-US')).availability('it-IT')).toBe('none');
+    expect(await engine(voices.filter(v => v.lang === 'en-US')).availability('en-US')).toBe('local');
+    expect(await engine(voices.filter(v => v.name !== 'Alice')).ready(false, 'it-IT')).toBe(false);
+    expect(await engine(voices.filter(v => v.name !== 'Alice')).ready(true, 'it-IT')).toBe(true);
   });
 
   it('speaks with the local voice and reports start and end', async () => {
@@ -110,7 +126,7 @@ describe('Tao voice', () => {
       cancel: vi.fn()
     };
     const engine = createBrowserTextToSpeech({ speechSynthesis: synth, SpeechSynthesisUtterance: Utterance })!;
-    expect(await engine.ready(false)).toBe(true);
+    expect(await engine.ready(false, 'it-IT')).toBe(true);
     const events: string[] = [];
     engine.speak('Buongiorno!', { onStart: () => events.push('start'), onEnd: () => events.push('end') });
     expect(spoken[0]).toMatchObject({ text: 'Buongiorno!', lang: 'it-IT' });
@@ -129,7 +145,7 @@ describe('Tao voice', () => {
       removeEventListener: vi.fn()
     };
     const engine = createBrowserTextToSpeech({ speechSynthesis: synth, SpeechSynthesisUtterance: class { } })!;
-    const ready = engine.ready(false);
+    const ready = engine.ready(false, 'it-IT');
     list = voices;
     changed!();
     expect(await ready).toBe(true);

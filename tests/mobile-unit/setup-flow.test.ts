@@ -3,8 +3,9 @@ import {
   answer, currentStep, newId, startSetup, summary, toSaveBody, withDelegations, type SetupState
 } from '../../src/mobile/src/services/setupFlow';
 import {
-  SPEECH_NOTICE, greeting, hints, intentOf, matchChoice, matchChoices, noteText, openingLines, typingMs, welcomeLines
+  greeting, hints, intentOf, matchChoice, matchChoices, noteText, openingLines, typingMs, welcomeLines
 } from '../../src/mobile/src/services/chatScript';
+import { t } from '../../src/mobile/src/i18n';
 
 let n = 0;
 const ids = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`;
@@ -104,7 +105,7 @@ describe('deterministic chat script', () => {
     expect(openingLines(settings, recap)).toEqual([
       'Ieri hai chiuso 5 carte.',
       'Nei giorni scorsi hai rimandato 3 carte: torneranno in coda.',
-      '1 carta è rimasta "non fatta": vale la pena rivederle.',
+      '1 carta è rimasta "non fatta": vale la pena rivederla.',
       '1 account non è ancora collegato.',
       'Da dove partiamo oggi?'
     ]);
@@ -119,9 +120,10 @@ describe('deterministic chat script', () => {
   });
 
   it('tells where audio and text go before asking for the browser speech consent', () => {
-    expect(SPEECH_NOTICE).toMatch(/Google[\s\S]*Microsoft[\s\S]*Apple/);
-    expect(SPEECH_NOTICE).toContain('voce italiana');
-    expect(SPEECH_NOTICE).toContain('non registra');
+    const notice = t('speech.notice');
+    expect(notice).toMatch(/Google[\s\S]*Microsoft[\s\S]*Apple/);
+    expect(notice).toContain('in questa lingua');
+    expect(notice).toContain('non registra');
   });
 
   it('types a line quickly: longer lines take longer, never more than 1.4 s', () => {

@@ -1,12 +1,19 @@
+import { getLocale, t, translate, type Locale, type MessageKey } from '../i18n';
+
 export type MemoryTag = 'lavoro' | 'relazioni' | 'attualita' | 'benessere' | 'personale';
 
-export function classifyMemo(text: string): MemoryTag[] {
-  const lower = text.toLocaleLowerCase('it');
-  const tags: MemoryTag[] = [];
-  if (/riunione|cliente|meeting|progetto|lavoro|work/.test(lower)) tags.push('lavoro');
-  if (/amico|amicizia|famiglia|friend|family/.test(lower)) tags.push('relazioni');
-  if (/attualit[aà]|news|notizi/.test(lower)) tags.push('attualita');
-  if (/salute|palestra|health/.test(lower)) tags.push('benessere');
+const tagWords: [MemoryTag, MessageKey][] = [
+  ['lavoro', 'tagwords.work'], ['relazioni', 'tagwords.relations'],
+  ['attualita', 'tagwords.news'], ['benessere', 'tagwords.wellbeing']
+];
+
+/** Keyword rules, not AI: the words of the current language, plus Italian and English. */
+export function classifyMemo(text: string, locale: Locale = getLocale()): MemoryTag[] {
+  const lower = text.toLocaleLowerCase();
+  const languages = [...new Set<Locale>([locale, 'en', 'it'])];
+  const tags = tagWords.filter(([, key]) => languages.some(language =>
+    translate(language, key).split('|').some(word => word.trim() !== '' && lower.includes(word.trim().toLocaleLowerCase())))
+  ).map(([tag]) => tag);
   return tags.length ? tags : ['personale'];
 }
 
@@ -23,7 +30,7 @@ let demoCaptureSequence = 0;
  */
 export function normalizeMemo(content: string, occurredAt: string, requireSecureId = false) {
   const raw = content.trim();
-  if (!raw) throw new Error('Il memo non può essere vuoto.');
+  if (!raw) throw new Error(t('notice.emptyMemo'));
   let uuid: string | undefined;
   try {
     uuid = globalThis.crypto?.randomUUID?.();
@@ -32,7 +39,7 @@ export function normalizeMemo(content: string, occurredAt: string, requireSecure
     // Never silently downgrade the authenticated Web cloud path.
   }
   if (requireSecureId && !uuid)
-    throw new Error('Identificativi sicuri non disponibili: apri Tao con HTTPS e Web Crypto.');
+    throw new Error(t('notice.noSecureIds'));
   const externalId = uuid ? 'local-' + uuid :
     'demo-' + occurredAt + '-' + (++demoCaptureSequence).toString(36);
   return {

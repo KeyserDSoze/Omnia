@@ -1,4 +1,5 @@
 import { InMemoryWebStorage, UserManager, WebStorageStateStore } from 'oidc-client-ts';
+import { getLocale, t } from '../i18n';
 import { hasOidcCallback, type WebCloudConfig } from './config';
 
 export interface BrowserAuth {
@@ -21,7 +22,7 @@ export interface BrowserAuth {
  * redirect transaction state, never for tokens.
  */
 export function createBrowserAuth(config: WebCloudConfig): BrowserAuth {
-  if (typeof window === 'undefined') throw new Error('OIDC Web richiede un browser.');
+  if (typeof window === 'undefined') throw new Error(t('auth.browserRequired'));
   // EXPO_BASE_URL is inlined from experiments.baseUrl ('' on the gateway, '/Tao' on Pages).
   const base = (process.env.EXPO_BASE_URL ?? '').replace(/\/+$/, '');
   const uri = new URL(`${base}/`, window.location.origin).toString();
@@ -44,7 +45,7 @@ export function createBrowserAuth(config: WebCloudConfig): BrowserAuth {
       if (!hasOidcCallback(window.location.search)) return false;
       try {
         const user = await manager.signinRedirectCallback();
-        if (!user.access_token || user.expired) throw new Error('Access token scaduto o mancante.');
+        if (!user.access_token || user.expired) throw new Error(t('auth.tokenMissing'));
         return true;
       } finally {
         // Never leave an OAuth authorization code in address bar or browser history.
@@ -55,7 +56,10 @@ export function createBrowserAuth(config: WebCloudConfig): BrowserAuth {
       const user = await manager.getUser();
       return Boolean(user?.access_token && !user.expired);
     },
-    login: idpHint => manager.signinRedirect(idpHint ? { extraQueryParams: { kc_idp_hint: idpHint } } : undefined),
+    login: idpHint => manager.signinRedirect({
+      // Keycloak shows its pages in this language when the realm offers it, and ignores it otherwise.
+      extraQueryParams: { ...(idpHint ? { kc_idp_hint: idpHint } : {}), ui_locales: getLocale() }
+    }),
     async profile() {
       const claims = (await manager.getUser())?.profile;
       const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -63,20 +67,20 @@ export function createBrowserAuth(config: WebCloudConfig): BrowserAuth {
     },
     async accessToken() {
       const user = await manager.getUser();
-      if (!user) throw new Error('Accesso richiesto.');
+      if (!user) throw new Error(t('auth.required'));
       if (user.expires_in !== undefined && user.expires_in < 45) {
         try {
           const refreshed = await manager.signinSilent();
-          if (!refreshed?.access_token || refreshed.expired) throw new Error('Sessione scaduta.');
+          if (!refreshed?.access_token || refreshed.expired) throw new Error(t('auth.expired'));
           return refreshed.access_token;
         } catch {
           await manager.removeUser();
-          throw new Error('Sessione scaduta. Accedi di nuovo.');
+          throw new Error(t('auth.expired'));
         }
       }
       if (!user.access_token || user.expired) {
         await manager.removeUser();
-        throw new Error('Sessione scaduta. Accedi di nuovo.');
+        throw new Error(t('auth.expired'));
       }
       return user.access_token;
     },

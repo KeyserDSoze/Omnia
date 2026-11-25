@@ -11,7 +11,7 @@ import {
   answer, currentStep, startSetup, toSaveBody, type DraftAccount, type SettingsDto, type SetupState
 } from '../services/setupFlow';
 import {
-  SPEECH_NOTICE, greeting, hints, intentOf, matchChoice, matchChoices, noteText, openingLines, typingMs,
+  greeting, hints, intentOf, matchChoice, matchChoices, noteText, openingLines, typingMs,
   welcomeLines, type ChatAction, type DayRecapDto
 } from '../services/chatScript';
 import { connectInPopup, openConnectPopup } from '../services/connectFlow';
@@ -19,10 +19,14 @@ import { defaultRoutes, routesFrom, type AiRouter, type AiRoutesDto, type Listen
 import { SpeechError, speechErrorMessage } from '../services/browserSpeech';
 import type { TodaySource } from '../services/demoToday';
 import { demoProviders } from '../services/demoToday';
+import { localeInfo, useLocale, useT } from '../i18n';
 import { TodayPanel } from './TodayPanel';
 import { BriefingPanel } from './BriefingPanel';
 import { TaoAvatar, type AvatarState } from './TaoAvatar';
 import { GoogleMark, MicrosoftMark } from './BrandMarks';
+import { LanguagePicker } from './LanguagePicker';
+import { Emerge, SmokeText } from './Emerge';
+import { smokeMs, smokeUnits } from './effects';
 import { serif, web, type Theme } from './theme';
 
 type Line = { id: number; from: 'tao' | 'user'; text: string; start: number; ms: number; hero?: boolean };
@@ -36,7 +40,6 @@ export type VoiceControl = { router: AiRouter; on: boolean; setOn: (on: boolean)
 
 const useNativeDriver = Platform.OS !== 'web';
 const providerLabel: Record<ConnectorProviderId, string> = { microsoft: 'Microsoft', google: 'Google' };
-const NO_VOICE = 'Su questo dispositivo non trovo una voce italiana: puoi aggiungerne una dalle impostazioni del sistema.';
 
 /**
  * The whole app is this chat: the Tao symbol talks (typewriter, and the voice when enabled),
@@ -62,6 +65,8 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
   still: boolean;
   compact: boolean;
 }) {
+  const tr = useT();
+  const locale = useLocale();
   const [messages, setMessages] = useState<Message[]>([]);
   const [settings, setSettings] = useState<SettingsDto | null>(null);
   const [providers, setProviders] = useState<ConnectorProviderDto[]>(demo ? demoProviders : []);
@@ -76,6 +81,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
   const [demoIn, setDemoIn] = useState(false);
   const [askSpeech, setAskSpeech] = useState<null | 'dictation' | 'voice'>(null);
   const [demoSpeech, setDemoSpeech] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
   const [typing, setTyping] = useState(false);
   const [speaking, setSpeaking] = useState(0);
   const [listening, setListening] = useState(false);
@@ -102,8 +108,11 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
       return;
     }
     const start = Math.max(now, typingUntil.current);
-    const ms = still ? 0 : typingMs(text);
-    typingUntil.current = start + ms + 140;
+    // The greeting condenses out of smoke on the web; every other line is typed.
+    const smoke = hero && Platform.OS === 'web';
+    const ms = still ? 0 : smoke ? smokeMs(smokeUnits(text).length) : typingMs(text);
+    // The next line starts while the last letters of the greeting are still settling.
+    typingUntil.current = start + (smoke ? Math.round(ms * 0.6) : ms + 140);
     setMessages(list => [...list, { id, from, text, start, ms, hero }]);
     setTyping(true);
     clearTimeout(typingTimer.current);
@@ -134,7 +143,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
       say(hello, 'tao', true);
       say(lead);
     } else if (mode === 'invalid') {
-      say('Qualcosa non va.', 'tao', true);
+      say(tr('welcome.invalid'), 'tao', true);
       if (invalidReason) say(invalidReason);
     } else if (mode === 'signed-in' && api) {
       setBooting(true);
@@ -156,7 +165,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
           say(greeting(profileName, state.settings, new Date()), 'tao', true);
           for (const line of openingLines(state.settings, recap)) say(line);
         } catch (e) {
-          if (live.current) say(e instanceof CloudApiError ? e.message : 'Non riesco a caricare le tue impostazioni.');
+          if (live.current) say(e instanceof CloudApiError ? e.message : tr('chat.settingsFailed'));
         } finally {
           if (live.current) setBooting(false);
         }
@@ -169,7 +178,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
       session.current = null;
       voice.router.textToSpeech?.cancel();
     };
-  }, [mode, api]);
+  }, [mode, api, locale]);
 
   // Tao speaks each new line while the voice is on; turning it on reads the latest line.
   useEffect(() => {
@@ -213,7 +222,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
     if (!setup) return;
     let next: SetupState;
     try { next = answer(setup, value); }
-    catch { say('Scegli una delle risposte proposte.'); return; }
+    catch { say(tr('chat.invalidChoice')); return; }
     say(shown, 'user');
     setPicks([]);
     if (next.step === 'done') {
@@ -228,7 +237,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
   async function save(draft: SettingsDto) {
     if (!api) {
       setSettings({ ...draft, onboardingCompletedAt: new Date().toISOString() });
-      say('Fatto! In demo non salvo nulla, ma ecco come funzionerebbe: adesso ti chiederei di collegare gli account.');
+      say(tr('chat.demoSaved'));
       return;
     }
     setBusy(true);
@@ -236,10 +245,10 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
       const saved = await api.saveSettings(toSaveBody(draft, true));
       if (!live.current) return;
       setSettings(saved);
-      say('Configurazione salvata: Tao sa quali account hai e cosa può fare per te. Puoi cambiarla dalle impostazioni in alto a destra.');
+      say(tr('chat.saved'));
       startConnectQueue(saved);
     } catch (e) {
-      if (live.current) say(e instanceof CloudApiError ? e.message : 'Salvataggio non riuscito. Riprova.');
+      if (live.current) say(e instanceof CloudApiError ? e.message : tr('chat.saveFailed'));
     } finally {
       if (live.current) setBusy(false);
     }
@@ -249,56 +258,54 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
     const pending = current.accounts.filter(a => !a.connectedAccountId);
     const usable = pending.filter(a => providers.some(pr => pr.id === a.provider && pr.configured));
     if (pending.length > 0 && usable.length === 0) {
-      say('Per collegare gli account serve che l’amministratore configuri le app Microsoft/Google sul server (vedi docs/connectors.md). Le tue risposte restano salvate.');
+      say(tr('chat.connectUnavailable'));
       return;
     }
-    if (usable.length === 0) { say('Tutto pronto. Da dove partiamo?'); return; }
+    if (usable.length === 0) { say(tr('chat.allSet')); return; }
     setQueue(usable);
-    say(`Colleghiamo «${usable[0].label}» (${providerLabel[usable[0].provider]}) adesso? Si apre la pagina di accesso ufficiale.`);
+    say(tr('chat.connectAsk', { label: usable[0].label, provider: providerLabel[usable[0].provider] }));
   }
 
   async function connectFirst() {
     if (!api || !queue?.length || !settings || Platform.OS !== 'web') return;
     const target = queue[0];
     const popup = openConnectPopup();
-    if (!popup) { say('Il browser ha bloccato la finestra: consenti i popup per questo sito e riprova.'); return; }
-    say('Collega ora', 'user');
+    if (!popup) { say(tr('chat.popupBlocked')); return; }
+    say(tr('chat.connectNow'), 'user');
     setBusy(true);
     try {
       const account = await connectInPopup(api, target.provider, popup, new AbortController().signal);
       if (!live.current) return;
-      if (!account) { say('Accesso annullato. Possiamo riprovare quando vuoi.'); return; }
+      if (!account) { say(tr('chat.connectCancelled')); return; }
       const linked = await api.saveSettings(toSaveBody({
         ...settings,
         accounts: settings.accounts.map(a => a.id === target.id ? { ...a, connectedAccountId: account.id } : a)
       }, false));
       if (!live.current) return;
       setSettings(linked);
-      say(`«${target.label}» collegato come ${account.displayName}.`);
+      say(tr('chat.connected', { label: target.label, account: account.displayName }));
       nextInQueue();
     } catch (e) {
-      if (live.current) say(e instanceof CloudApiError ? e.message : 'Collegamento non riuscito. Riprova.');
+      if (live.current) say(e instanceof CloudApiError ? e.message : tr('chat.connectFailed'));
     } finally {
       if (live.current) setBusy(false);
     }
   }
 
   function nextInQueue(skipped = false) {
-    if (skipped) say('Più tardi', 'user');
+    if (skipped) say(tr('chat.connectLater'), 'user');
     const rest = (queue ?? []).slice(1);
     setQueue(rest.length > 0 ? rest : null);
-    if (rest.length === 0)
-      say('Perfetto. Se hai altri account associati puoi aggiungerli quando vuoi con «Configura Tao». Intanto, da dove partiamo?');
-    else
-      say(`E «${rest[0].label}» (${providerLabel[rest[0].provider]})? Lo colleghiamo adesso?`);
+    if (rest.length === 0) say(tr('chat.connectDone'));
+    else say(tr('chat.connectNext', { label: rest[0].label, provider: providerLabel[rest[0].provider] }));
   }
 
   function act(action: ChatAction, label?: string) {
     if (label) say(label, 'user');
     switch (action) {
-      case 'today': say('Ecco le carte di oggi: una alla volta.'); show('today'); break;
+      case 'today': say(tr('chat.todayIntro')); show('today'); break;
       case 'briefing':
-        if (!api) { say('Il piano del giorno usa un modello AI e funziona sul server, non nella demo.'); break; }
+        if (!api) { say(tr('chat.briefingDemo')); break; }
         show('briefing'); break;
       case 'setup':
         if (settings?.onboardingCompletedAt && settings.accounts.some(a => !a.connectedAccountId) && api)
@@ -309,7 +316,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
       case 'memory': onOpenMemory(); break;
       case 'settings': onOpenSettings(); break;
       case 'unknown':
-        say('Non ho ancora un modello per le domande libere: posso smistare la giornata, salvare una nota o configurare i tuoi account.');
+        say(tr('chat.unknown'));
         break;
     }
   }
@@ -330,7 +337,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
         return;
       }
       say(text, 'user');
-      say('Scegli una delle risposte qui sotto: puoi toccarla o dirla.');
+      say(tr('chat.pickAnswer'));
       return;
     }
     say(text, 'user');
@@ -341,26 +348,27 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
   submitRef.current = submitText;
 
   function demoLogin(idp?: ConnectorProviderId) {
-    say(idp ? 'Continua con ' + providerLabel[idp] : 'Accedi con email e password', 'user');
+    say(idp ? tr('login.continueWith', { provider: providerLabel[idp] }) : tr('login.email'), 'user');
     setDemoIn(true);
-    say('Accesso simulato: nella demo non c’è nessun account vero e non salvo nulla.');
+    say(tr('chat.demoSignedIn'));
     say(greeting(null, null, new Date()), 'tao', true);
-    say('Prova a smistare una giornata di esempio, oppure fai la configurazione guidata.');
+    say(tr('chat.demoTry'));
   }
 
   async function toggleVoice() {
     const tts = voice.router.textToSpeech;
     if (!tts) return;
     if (voice.on) { voice.setOn(false); return; }
-    const kind = await tts.availability();
+    const lang = localeInfo(locale).tag;
+    const kind = await tts.availability(lang);
     if (!live.current) return;
-    if (kind === 'none') { say(NO_VOICE); return; }
-    if (kind === 'local') { await tts.ready(false); voice.setOn(true); return; }
+    if (kind === 'none') { say(tr('voice.none')); return; }
+    if (kind === 'local') { await tts.ready(false, lang); voice.setOn(true); return; }
     // Only an online voice: Tao's text would leave the device.
-    if (mode === 'signed-out') { say('La voce online del browser si attiva dopo l’accesso, con un consenso dedicato.'); return; }
+    if (mode === 'signed-out') { say(tr('voice.signInForOnline')); return; }
     const allowed = await speechAllowed();
     if (!live.current) return;
-    if (allowed === 'yes') { await tts.ready(true); voice.setOn(true); }
+    if (allowed === 'yes') { await tts.ready(true, lang); voice.setOn(true); }
     else if (allowed === 'no') askForSpeech('voice');
   }
 
@@ -381,7 +389,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
       const grants = await api.listConsents();
       return grants.some(g => g.source === SPEECH_SOURCE && g.purpose === SPEECH_PURPOSE && g.active) ? 'yes' : 'no';
     } catch (e) {
-      if (live.current) say(e instanceof CloudApiError ? e.message : 'Non riesco a verificare il consenso per la voce.');
+      if (live.current) say(e instanceof CloudApiError ? e.message : tr('speech.checkFailed'));
       return 'error';
     } finally {
       if (live.current) setBusy(false);
@@ -390,37 +398,37 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
 
   function askForSpeech(then: 'dictation' | 'voice') {
     setAskSpeech(then);
-    say(SPEECH_NOTICE);
+    say(tr('speech.notice'));
   }
 
   async function acceptSpeech() {
     const then = askSpeech;
     setAskSpeech(null);
-    say('Attiva i servizi vocali', 'user');
+    say(tr('speech.accept'), 'user');
     if (api) {
       setBusy(true);
       try {
         await api.grantBrowserSpeech();
       } catch (e) {
-        if (live.current) say(e instanceof CloudApiError ? e.message : 'Consenso non salvato: la voce resta spenta.');
+        if (live.current) say(e instanceof CloudApiError ? e.message : tr('speech.saveFailed'));
         return;
       } finally {
         if (live.current) setBusy(false);
       }
       if (!live.current) return;
-      say('Servizi vocali attivi per 30 giorni.');
+      say(tr('speech.active'));
     } else {
       setDemoSpeech(true);
-      say('Servizi vocali attivi per questa demo.');
+      say(tr('speech.activeDemo'));
     }
     if (then === 'dictation') listen();
-    if (then === 'voice' && await voice.router.textToSpeech?.ready(true) && live.current) voice.setOn(true);
+    if (then === 'voice' && await voice.router.textToSpeech?.ready(true, localeInfo(locale).tag) && live.current) voice.setOn(true);
   }
 
   function declineSpeech() {
     setAskSpeech(null);
-    say('Non ora', 'user');
-    say('Va bene: puoi sempre scrivermi.');
+    say(tr('speech.decline'), 'user');
+    say(tr('speech.declined'));
   }
 
   function listen() {
@@ -428,14 +436,14 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
     if (!stt || session.current) return;
     // Tao stops talking, otherwise the microphone would hear it.
     voice.router.textToSpeech?.cancel();
-    const current = stt.listen({ lang: 'it-IT', onInterim: text => { if (live.current) setInput(text); } });
+    const current = stt.listen({ lang: localeInfo(locale).tag, onInterim: text => { if (live.current) setInput(text); } });
     session.current = current;
     setListening(true);
     current.result.then(text => {
       if (!live.current) return;
       setInput('');
       if (text) submitRef.current(text);
-      else say('Non ho capito. Riprova, oppure scrivimi.');
+      else say(tr('speech.notUnderstood'));
     }, (e: unknown) => {
       if (!live.current) return;
       setInput('');
@@ -459,19 +467,19 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
   const lastId = messages.length > 0 ? messages[messages.length - 1].id : -1;
   const pause = () => Math.max(0, typingUntil.current - Date.now());
   const hintList = mode === 'demo'
-    ? [{ id: 'today' as const, label: 'Smista la giornata (demo)' }, { id: 'setup' as const, label: '✨ Configura Tao' },
-      { id: 'memory' as const, label: 'Le mie note' }]
+    ? [{ id: 'today' as const, label: tr('hint.todayDemo') }, { id: 'setup' as const, label: tr('hint.setup') },
+      { id: 'memory' as const, label: tr('hint.memory') }]
     : mode === 'signed-in' ? hints(settings, assistant) : [];
   const tts = voice.router.textToSpeech;
   const avatarState: AvatarState = listening ? 'listening' : speaking > 0 || typing ? 'speaking'
     : busy || booting || mode === 'checking' ? 'thinking' : 'idle';
-  const status = listening ? 'ti ascolto…' : speaking > 0 ? 'sto parlando'
-    : tts ? (voice.on ? 'voce attiva · tocca il simbolo per silenziarmi' : 'tocca il simbolo per sentire la mia voce') : '';
+  const status = listening ? tr('status.listening') : speaking > 0 ? tr('status.speaking')
+    : tts ? (voice.on ? tr('status.voiceOn') : tr('status.voiceOff')) : '';
   const loginProviders = (['microsoft', 'google'] as const)
     .filter(id => mode === 'demo' || socialProviders.includes(id));
   const avatar = (size: number) => (
     <TaoAvatar size={size} state={avatarState} theme={t} still={still} testID="tao-avatar"
-      label={tts ? (voice.on ? 'Tao: silenzia la voce' : 'Tao: ascolta la mia voce') : 'Tao'}
+      label={tts ? (voice.on ? tr('avatar.mute') : tr('avatar.listen')) : 'Tao'}
       pressed={tts ? voice.on : undefined} onPress={tts ? () => { void toggleVoice(); } : undefined} />
   );
 
@@ -485,12 +493,19 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
     );
     const size = m.hero ? (centered ? (compact ? styles.heroCompact : styles.hero) : styles.greeting)
       : centered ? styles.lead : styles.line;
+    const textStyle = [size, {
+      color: centered && !m.hero ? t.subtle : t.text, fontFamily: serif, textAlign: centered ? 'center' as const : 'left' as const
+    }];
+    if (m.hero && Platform.OS === 'web') return (
+      <View key={m.id} testID="chat-tao" accessibilityLiveRegion="polite"
+        style={centered ? styles.centered : styles.taoLine}>
+        <SmokeText text={m.text} delay={m.start - Date.now()} still={still} glow={t.glow} style={textStyle} />
+      </View>
+    );
     return (
       <Appear key={m.id} still={still} delay={m.start - Date.now()}>
         <View testID="chat-tao" accessibilityLiveRegion="polite" style={centered ? styles.centered : styles.taoLine}>
-          <Typewriter text={m.text} start={m.start} ms={m.ms} style={[size, {
-            color: centered && !m.hero ? t.subtle : t.text, fontFamily: serif, textAlign: centered ? 'center' : 'left'
-          }]} />
+          <Typewriter text={m.text} start={m.start} ms={m.ms} style={textStyle} />
         </View>
       </Appear>
     );
@@ -505,10 +520,19 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
           {messages.map(m => 'widget' in m ? null : lineView(m, true))}
         </View>
         {(mode === 'signed-out' || mode === 'demo') && messages.length > 0 && (
-          <Appear key={'login-' + lastId} still={still} delay={pause()} style={styles.loginWrap}>
-            <LoginButtons t={t} providers={[...loginProviders]}
+          <View key={'login-' + lastId} style={styles.loginWrap}>
+            <LoginButtons t={t} providers={[...loginProviders]} still={still} delay={pause()}
               onLogin={idp => mode === 'demo' ? demoLogin(idp) : onLogin(idp)} />
-          </Appear>
+          </View>
+        )}
+        {messages.length > 0 && (
+          <View style={styles.languageWrap}>
+            <Pressable testID="language-open" accessibilityRole="button" aria-expanded={languageOpen}
+              accessibilityLabel={tr('language.label')} onPress={() => setLanguageOpen(open => !open)}>
+              <Text style={[styles.linkText, { color: t.subtle }]}>{'\u{1F310} ' + localeInfo(locale).name}</Text>
+            </Pressable>
+            {languageOpen && <LanguagePicker theme={t} onPick={() => setLanguageOpen(false)} />}
+          </View>
         )}
       </ScrollView>
     </View>
@@ -546,7 +570,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
                     : reply(choice.id, choice.label)} />;
               })}
               {step.input === 'multi' && (
-                <Chip testID="setup-confirm" label="Conferma" t={t} primary disabled={picks.length === 0}
+                <Chip testID="setup-confirm" label={tr('chat.confirm')} t={t} primary disabled={picks.length === 0}
                   onPress={() => reply(picks, step.choices.filter(c => picks.includes(c.id)).map(c => c.label).join(', '))} />
               )}
             </View>
@@ -556,9 +580,9 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
         {askSpeech && !busy && (
           <Appear key={'speech-' + lastId} still={still} delay={pause()}>
             <View style={styles.chips}>
-              <Chip testID="voice-consent-accept" label="Attiva i servizi vocali" t={t} primary
+              <Chip testID="voice-consent-accept" label={tr('speech.accept')} t={t} primary
                 onPress={() => { void acceptSpeech(); }} />
-              <Chip testID="voice-consent-decline" label="Non ora" t={t} onPress={declineSpeech} />
+              <Chip testID="voice-consent-decline" label={tr('speech.decline')} t={t} onPress={declineSpeech} />
             </View>
           </Appear>
         )}
@@ -566,8 +590,8 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
         {queue && queue.length > 0 && !busy && (
           <Appear key={'queue-' + lastId} still={still} delay={pause()}>
             <View style={styles.chips}>
-              <Chip testID="connect-now" label="Collega ora" t={t} primary onPress={() => { void connectFirst(); }} />
-              <Chip testID="connect-later" label="Più tardi" t={t} onPress={() => nextInQueue(true)} />
+              <Chip testID="connect-now" label={tr('chat.connectNow')} t={t} primary onPress={() => { void connectFirst(); }} />
+              <Chip testID="connect-later" label={tr('chat.connectLater')} t={t} onPress={() => nextInQueue(true)} />
             </View>
           </Appear>
         )}
@@ -590,7 +614,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
           web({ backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' })]}>
           {voice.router.speechToText && (
             <Pressable testID="chat-mic" accessibilityRole="button" aria-pressed={listening}
-              accessibilityLabel={listening ? 'Ferma la dettatura' : 'Parla a Tao'} disabled={busy && !listening}
+              accessibilityLabel={listening ? tr('composer.micStop') : tr('composer.micStart')} disabled={busy && !listening}
               onPress={() => { void toggleMic(); }}
               style={[styles.round, { backgroundColor: listening ? t.accent : t.card2 }]}>
               <MicGlyph color={listening ? t.accentText : t.text} />
@@ -598,11 +622,10 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
           )}
           <TextInput testID="chat-input" value={input} onChangeText={setInput} onSubmitEditing={() => submitText(input)}
             onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} editable={!busy && !listening}
-            placeholder={listening ? 'Ti ascolto…' : step?.input === 'text' ? step.placeholder
-              : voice.router.speechToText ? 'Scrivi o parla a Tao… (es. «cosa devo fare oggi?»)'
-              : 'Scrivi a Tao… (es. «cosa devo fare oggi?»)'}
+            placeholder={listening ? tr('composer.listening') : step?.input === 'text' ? step.placeholder
+              : voice.router.speechToText ? tr('composer.voice') : tr('composer.text')}
             placeholderTextColor={t.subtle} style={[styles.input, { color: t.text }, web({ outlineStyle: 'none' })]} />
-          <Pressable testID="chat-send" accessibilityRole="button" accessibilityLabel="Invia" disabled={busy}
+          <Pressable testID="chat-send" accessibilityRole="button" accessibilityLabel={tr('composer.send')} disabled={busy}
             onPress={() => submitText(input)} style={[styles.round, { backgroundColor: t.accent, opacity: busy ? 0.5 : 1 }]}>
             <Text style={[styles.sendGlyph, { color: t.accentText }]}>↑</Text>
           </Pressable>
@@ -658,32 +681,44 @@ function Typewriter({ text, start, ms, style }: { text: string; start: number; m
 
 const hovered = (state: unknown) => (state as { hovered?: boolean }).hovered === true;
 
-function LoginButtons({ t, providers, onLogin }: {
+function LoginButtons({ t, providers, still, delay, onLogin }: {
   t: Theme;
   providers: ConnectorProviderId[];
+  still: boolean;
+  /** Milliseconds until Tao has finished speaking. */
+  delay: number;
   onLogin: (idp?: ConnectorProviderId) => void;
 }) {
+  const tr = useT();
   const dark = t.mode === 'dark';
   const face = { backgroundColor: dark ? '#131314' : '#FFFFFF', borderColor: dark ? '#8E918F' : '#747775' };
   const ink = { color: dark ? '#E3E3E3' : '#1F1F1F' };
+  // Each button dissolves in a beat after the previous one, then keeps pulsing.
+  const step = 220;
   return (
     <View style={styles.login}>
-      {providers.map(id => (
-        <Pressable key={id} testID={'chat-login-' + id} accessibilityRole="button" onPress={() => onLogin(id)}
-          style={state => [styles.brandButton, face, hovered(state) ? styles.lift : null]}>
-          {id === 'microsoft' ? <MicrosoftMark /> : <GoogleMark />}
-          <Text style={[styles.brandText, ink]}>Continua con {providerLabel[id]}</Text>
-        </Pressable>
+      {providers.map((id, i) => (
+        <Emerge key={id} theme={t} still={still} delay={delay + i * step} pulse={999}>
+          <Pressable testID={'chat-login-' + id} accessibilityRole="button" onPress={() => onLogin(id)}
+            style={state => [styles.brandButton, face, hovered(state) ? styles.lift : null]}>
+            {id === 'microsoft' ? <MicrosoftMark /> : <GoogleMark />}
+            <Text style={[styles.brandText, ink]}>{tr('login.continueWith', { provider: providerLabel[id] })}</Text>
+          </Pressable>
+        </Emerge>
       ))}
       {providers.length > 0 ? (
-        <Pressable testID="chat-login" accessibilityRole="button" onPress={() => onLogin()} style={styles.textButton}>
-          <Text style={[styles.linkText, { color: t.subtle }]}>Accedi con email e password</Text>
-        </Pressable>
+        <Emerge theme={t} still={still} delay={delay + providers.length * step}>
+          <Pressable testID="chat-login" accessibilityRole="button" onPress={() => onLogin()} style={styles.textButton}>
+            <Text style={[styles.linkText, { color: t.subtle }]}>{tr('login.email')}</Text>
+          </Pressable>
+        </Emerge>
       ) : (
-        <Pressable testID="chat-login" accessibilityRole="button" onPress={() => onLogin()}
-          style={state => [styles.primary, { backgroundColor: t.accent }, hovered(state) ? styles.lift : null]}>
-          <Text style={[styles.primaryText, { color: t.accentText }]}>Accedi</Text>
-        </Pressable>
+        <Emerge theme={t} still={still} delay={delay} pulse={999}>
+          <Pressable testID="chat-login" accessibilityRole="button" onPress={() => onLogin()}
+            style={state => [styles.primary, { backgroundColor: t.accent }, hovered(state) ? styles.lift : null]}>
+            <Text style={[styles.primaryText, { color: t.accentText }]}>{tr('login.signIn')}</Text>
+          </Pressable>
+        </Emerge>
       )}
     </View>
   );
@@ -740,6 +775,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 14, fontWeight: '700' },
   lift: { transform: [{ translateY: -1 }] },
   loginWrap: { width: '100%', alignItems: 'center' },
+  languageWrap: { marginTop: 36, alignItems: 'center', gap: 14, maxWidth: 560 },
   login: { width: '100%', maxWidth: 340, gap: 12, marginTop: 30 },
   brandButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, borderWidth: 1,
     borderRadius: 999, minHeight: 52, paddingHorizontal: 22, boxShadow: '0 10px 30px rgba(0,0,0,0.18)' },

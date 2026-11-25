@@ -4,12 +4,10 @@ import {
   CloudApiError, type ConnectorAccountDto, type ConnectorProviderDto, type ConnectorsDto, type MemoryApi
 } from '../services/memoryApi';
 import { connectInPopup, openConnectPopup } from '../services/connectFlow';
+import { useT, type MessageKey } from '../i18n';
 import type { Palette } from './TodayPanel';
 
-const capabilityLabels: Record<string, string> = {
-  'calendar.read': 'calendario', 'mail.read': 'email', 'tasks.read': 'attività',
-  'tasks.complete': 'completare attività (solo su tua conferma)', 'chats.read': 'chat Teams'
-};
+const capabilityKeys = new Set<string>(['calendar.read', 'mail.read', 'tasks.read', 'chats.read', 'tasks.complete']);
 
 /**
  * Connected work accounts. OAuth runs in a popup; the API (confidential client) redeems the
@@ -21,6 +19,8 @@ export function ConnectionsPanel({ api, p, onChanged, onConnected }: {
   onChanged: (connectors: ConnectorsDto) => void;
   onConnected?: (account: ConnectorAccountDto) => void;
 }) {
+  const t = useT();
+  const capability = (c: string) => capabilityKeys.has(c) ? t(`capability.${c}` as MessageKey) : c;
   const [data, setData] = useState<ConnectorsDto | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export function ConnectionsPanel({ api, p, onChanged, onConnected }: {
       setData(result);
       onChanged(result);
     } catch (e) {
-      if (live.current) setMessage(e instanceof CloudApiError ? e.message : 'Connessioni non disponibili.');
+      if (live.current) setMessage(e instanceof CloudApiError ? e.message : t('connections.loadFailed'));
     }
   }
 
@@ -53,29 +53,29 @@ export function ConnectionsPanel({ api, p, onChanged, onConnected }: {
     // Open synchronously inside the click handler, otherwise popup blockers intervene.
     const popup = openConnectPopup();
     if (!popup) {
-      setMessage('Il browser ha bloccato la finestra di accesso: consenti i popup per questo sito.');
+      setMessage(t('connections.popupBlocked'));
       return;
     }
     const controller = new AbortController();
     abort.current = controller;
     setPending(provider.id);
-    setMessage('Completa l’accesso a ' + provider.displayName + ' nella finestra aperta…');
+    setMessage(t('connections.inProgress', { provider: provider.displayName }));
     try {
       const account = await connectInPopup(api, provider.id, popup, controller.signal);
       if (!live.current) return;
       if (!account) {
-        setMessage('Accesso a ' + provider.displayName + ' annullato o negato.');
+        setMessage(t('connections.cancelled', { provider: provider.displayName }));
         return;
       }
-      setMessage(account.displayName + ' collegato.');
+      setMessage(t('connections.connected', { account: account.displayName }));
       onConnected?.(account);
       await load();
     } catch (e) {
       if (!live.current) return;
       setMessage(e instanceof CloudApiError ? e.message :
-        e instanceof Error && e.message === 'timeout' ? 'Tempo scaduto: riprova il collegamento.' :
-        e instanceof Error && e.message === 'aborted' ? 'Collegamento annullato.' :
-        'Collegamento non riuscito. Riprova.');
+        e instanceof Error && e.message === 'timeout' ? t('connections.timeout') :
+        e instanceof Error && e.message === 'aborted' ? t('connections.aborted') :
+        t('connections.failed'));
     } finally {
       if (abort.current === controller) abort.current = null;
       if (live.current) setPending(null);
@@ -91,23 +91,19 @@ export function ConnectionsPanel({ api, p, onChanged, onConnected }: {
     try {
       await api.disconnectConnector(account.id);
       if (!live.current) return;
-      setMessage(account.displayName + ' scollegato: i token sono stati eliminati da Tao.' +
-        (account.provider === 'microsoft' ? ' Puoi revocare anche il consenso da myapps.microsoft.com.' : ''));
+      setMessage(t('connections.disconnected', { account: account.displayName }) +
+        (account.provider === 'microsoft' ? ' ' + t('connections.microsoftRevoke') : ''));
       await load();
     } catch (e) {
-      if (live.current) setMessage(e instanceof CloudApiError ? e.message : 'Scollegamento non riuscito.');
+      if (live.current) setMessage(e instanceof CloudApiError ? e.message : t('connections.disconnectFailed'));
     }
   }
 
   const heading = { color: p.text };
   return (
     <View testID="connections-panel" style={[styles.card, { backgroundColor: p.surface, borderColor: p.border }]}>
-      <Text style={[styles.kicker, { color: p.subtle }]}>CONNESSIONI DI LAVORO</Text>
-      <Text style={[styles.hint, heading]}>
-        Tao legge calendario, email, attività e chat per costruire la tua giornata. Non salva i contenuti:
-        li legge al momento e conserva solo le tue decisioni. L’unica scrittura possibile è completare
-        un’attività, e solo se la confermi.
-      </Text>
+      <Text style={[styles.kicker, { color: p.subtle }]}>{t('connections.kicker')}</Text>
+      <Text style={[styles.hint, heading]}>{t('connections.intro')}</Text>
       {(data?.accounts ?? []).map(account => (
         <View key={account.id} testID="connector-account" style={[styles.row, { borderColor: p.border }]}>
           <View style={{ flex: 1 }}>
@@ -119,7 +115,7 @@ export function ConnectionsPanel({ api, p, onChanged, onConnected }: {
           </View>
           <Pressable testID="connector-disconnect" accessibilityRole="button" onPress={() => { void disconnect(account); }}
             style={[styles.button, { backgroundColor: p.card2 }]}>
-            <Text style={[styles.buttonText, heading]}>{confirming === account.id ? 'Conferma scollegamento' : 'Scollega'}</Text>
+            <Text style={[styles.buttonText, heading]}>{confirming === account.id ? t('connections.confirmDisconnect') : t('connections.disconnect')}</Text>
           </Pressable>
         </View>
       ))}
@@ -131,20 +127,20 @@ export function ConnectionsPanel({ api, p, onChanged, onConnected }: {
               onPress={() => { void connect(provider); }}
               style={[styles.button, { backgroundColor: p.card2, opacity: provider.configured && !pending ? 1 : 0.5 }]}>
               <Text style={[styles.buttonText, heading]}>
-                {pending === provider.id ? 'In attesa…' : 'Collega ' + provider.displayName}
+                {pending === provider.id ? t('connections.waiting') : t('connections.connect', { provider: provider.displayName })}
               </Text>
             </Pressable>
             <Text style={[styles.hint, { color: p.subtle }]}>
               {provider.configured
-                ? 'Accesso a: ' + provider.capabilities.map(c => capabilityLabels[c] ?? c).join(', ') + '.'
-                : 'Non configurato su questo server (vedi README: registrazione app).'}
+                ? t('connections.access', { list: provider.capabilities.map(capability).join(', ') })
+                : t('connections.notConfigured')}
             </Text>
           </View>
         ))}
       </View>
       {pending && (
         <Pressable testID="connector-cancel" accessibilityRole="button" onPress={() => abort.current?.abort()}>
-          <Text style={[styles.hint, { color: p.accent }]}>Annulla collegamento</Text>
+          <Text style={[styles.hint, { color: p.accent }]}>{t('connections.cancel')}</Text>
         </Pressable>
       )}
       {!!message && <Text accessibilityRole="alert" testID="connector-message" style={[styles.hint, heading]}>{message}</Text>}

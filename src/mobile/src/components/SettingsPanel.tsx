@@ -6,15 +6,13 @@ import {
 } from '../services/memoryApi';
 import { newId, summary, toSaveBody, type DraftAccount, type SettingsDto } from '../services/setupFlow';
 import type { AiEngine } from '../services/aiRouter';
+import { intlTag, localeInfo, useLocale, useT, type MessageKey } from '../i18n';
 import { ConnectionsPanel } from './ConnectionsPanel';
+import { LanguagePicker } from './LanguagePicker';
 import type { VoiceControl } from './ChatHome';
 import { web, type Theme } from './theme';
 
-const capabilityNames: Record<string, string> = {
-  'calendar.read': 'Calendario', 'mail.read': 'Email', 'tasks.read': 'Attività', 'chats.read': 'Chat',
-  'tasks.complete': 'Completare attività'
-};
-const engineName: Record<AiEngine, string> = { browser: 'nel browser', server: 'sul server Tao', off: 'spento' };
+const capabilityKeys = new Set<string>(['calendar.read', 'mail.read', 'tasks.read', 'chats.read', 'tasks.complete']);
 
 /**
  * Account and settings (top right). Everything shown here is what the agent may read or do on
@@ -33,6 +31,10 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
   onToggleTheme: () => void;
   voice: VoiceControl;
 }) {
+  const t = useT();
+  const locale = useLocale();
+  const capabilityName = (c: string) => capabilityKeys.has(c) ? t(`capability.${c}` as MessageKey) : c;
+  const engineName = (engine: AiEngine) => t(`engine.${engine}`);
   const [state, setState] = useState<SettingsResponseDto | null>(null);
   const [speech, setSpeech] = useState<ConsentDto | null>(null);
   const [message, setMessage] = useState('');
@@ -47,7 +49,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
       setState(result);
       setSpeech(grants.find(g => g.source === SPEECH_SOURCE && g.purpose === SPEECH_PURPOSE && g.active) ?? null);
     } catch (e) {
-      if (live.current) setMessage(e instanceof CloudApiError ? e.message : 'Impostazioni non disponibili.');
+      if (live.current) setMessage(e instanceof CloudApiError ? e.message : t('settings.loadFailed'));
     }
   }
 
@@ -67,7 +69,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
       setState(current => current && { ...current, settings: saved });
       setMessage(done);
     } catch (e) {
-      if (live.current) setMessage(e instanceof CloudApiError ? e.message : 'Salvataggio non riuscito.');
+      if (live.current) setMessage(e instanceof CloudApiError ? e.message : t('settings.saveFailed'));
     } finally {
       if (live.current) setSaving(false);
     }
@@ -76,18 +78,18 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
   async function toggleVoice() {
     const tts = voice.router.textToSpeech;
     if (!tts) return;
-    if (voice.on) { voice.setOn(false); setMessage('Tao non legge più i suoi messaggi.'); return; }
-    const kind = await tts.availability();
+    if (voice.on) { voice.setOn(false); setMessage(t('settings.voiceStopped')); return; }
+    const lang = localeInfo(locale).tag;
+    const kind = await tts.availability(lang);
     if (!live.current) return;
-    if (kind === 'none') { setMessage('Su questo dispositivo non c’è una voce italiana: aggiungila dalle impostazioni del sistema.'); return; }
+    if (kind === 'none') { setMessage(t('voice.none')); return; }
     if (kind === 'online' && !speech) {
-      setMessage('Qui c’è solo la voce online del browser: attivala toccando il simbolo nella chat, con il consenso ai servizi vocali.');
+      setMessage(t('settings.voiceNeedsConsent'));
       return;
     }
-    await tts.ready(kind === 'online');
+    await tts.ready(kind === 'online', lang);
     voice.setOn(true);
-    if (live.current) setMessage(kind === 'local' ? 'Tao legge i suoi messaggi con una voce del dispositivo.'
-      : 'Tao legge i suoi messaggi con la voce online del browser.');
+    if (live.current) setMessage(t(kind === 'local' ? 'settings.voiceLocal' : 'settings.voiceOnline'));
   }
 
   async function revokeSpeech() {
@@ -97,10 +99,10 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
       await api.revokeConsent(speech.id);
       if (!live.current) return;
       setSpeech(null);
-      if (await voice.router.textToSpeech?.availability() === 'online') voice.setOn(false);
-      setMessage('Servizi vocali del browser revocati: niente dettatura né voce online finché non li riattivi.');
+      if (await voice.router.textToSpeech?.availability(localeInfo(locale).tag) === 'online') voice.setOn(false);
+      setMessage(t('settings.speechRevoked'));
     } catch (e) {
-      if (live.current) setMessage(e instanceof CloudApiError ? e.message : 'Revoca non confermata. Riprova.');
+      if (live.current) setMessage(e instanceof CloudApiError ? e.message : t('settings.revokeFailed'));
     } finally {
       if (live.current) setSaving(false);
     }
@@ -118,7 +120,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
       accounts: settings.accounts.map(a => a.id !== account.id ? a : {
         ...a, delegations: on ? a.delegations.filter(d => d !== capability) : [...a.delegations, capability]
       })
-    }, `${account.label}: ${capabilityNames[capability] ?? capability} ${on ? 'disattivato' : 'attivato'}.`);
+    }, t(on ? 'settings.delegationOff' : 'settings.delegationOn', { account: account.label, capability: capabilityName(capability) }));
   }
 
   function linkConnected(account: ConnectorAccountDto) {
@@ -133,7 +135,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
           delegations: supported(account.provider).filter(c => c.endsWith('.read') ||
             (settings.agentMode === 'act_with_confirmation' && c === 'tasks.complete'))
         }];
-    void save({ ...settings, accounts }, `${account.displayName} aggiunto alla configurazione.`);
+    void save({ ...settings, accounts }, t('settings.accountAdded', { account: account.displayName }));
   }
 
   const heading = { color: p.text };
@@ -153,67 +155,70 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
               <Text style={{ color: p.accentText, fontWeight: '800', fontSize: 18 }}>{initials}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text testID="settings-name" style={[styles.title, heading]}>{profile.name ?? 'Il tuo account'}</Text>
+              <Text testID="settings-name" style={[styles.title, heading]}>{profile.name ?? t('settings.yourAccount')}</Text>
               {!!profile.email && <Text style={[styles.hint, { color: p.subtle, marginTop: 2 }]}>{profile.email}</Text>}
             </View>
           </View>
           <View style={styles.row}>
             {accountConsoleUrl && (
-              <Button testID="settings-account-console" label="Accesso e social login (Google, Microsoft)" p={p}
+              <Button testID="settings-account-console" label={t('settings.console')} p={p}
                 onPress={() => { if (typeof window !== 'undefined') window.open(accountConsoleUrl, '_blank', 'noopener'); }} />
             )}
-            {onLogout && <Button testID="settings-logout" label="Esci" p={p} onPress={onLogout} />}
+            {onLogout && <Button testID="settings-logout" label={t('settings.logout')} p={p} onPress={onLogout} />}
           </View>
-          <Text style={[styles.hint, { color: p.subtle }]}>
-            Puoi accedere a Tao anche con Google o Microsoft se l’amministratore li ha attivati: collega l’identità dalla
-            pagina «Accesso e social login», nella sezione account collegati.
-          </Text>
+          <Text style={[styles.hint, { color: p.subtle }]}>{t('settings.socialHint')}</Text>
         </View>
       ) : (
         <View style={card}>
-          <Text style={[styles.kicker, { color: p.subtle }]}>DEMO</Text>
-          <Text style={[styles.hint, heading]}>Nessun account: qui provi aspetto, voce e note. Niente viene salvato.</Text>
+          <Text style={[styles.kicker, { color: p.subtle }]}>{t('settings.demoKicker')}</Text>
+          <Text style={[styles.hint, heading]}>{t('settings.demoText')}</Text>
         </View>
       )}
 
       <View style={card}>
-        <Text style={[styles.kicker, { color: p.subtle }]}>ASPETTO E VOCE</Text>
+        <Text style={[styles.kicker, { color: p.subtle }]}>{t('settings.languageKicker')}</Text>
+        <View style={{ marginTop: 12 }}><LanguagePicker theme={p} /></View>
+        <Text style={[styles.hint, { color: p.subtle }]}>{t('settings.languageHint')}</Text>
+      </View>
+
+      <View style={card}>
+        <Text style={[styles.kicker, { color: p.subtle }]}>{t('settings.appearanceKicker')}</Text>
         <View style={styles.row}>
           <Button testID="theme-toggle" p={p} onPress={onToggleTheme}
-            label={p.mode === 'dark' ? '☀ Tema chiaro' : '☾ Tema scuro'} />
+            label={p.mode === 'dark' ? t('settings.themeLight') : t('settings.themeDark')} />
           {voice.router.textToSpeech && (
             <Button testID="settings-voice" p={p} selected={voice.on} onPress={() => { void toggleVoice(); }}
-              label={voice.on ? '✓ Tao parla ad alta voce' : 'Fai parlare Tao'} />
+              label={voice.on ? t('settings.voiceOn') : t('settings.voiceOff')} />
           )}
           {api && speech && (
             <Button testID="settings-speech-revoke" p={p} disabled={saving} onPress={() => { void revokeSpeech(); }}
-              label="Revoca i servizi vocali" />
+              label={t('settings.speechRevoke')} />
           )}
         </View>
         <Text testID="settings-speech" style={[styles.hint, heading]}>
           {!voice.router.speechToText && !voice.router.textToSpeech
-            ? 'Voce non disponibile in questo browser o spenta sul server.'
-            : !api ? 'Servizi vocali del browser: in demo il consenso vale solo per questa pagina.'
-            : speech ? `Servizi vocali del browser attivi fino al ${new Date(speech.expiresAt).toLocaleDateString('it-IT')}: dettatura dal microfono nella chat.`
-            : 'Servizi vocali del browser spenti: li attivi dal microfono o dal simbolo nella chat, con un consenso dedicato.'}
+            ? t('settings.speechUnavailable')
+            : !api ? t('settings.speechDemo')
+            : speech ? t('settings.speechActive', { date: new Date(speech.expiresAt).toLocaleDateString(intlTag()) })
+            : t('settings.speechOff')}
         </Text>
         <Text testID="settings-ai-routes" style={[styles.hint, { color: p.subtle }]}>
-          Router AI · dettatura {engineName[routes.speechToText]} · voce di Tao {engineName[routes.textToSpeech]} (prima
-          le voci del dispositivo) · piano del giorno {engineName[routes.briefing]}.
+          {t('settings.routes', { stt: engineName(routes.speechToText), tts: engineName(routes.textToSpeech),
+            briefing: engineName(routes.briefing) })}
         </Text>
       </View>
 
       {api && (
         <View style={card}>
-          <Text style={[styles.kicker, { color: p.subtle }]}>CONFIGURAZIONE</Text>
+          <Text style={[styles.kicker, { color: p.subtle }]}>{t('settings.configKicker')}</Text>
           {settings ? summary(settings).map(line => <Text key={line} style={[styles.hint, heading]}>{line}</Text>)
-            : <Text style={[styles.hint, heading]}>Non hai ancora fatto la configurazione guidata.</Text>}
+            : <Text style={[styles.hint, heading]}>{t('settings.noSetup')}</Text>}
           <View style={styles.row}>
-            <Button testID="settings-rerun-setup" label={settings ? 'Rifai la configurazione' : '✨ Configura Tao'} p={p}
+            <Button testID="settings-rerun-setup" label={settings ? t('settings.rerun') : t('hint.setup')} p={p}
               primary={!settings} onPress={onRunSetup} />
             {settings && (
               <Button testID="settings-agent-mode" p={p} disabled={saving}
-                label={settings.agentMode === 'read_only' ? 'Permetti azioni con conferma' : 'Torna a sola lettura'}
+                label={settings.agentMode === 'read_only' ? t('settings.allowActions') : t('settings.readOnly')}
                 onPress={() => void save({
                   ...settings,
                   agentMode: settings.agentMode === 'read_only' ? 'act_with_confirmation' : 'read_only',
@@ -224,7 +229,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
                         ? Array.from(new Set([...a.delegations, 'tasks.complete'])) : a.delegations)
                       : a.delegations.filter(d => d !== 'tasks.complete')
                   }))
-                }, settings.agentMode === 'read_only' ? 'Tao può agire, sempre dopo la tua conferma.' : 'Tao ora può solo leggere.')} />
+                }, t(settings.agentMode === 'read_only' ? 'settings.actionsOn' : 'settings.actionsOff'))} />
             )}
           </View>
         </View>
@@ -232,13 +237,16 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
 
       {api && settings && settings.accounts.length > 0 && (
         <View style={card}>
-          <Text style={[styles.kicker, { color: p.subtle }]}>COSA PUÒ FARE TAO PER TE, ACCOUNT PER ACCOUNT</Text>
+          <Text style={[styles.kicker, { color: p.subtle }]}>{t('settings.delegationsKicker')}</Text>
           {settings.accounts.map(account => (
             <View key={account.id} testID="settings-account" style={[styles.accountBlock, { borderColor: p.border }]}>
               <Text style={[styles.name, heading]}>{account.label}</Text>
               <Text style={[styles.hint, { color: p.subtle, marginTop: 2 }]}>
-                {account.provider === 'microsoft' ? 'Microsoft' : 'Google'} · {account.usage === 'work' ? 'lavoro' : 'personale'} ·{' '}
-                {account.connectedAccountId && connectedIds.has(account.connectedAccountId) ? 'collegato' : 'da collegare'}
+                {t('settings.accountLine', {
+                  provider: account.provider === 'microsoft' ? 'Microsoft' : 'Google',
+                  usage: t(account.usage === 'work' ? 'settings.work' : 'settings.personal'),
+                  state: t(account.connectedAccountId && connectedIds.has(account.connectedAccountId) ? 'settings.linked' : 'settings.toLink')
+                })}
               </Text>
               <View style={styles.row}>
                 {supported(account.provider)
@@ -246,7 +254,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
                   .map(capability => {
                     const on = account.delegations.includes(capability);
                     return <Button key={capability} testID={`delegation-${capability}`} p={p} selected={on} disabled={saving}
-                      label={(on ? '✓ ' : '') + capabilityNames[capability]} onPress={() => toggle(account, capability)} />;
+                      label={(on ? '✓ ' : '') + capabilityName(capability)} onPress={() => toggle(account, capability)} />;
                   })}
               </View>
             </View>
@@ -257,16 +265,14 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
       {api && <ConnectionsPanel api={api} p={p} onChanged={() => { void load(); }} onConnected={linkConnected} />}
 
       <View style={card}>
-        <Text style={[styles.kicker, { color: p.subtle }]}>NOTE E PRIVACY</Text>
-        <Text style={[styles.hint, heading]}>Note, consensi, esportazione e cancellazione di tutti i tuoi dati.</Text>
+        <Text style={[styles.kicker, { color: p.subtle }]}>{t('settings.notesKicker')}</Text>
+        <Text style={[styles.hint, heading]}>{t('settings.notesText')}</Text>
         <View style={styles.row}>
-          <Button testID="settings-open-memory" label="Note e privacy" p={p} onPress={onOpenMemory} />
+          <Button testID="settings-open-memory" label={t('settings.notesButton')} p={p} onPress={onOpenMemory} />
         </View>
       </View>
       {!!message && <Text accessibilityRole="alert" testID="settings-message" style={[styles.hint, heading]}>{message}</Text>}
-      <Text style={[styles.footer, { color: p.subtle }]}>
-        TAO · 0.5 · PRIVACY BY DESIGN · NESSUNA AZIONE SENZA LA TUA CONFERMA
-      </Text>
+      <Text style={[styles.footer, { color: p.subtle }]}>{t('settings.footer')}</Text>
     </View>
   );
 }

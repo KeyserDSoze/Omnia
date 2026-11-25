@@ -4,6 +4,7 @@ import {
   ASSISTANT_PURPOSE, ASSISTANT_SOURCE, CloudApiError, type AssistantInfoDto, type BriefingDto, type MemoryApi
 } from '../services/memoryApi';
 import { deckWindow } from '../services/todayDeck';
+import { getLocale, useT } from '../i18n';
 import type { Palette } from './TodayPanel';
 
 /**
@@ -15,6 +16,7 @@ export function BriefingPanel({ api, p, onSuggestions }: {
   p: Palette;
   onSuggestions: (suggestions: Record<string, string>) => void;
 }) {
+  const t = useT();
   const [info, setInfo] = useState<AssistantInfoDto | null>(null);
   const [consented, setConsented] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -35,7 +37,7 @@ export function BriefingPanel({ api, p, onSuggestions }: {
         if (live.current)
           setConsented(grants.some(g => g.source === ASSISTANT_SOURCE && g.purpose === ASSISTANT_PURPOSE && g.active));
       } catch {
-        if (live.current) setMessage('Stato dell’assistente non disponibile.');
+        if (live.current) setMessage(t('briefing.statusFailed'));
       }
     })();
     return () => { live.current = false; };
@@ -49,7 +51,7 @@ export function BriefingPanel({ api, p, onSuggestions }: {
       await api.grantAssistantBriefing();
       if (live.current) setConsented(true);
     } catch (e) {
-      if (live.current) setMessage(e instanceof CloudApiError ? e.message : 'Attivazione non riuscita.');
+      if (live.current) setMessage(e instanceof CloudApiError ? e.message : t('briefing.activateFailed'));
     } finally {
       if (live.current) setBusy(false);
     }
@@ -62,14 +64,14 @@ export function BriefingPanel({ api, p, onSuggestions }: {
     try {
       const range = deckWindow(new Date());
       const result = await api.briefing(range.from, range.to,
-        Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+        Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', getLocale());
       if (!live.current) return;
       setBriefing(result);
       onSuggestions(Object.fromEntries(result.suggestions.map(s => [s.key, s.preAction])));
     } catch (e) {
       if (!live.current) return;
       if (e instanceof CloudApiError && e.code === 'assistant_consent_required') setConsented(false);
-      setMessage(e instanceof CloudApiError ? e.message : 'Piano non disponibile. Riprova.');
+      setMessage(e instanceof CloudApiError ? e.message : t('briefing.failed'));
     } finally {
       if (live.current) setBusy(false);
     }
@@ -79,27 +81,23 @@ export function BriefingPanel({ api, p, onSuggestions }: {
   const heading = { color: p.text };
   return (
     <View testID="briefing-panel" style={[styles.card, { backgroundColor: p.surface, borderColor: p.border }]}>
-      <Text style={[styles.kicker, { color: p.subtle }]}>PIANO DEL GIORNO · AI</Text>
+      <Text style={[styles.kicker, { color: p.subtle }]}>{t('briefing.kicker')}</Text>
       {!info.configured ? (
-        <Text testID="briefing-unconfigured" style={[styles.hint, { color: p.subtle }]}>
-          Assistente AI non configurato su questo server (LLM_ENDPOINT, LLM_MODEL). Il deck funziona anche senza.
-        </Text>
+        <Text testID="briefing-unconfigured" style={[styles.hint, { color: p.subtle }]}>{t('briefing.unconfigured')}</Text>
       ) : !consented ? (
         <>
           <Text style={[styles.hint, heading]}>
-            Su richiesta, Tao invia al modello {info.model} ({info.host}) solo tipo, titolo, orario, nome
-            dell’interlocutore e un’anteprima di 140 caratteri delle carte ancora aperte: niente indirizzi email,
-            link o identificativi. Il risultato non viene salvato. Puoi revocare dal registro dei consensi.
+            {t('briefing.disclosure', { model: info.model ?? '', host: info.host ?? '' })}
           </Text>
           <Pressable testID="briefing-acknowledge" accessibilityRole="checkbox" aria-checked={acknowledged}
             onPress={() => setAcknowledged(v => !v)} style={styles.checkRow}>
             <Text style={[styles.check, { borderColor: p.text, color: p.text }]}>{acknowledged ? '✓' : ' '}</Text>
-            <Text style={[styles.hint, heading, { flex: 1, marginTop: 0 }]}>Ho capito cosa viene inviato al modello.</Text>
+            <Text style={[styles.hint, heading, { flex: 1, marginTop: 0 }]}>{t('briefing.ack')}</Text>
           </Pressable>
           <Pressable testID="briefing-activate" accessibilityRole="button" disabled={!acknowledged || busy}
             onPress={() => { void activate(); }}
             style={[styles.button, { backgroundColor: p.card2, opacity: acknowledged && !busy ? 1 : 0.5 }]}>
-            <Text style={[styles.buttonText, heading]}>Attiva l’assistente (30 giorni)</Text>
+            <Text style={[styles.buttonText, heading]}>{t('briefing.activate')}</Text>
           </Pressable>
         </>
       ) : (
@@ -108,16 +106,22 @@ export function BriefingPanel({ api, p, onSuggestions }: {
             onPress={() => { void generate(); }}
             style={[styles.button, { backgroundColor: p.accent, opacity: busy ? 0.5 : 1 }]}>
             <Text style={[styles.buttonText, { color: p.accentText }]}>
-              {busy ? 'Sto preparando il piano…' : briefing ? 'Rigenera il piano del giorno' : 'Genera il piano del giorno'}
+              {busy ? t('briefing.preparing') : briefing ? t('briefing.regenerate') : t('briefing.generate')}
             </Text>
           </Pressable>
           {briefing && (
             <View testID="briefing-result">
-              <Text style={[styles.summary, heading]}>{briefing.summary}</Text>
-              <Text style={[styles.hint, { color: p.subtle }]}>
-                Generato da {briefing.model} su {briefing.cardsSent} carte · L’AI può sbagliare: verifica prima di agire.
-                {briefing.suggestions.length > 0 ? ' Le pre-azioni suggerite compaiono sulle carte.' : ''}
-              </Text>
+              {briefing.cardsSent === 0 ? (
+                <Text style={[styles.summary, heading]}>{t('briefing.nothingOpen')}</Text>
+              ) : (
+                <>
+                  <Text style={[styles.summary, heading]}>{briefing.summary}</Text>
+                  <Text style={[styles.hint, { color: p.subtle }]}>
+                    {t('briefing.generatedBy', { model: briefing.model, count: briefing.cardsSent })}
+                    {briefing.suggestions.length > 0 ? ' ' + t('briefing.onCards') : ''}
+                  </Text>
+                </>
+              )}
             </View>
           )}
         </>

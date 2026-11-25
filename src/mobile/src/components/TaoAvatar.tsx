@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { nextWhim, type Whim } from './effects';
 import { web, type Theme } from './theme';
 
 export type AvatarState = 'idle' | 'thinking' | 'speaking' | 'listening';
@@ -28,6 +29,15 @@ export function TaoAvatar({ size, state, theme, still, label, pressed, onPress, 
   const spin = useRef(new Animated.Value(0)).current;
   const breath = useRef(new Animated.Value(0)).current;
   const ripple = useRef(new Animated.Value(0)).current;
+  const flipY = useRef(new Animated.Value(0)).current;
+  const flipX = useRef(new Animated.Value(0)).current;
+  const pop = useRef(new Animated.Value(0)).current;
+  const direction = useRef(1);
+  const turning = useRef<() => void>(() => { });
+  const whimBusy = useRef(false);
+  const pressFlip = useRef<() => void>(() => { });
+  const current = useRef(state);
+  current.current = state;
 
   useEffect(() => {
     if (still) return;
@@ -35,12 +45,61 @@ export function TaoAvatar({ size, state, theme, still, label, pressed, onPress, 
     // Restart from the current angle, so a change of speed never jumps.
     const turn = () => spin.stopAnimation(angle => {
       if (!active) return;
-      Animated.timing(spin, { toValue: angle + 1, duration: turnMs[state], easing: Easing.linear, useNativeDriver })
+      Animated.timing(spin, { toValue: angle + direction.current, duration: turnMs[state], easing: Easing.linear, useNativeDriver })
         .start(({ finished }) => { if (finished && active) turn(); });
     });
+    turning.current = turn;
     turn();
     return () => { active = false; spin.stopAnimation(); };
   }, [state, still]);
+
+  // Now and then the symbol does something unexpected: turns the other way, flips, tumbles, spins a lap.
+  useEffect(() => {
+    if (still) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let previous: Whim | undefined;
+    const done = () => { whimBusy.current = false; };
+    const flip = (axis: Animated.Value, ms: number) => {
+      whimBusy.current = true;
+      Animated.parallel([
+        Animated.timing(axis, { toValue: 1, duration: ms, easing: Easing.inOut(Easing.cubic), useNativeDriver }),
+        Animated.sequence([
+          Animated.timing(pop, { toValue: 1, duration: ms / 2, easing: Easing.out(Easing.quad), useNativeDriver }),
+          Animated.timing(pop, { toValue: 0, duration: ms / 2, easing: Easing.in(Easing.quad), useNativeDriver })
+        ])
+      ]).start(() => { axis.setValue(0); done(); });
+    };
+    const redirect = (laps: number, ms: number, reverse: boolean) => {
+      whimBusy.current = true;
+      spin.stopAnimation(angle => {
+        Animated.timing(spin, {
+          toValue: angle + direction.current * laps, duration: ms,
+          easing: laps > 0.5 ? Easing.inOut(Easing.cubic) : Easing.out(Easing.quad), useNativeDriver
+        }).start(({ finished }) => {
+          done();
+          if (!finished) return;
+          if (reverse) direction.current = -direction.current;
+          turning.current();
+        });
+      });
+    };
+    pressFlip.current = () => flip(flipY, 1000);
+    const schedule = () => {
+      const whim = nextWhim(Math.random, previous);
+      timer = setTimeout(() => {
+        if (!whimBusy.current && current.current !== 'thinking') {
+          previous = whim.kind;
+          if (whim.kind === 'flip') flip(flipY, 1200);
+          else if (whim.kind === 'tumble') flip(flipX, 1200);
+          else if (whim.kind === 'burst') redirect(1, 1300, false);
+          else redirect(0.06, 700, true);
+        }
+        schedule();
+      }, whim.waitMs);
+    };
+    schedule();
+    return () => { clearTimeout(timer); pressFlip.current = () => { }; };
+  }, [still]);
 
   useEffect(() => {
     if (still) { breath.setValue(0); return; }
@@ -63,6 +122,9 @@ export function TaoAvatar({ size, state, theme, still, label, pressed, onPress, 
   }, [state, still]);
 
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const turnY = flipY.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const turnX = flipX.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const flourish = pop.interpolate({ inputRange: [0, 1], outputRange: [1, 1.16] });
   const scale = breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1 + swell[state]] });
   const haloOpacity = breath.interpolate({ inputRange: [0, 1], outputRange: [state === 'idle' ? 0.5 : 0.75, 1] });
   const lobe = size / 2;
@@ -76,7 +138,8 @@ export function TaoAvatar({ size, state, theme, still, label, pressed, onPress, 
   ];
 
   return (
-    <Pressable testID={testID} onPress={onPress} disabled={!onPress} accessibilityRole="button"
+    <Pressable testID={testID} onPress={onPress ? () => { if (!whimBusy.current) pressFlip.current(); onPress(); } : undefined}
+      disabled={!onPress} accessibilityRole="button"
       accessibilityLabel={label} aria-pressed={pressed}
       style={[styles.box, { width: size * 1.7, height: size * 1.7 }]}>
       <Animated.View pointerEvents="none" style={[styles.center, {
@@ -92,7 +155,8 @@ export function TaoAvatar({ size, state, theme, still, label, pressed, onPress, 
         }]} />
       ))}
       <Animated.View style={[styles.symbol, {
-        width: size, height: size, borderRadius: lobe, transform: [{ rotate }, { scale }],
+        width: size, height: size, borderRadius: lobe, transform: [{ perspective: 800 }, { rotateX: turnX },
+          { rotateY: turnY }, { rotate }, { scale }, { scale: flourish }],
         boxShadow: `0 0 ${Math.round(size * 0.35)}px ${theme.glow}`
       }]}>
         <View style={{ flex: 1, backgroundColor: theme.yin }} />

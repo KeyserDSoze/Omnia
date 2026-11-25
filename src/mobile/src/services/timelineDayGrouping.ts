@@ -3,6 +3,7 @@
  * occurredAt instant returned by the signed API (or local demo capture).
  * This is a view transform only: never changes keyset order or SQL/consent.
  */
+import { intlTag } from '../i18n';
 export type TimelineDayGroup<T> = {
   key: string;
   label: string;
@@ -16,7 +17,7 @@ export function groupTimelineByLocalDay<T extends { occurredAt: string }>(
   const dayFormatter = new Intl.DateTimeFormat('en-GB', {
     timeZone, year: 'numeric', month: '2-digit', day: '2-digit'
   });
-  const labelFormatter = new Intl.DateTimeFormat('it-IT', {
+  const labelFormatter = new Intl.DateTimeFormat(intlTag(), {
     timeZone, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   });
   const days = new Map<string, TimelineDayGroup<T>>();

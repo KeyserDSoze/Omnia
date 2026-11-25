@@ -1,4 +1,5 @@
 import type { ConnectorProviderId } from './memoryApi';
+import { t } from '../i18n';
 
 /**
  * Guided setup: a fixed script written by us (no AI). Every answer is a choice or a short text;
@@ -93,62 +94,59 @@ const providerName = (provider: ConnectorProviderId) => provider === 'microsoft'
 
 export function currentStep(state: SetupState): Step {
   const { draft } = state;
+  const variable = { id: 'variable', label: t('setup.variable') };
   switch (state.step) {
     case 'name':
       return { id: 'name', input: 'text', choices: draft.displayName ? [{ id: draft.displayName, label: draft.displayName }] : [],
-        question: 'Ciao! Ti faccio qualche domanda per preparare Tao, senza AI e senza leggere nulla per ora. Come vuoi che ti chiami?',
-        placeholder: 'Il tuo nome' };
+        question: t('setup.name'), placeholder: t('setup.namePlaceholder') };
     case 'microsoft':
-      return { id: 'microsoft', input: 'choice', question: 'Hai un account Microsoft per lavorare (Outlook, Teams, To Do)?',
-        choices: [{ id: 'work', label: 'Sì, di lavoro (Microsoft 365)' }, { id: 'personal', label: 'Sì, personale (Outlook.com)' },
-          { id: 'no', label: 'No' }] };
+      return { id: 'microsoft', input: 'choice', question: t('setup.microsoft'),
+        choices: [{ id: 'work', label: t('setup.microsoftWork') }, { id: 'personal', label: t('setup.microsoftPersonal') },
+          { id: 'no', label: t('setup.no') }] };
     case 'microsoft-tools':
-      return { id: 'microsoft-tools', input: 'multi', question: 'Cosa usi di Microsoft? Scegli tutto quello che vale.',
-        choices: [{ id: 'outlook', label: 'Outlook: posta e calendario' }, { id: 'teams', label: 'Teams: chat' },
-          { id: 'microsoftTodo', label: 'To Do: attività' }] };
+      return { id: 'microsoft-tools', input: 'multi', question: t('setup.microsoftTools'),
+        choices: [{ id: 'outlook', label: t('setup.toolOutlook') }, { id: 'teams', label: t('setup.toolTeams') },
+          { id: 'microsoftTodo', label: t('setup.toolTodo') }] };
     case 'google':
-      return { id: 'google', input: 'choice', question: 'Hai un account Google (Gmail, Calendar, Tasks)?',
-        choices: [{ id: 'work', label: 'Sì, Google Workspace di lavoro' }, { id: 'personal', label: 'Sì, Gmail personale' },
-          { id: 'no', label: 'No' }] };
+      return { id: 'google', input: 'choice', question: t('setup.google'),
+        choices: [{ id: 'work', label: t('setup.googleWork') }, { id: 'personal', label: t('setup.googlePersonal') },
+          { id: 'no', label: t('setup.no') }] };
     case 'google-tools':
-      return { id: 'google-tools', input: 'multi', question: 'Cosa usi di Google? Scegli tutto quello che vale.',
+      return { id: 'google-tools', input: 'multi', question: t('setup.googleTools'),
         choices: [{ id: 'gmail', label: 'Gmail' }, { id: 'googleCalendar', label: 'Google Calendar' },
           { id: 'googleTasks', label: 'Google Tasks' }] };
     case 'more':
       return { id: 'more', input: 'choice',
-        question: draft.accounts.length === 0
-          ? 'Hai altri account di lavoro associati a te, da collegare?'
-          : `Finora: ${draft.accounts.map(a => a.label).join(', ')}. Hai altri account associati (un altro tenant Microsoft, un altro Google)?`,
-        choices: [{ id: 'microsoft', label: 'Sì, un altro account Microsoft' }, { id: 'google', label: 'Sì, un altro account Google' },
-          { id: 'no', label: 'No, è tutto' }] };
+        question: draft.accounts.length === 0 ? t('setup.moreFirst')
+          : t('setup.moreSoFar', { list: draft.accounts.map(a => a.label).join(', ') }),
+        choices: [{ id: 'microsoft', label: t('setup.moreMicrosoft') }, { id: 'google', label: t('setup.moreGoogle') },
+          { id: 'no', label: t('setup.moreNo') }] };
     case 'extra-usage':
       return { id: 'extra-usage', input: 'choice',
-        question: `Questo account ${providerName(state.extra!.provider)} è di lavoro o personale?`,
-        choices: [{ id: 'work', label: 'Di lavoro' }, { id: 'personal', label: 'Personale' }] };
+        question: t('setup.extraUsage', { provider: providerName(state.extra!.provider) }),
+        choices: [{ id: 'work', label: t('setup.usageWork') }, { id: 'personal', label: t('setup.usagePersonal') }] };
     case 'extra-label':
       return { id: 'extra-label', input: 'text', choices: [],
-        question: 'Come lo chiamiamo? (es. "Cliente Rossi", "Secondo tenant")', placeholder: 'Nome dell\u2019account' };
+        question: t('setup.extraLabel'), placeholder: t('setup.extraLabelPlaceholder') };
     case 'crm':
-      return { id: 'crm', input: 'choice', question: 'Usi un CRM? Mi serve per sapere cosa potremo collegare più avanti.',
+      return { id: 'crm', input: 'choice', question: t('setup.crm'),
         choices: [{ id: 'dynamics365', label: 'Dynamics 365' }, { id: 'salesforce', label: 'Salesforce' },
-          { id: 'hubspot', label: 'HubSpot' }, { id: 'other', label: 'Un altro' }, { id: 'none', label: 'No' }] };
+          { id: 'hubspot', label: 'HubSpot' }, { id: 'other', label: t('setup.crmOther') }, { id: 'none', label: t('setup.no') }] };
     case 'start':
-      return { id: 'start', input: 'choice', question: 'A che ora inizi a lavorare di solito?',
-        choices: ['07:00', '08:00', '09:00', '10:00'].map(t => ({ id: t, label: t }))
-          .concat([{ id: 'variable', label: 'Orari variabili' }]) };
+      return { id: 'start', input: 'choice', question: t('setup.start'),
+        choices: ['07:00', '08:00', '09:00', '10:00'].map(time => ({ id: time, label: time })).concat([variable]) };
     case 'end':
-      return { id: 'end', input: 'choice', question: 'E quando finisci?',
-        choices: ['16:00', '17:00', '18:00', '19:00', '20:00'].filter(t => !draft.workStart || t > draft.workStart)
-          .map(t => ({ id: t, label: t })).concat([{ id: 'variable', label: 'Orari variabili' }]) };
+      return { id: 'end', input: 'choice', question: t('setup.end'),
+        choices: ['16:00', '17:00', '18:00', '19:00', '20:00'].filter(time => !draft.workStart || time > draft.workStart)
+          .map(time => ({ id: time, label: time })).concat([variable]) };
     case 'agent':
-      return { id: 'agent', input: 'choice', question: 'Cosa può fare Tao per te con questi account?',
-        choices: [{ id: 'read_only', label: 'Solo leggere e prepararmi la giornata' },
-          { id: 'act_with_confirmation', label: 'Anche agire per me (es. completare attività), sempre dopo la mia conferma' }] };
+      return { id: 'agent', input: 'choice', question: t('setup.agent'),
+        choices: [{ id: 'read_only', label: t('setup.agentRead') }, { id: 'act_with_confirmation', label: t('setup.agentAct') }] };
     case 'summary':
-      return { id: 'summary', input: 'choice', question: ['Ecco cosa ho capito:', ...summary(draft)].join('\n'),
-        choices: [{ id: 'save', label: 'Salva la configurazione' }, { id: 'restart', label: 'Ricomincia' }] };
+      return { id: 'summary', input: 'choice', question: [t('setup.summary'), ...summary(draft)].join('\n'),
+        choices: [{ id: 'save', label: t('setup.save') }, { id: 'restart', label: t('setup.restart') }] };
     case 'done':
-      return { id: 'done', input: 'none', choices: [], question: 'Configurazione salvata.' };
+      return { id: 'done', input: 'none', choices: [], question: t('setup.done') };
   }
 }
 
@@ -157,9 +155,9 @@ export function answer(state: SetupState, value: string | string[], id: () => st
   const step = currentStep(state);
   const single = Array.isArray(value) ? '' : value.trim();
   const picks = Array.isArray(value) ? value : [];
-  if (step.input === 'choice' && !step.choices.some(c => c.id === single)) throw new Error('Scelta non valida.');
+  if (step.input === 'choice' && !step.choices.some(c => c.id === single)) throw new Error(t('chat.invalidChoice'));
   if (step.input === 'multi' && (picks.length === 0 || picks.some(p => !step.choices.some(c => c.id === p))))
-    throw new Error('Scelta non valida.');
+    throw new Error(t('chat.invalidChoice'));
   const draft = { ...state.draft, tools: { ...state.draft.tools }, accounts: [...state.draft.accounts] };
   const go = (step: StepId, extra = state.extra): SetupState => ({ step, draft, extra });
   const addAccount = (provider: ConnectorProviderId, usage: Usage, label: string) =>
@@ -171,7 +169,7 @@ export function answer(state: SetupState, value: string | string[], id: () => st
       return go('microsoft');
     case 'microsoft':
       if (single === 'no') return go('google');
-      addAccount('microsoft', single as Usage, single === 'work' ? 'Microsoft 365 di lavoro' : 'Outlook personale');
+      addAccount('microsoft', single as Usage, t(single === 'work' ? 'account.microsoftWork' : 'account.microsoftPersonal'));
       return go('microsoft-tools');
     case 'microsoft-tools':
       draft.tools.outlook = picks.includes('outlook');
@@ -180,7 +178,7 @@ export function answer(state: SetupState, value: string | string[], id: () => st
       return go('google');
     case 'google':
       if (single === 'no') return go('more');
-      addAccount('google', single as Usage, single === 'work' ? 'Google Workspace di lavoro' : 'Gmail personale');
+      addAccount('google', single as Usage, t(single === 'work' ? 'account.googleWork' : 'account.googlePersonal'));
       return go('google-tools');
     case 'google-tools':
       draft.tools.gmail = picks.includes('gmail');
@@ -245,11 +243,14 @@ export function summary(draft: SettingsDto): string[] {
     tools.googleCalendar && 'Google Calendar', tools.googleTasks && 'Google Tasks'
   ].filter(Boolean);
   return [
-    `• Nome: ${draft.displayName ?? 'non indicato'}`,
-    `• Account: ${draft.accounts.length ? draft.accounts.map(a => `${a.label} (${a.usage === 'work' ? 'lavoro' : 'personale'})`).join(', ') : 'nessuno'}`,
-    `• Strumenti: ${used.length ? used.join(', ') : 'nessuno indicato'}${tools.crm ? `, CRM ${tools.crm}` : ''}`,
-    `• Orari: ${draft.workStart ?? 'variabili'}${draft.workEnd ? `–${draft.workEnd}` : ''}`,
-    `• Tao può: ${draft.agentMode === 'read_only' ? 'solo leggere' : 'leggere e agire con la tua conferma'}`
+    t('summary.name', { value: draft.displayName ?? t('summary.notGiven') }),
+    t('summary.accounts', { value: draft.accounts.length
+      ? draft.accounts.map(a => `${a.label} (${t(a.usage === 'work' ? 'summary.work' : 'summary.personal')})`).join(', ')
+      : t('summary.none') }),
+    t('summary.tools', { value: used.length ? used.join(', ') : t('summary.noTools') }) +
+      (tools.crm ? t('summary.crm', { crm: tools.crm }) : ''),
+    t('summary.hours', { value: (draft.workStart ?? t('summary.variable')) + (draft.workEnd ? `–${draft.workEnd}` : '') }),
+    t('summary.can', { value: t(draft.agentMode === 'read_only' ? 'summary.readOnly' : 'summary.act') })
   ];
 }
 

@@ -32,6 +32,48 @@ test('la home è solo una chat: il simbolo dice ciao e chiede di entrare con Mic
   expect(errors.filter(e => /418|hydrat/i.test(e))).toEqual([]);
 });
 
+test('la lingua si sceglie dalla chat, si ricorda nel browser e l’arabo passa a destra-sinistra', async ({ page }) => {
+  await page.goto(appPath);
+  await expect(page.getByTestId('chat-tao').first()).toHaveText('Ciao.');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+  await page.getByTestId('language-open').click();
+  await expect(page.getByTestId('language-picker').locator('[data-testid^="language-"]')).toHaveCount(21);
+  await page.getByTestId('language-en').click();
+  await expect(page.getByTestId('chat-tao').first()).toHaveText('Hello.');
+  await expect(page.getByTestId('chat-login-microsoft')).toContainText('Continue with Microsoft');
+  await expect(page.locator('html')).toHaveAttribute('lang', /^en/);
+  // Remembered only in this browser: a reload keeps it.
+  await page.reload();
+  await expect(page.getByTestId('chat-tao').first()).toHaveText('Hello.');
+  await page.getByTestId('language-open').click();
+  await page.getByTestId('language-ar').click();
+  await expect(page.getByTestId('chat-tao').first()).toHaveText('مرحبًا.');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page.locator('html')).toHaveAttribute('lang', /^ar/);
+  await page.getByTestId('language-open').click();
+  await page.getByTestId('language-it').click();
+  await expect(page.getByTestId('chat-tao').first()).toHaveText('Ciao.');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+});
+
+test('gli effetti: il saluto esce dal fumo, i pulsanti emergono e pulsano; con movimento ridotto restano fermi', async ({ page }) => {
+  await page.goto(appPath);
+  await expect(page.getByTestId('chat-login-microsoft')).toBeVisible();
+  const smoke = page.locator('[data-testid="chat-tao"] [data-tao^="smoke-"]');
+  expect(await smoke.count()).toBeGreaterThan(0);
+  await expect(page.locator('[data-tao="dissolve"]').first()).toBeAttached();
+  const pulse = page.locator('[data-tao^="pulse-"]').first();
+  await expect(pulse).toBeAttached();
+  expect(await pulse.evaluate(el => getComputedStyle(el).animationName)).toMatch(/^tao-pulse-/);
+  expect(await pulse.evaluate(el => getComputedStyle(el).animationIterationCount)).toBe('infinite');
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await expect(page.getByTestId('chat-login-microsoft')).toBeVisible();
+  await expect(page.getByTestId('chat-tao').first()).toHaveText('Ciao.');
+  await expect(page.locator('[data-tao]')).toHaveCount(0);
+});
+
 test('demo: la configurazione guidata fa domande fisse e compone le impostazioni', async ({ page }) => {
   test.skip(!!process.env.TAO_E2E_BASE_URL, 'The demo exists only in the static export.');
   await page.goto(appPath);

@@ -1,4 +1,5 @@
 import type { ConnectorProviderDto, TodayDto, TodayItemDto, TriageDecision, TriageResultDto, WorkItemDto } from './memoryApi';
+import { t, type MessageKey } from '../i18n';
 
 /** What the daily deck needs: the signed API in cloud mode, synthetic data in the public demo. */
 export type TodaySource = {
@@ -29,24 +30,27 @@ export function createDemoToday(clock: () => Date = () => new Date()): TodaySour
     };
   };
   const decisions = new Map<string, TodayItemDto['triage']>();
-  const items: { item: WorkItemDto; priority: number }[] = [
-    { priority: 100, item: item({ kind: 'task', externalId: 'l|renew', title: 'Rinnovare il dominio aziendale',
-      provider: 'google', detail: 'Amministrazione', dueAt: at(-180) }) },
-    { priority: 90, item: item({ kind: 'task', externalId: 'l|offer', title: 'Inviare l’offerta a ACME',
-      detail: 'Clienti', dueAt: at(240), important: true }) },
-    { priority: 85, item: item({ kind: 'event', externalId: 'standup', title: 'Standup di team',
+  // Texts are catalog keys, translated on every read so the demo follows the chosen language.
+  const items: { item: WorkItemDto; priority: number; title?: MessageKey; detail?: MessageKey }[] = [
+    { priority: 100, title: 'demo.renew', detail: 'demo.renewDetail', item: item({ kind: 'task', externalId: 'l|renew',
+      title: '', provider: 'google', dueAt: at(-180) }) },
+    { priority: 90, title: 'demo.offer', detail: 'demo.offerDetail', item: item({ kind: 'task', externalId: 'l|offer',
+      title: '', dueAt: at(240), important: true }) },
+    { priority: 85, title: 'demo.standup', item: item({ kind: 'event', externalId: 'standup', title: '',
       counterpart: 'Giulia Verdi', startsAt: at(45), endsAt: at(60), detail: 'Teams' }) },
-    { priority: 80, item: item({ kind: 'mail', externalId: 'contract', title: 'Contratto da firmare entro venerdì',
-      counterpart: 'Marco Bianchi', detail: 'Ciao, ti allego la versione finale con le modifiche concordate…',
-      startsAt: at(-50), important: true, unread: true }) },
-    { priority: 75, item: item({ kind: 'chat', externalId: 'c|m', title: 'Luca Neri',
-      counterpart: 'Luca Neri', detail: 'Ci sentiamo alle 15 per la demo?', startsAt: at(-12), unread: true }) }
+    { priority: 80, title: 'demo.contract', detail: 'demo.contractDetail', item: item({ kind: 'mail', externalId: 'contract',
+      title: '', counterpart: 'Marco Bianchi', startsAt: at(-50), important: true, unread: true }) },
+    { priority: 75, detail: 'demo.chatDetail', item: item({ kind: 'chat', externalId: 'c|m', title: 'Luca Neri',
+      counterpart: 'Luca Neri', startsAt: at(-12), unread: true }) }
   ];
+  const shown = (x: (typeof items)[number]): WorkItemDto => ({
+    ...x.item, title: x.title ? t(x.title) : x.item.title, detail: x.detail ? t(x.detail) : x.item.detail
+  });
   return {
     async today(from: Date, to: Date): Promise<TodayDto> {
       return {
         from: from.toISOString(), to: to.toISOString(),
-        items: items.map(x => ({ key: x.item.key, item: x.item, priority: x.priority, triage: decisions.get(x.item.key) ?? null })),
+        items: items.map(x => ({ key: x.item.key, item: shown(x), priority: x.priority, triage: decisions.get(x.item.key) ?? null })),
         accounts: [
           { accountId: demoAccount, provider: 'microsoft', displayName: 'Demo Microsoft 365', status: 'ok' },
           { accountId: demoAccount, provider: 'google', displayName: 'Demo Google Workspace', status: 'ok' }
@@ -55,7 +59,7 @@ export function createDemoToday(clock: () => Date = () => new Date()): TodaySour
     },
     async decide(key, decision, options = {}): Promise<TriageResultDto> {
       const target = items.find(x => x.item.key === key);
-      if (!target) throw new Error('Elemento non trovato.');
+      if (!target) throw new Error(t('error.invalid_item'));
       const snoozedUntil = decision === 'later' ? at(options.snoozeMinutes ?? 120) : null;
       const appliedToSource = options.applyToSource === true && decision === 'done' && target.item.kind === 'task';
       decisions.set(key, { decision, decidedAt: clock().toISOString(), snoozedUntil, appliedToSource });

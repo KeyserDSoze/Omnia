@@ -22,6 +22,7 @@ import { loginOptions, type ConnectorProviderId } from '../services/memoryApi';
 import { createDemoToday } from '../services/demoToday';
 import { createAiRouter, defaultRoutes, noAiRouter, type AiRoutesDto } from '../services/aiRouter';
 import { browserEngines } from '../services/browserSpeech';
+import { intlTag, localeInfo, t as translateNow, useLocale, useT, type MessageKey } from '../i18n';
 
 type LocalMemo = { id: string; source: string; occurredAt: string; content: string; tags: string[]; time: string };
 const webMode: WebMode = Platform.OS === 'web' ? configuredWebMode() : { kind: 'demo' };
@@ -32,10 +33,19 @@ const activeManualGrant = (grants: ConsentDto[]) =>
 const timelineMemo = (item: RemoteMemory): LocalMemo => ({
   id: item.id, source: item.source, occurredAt: item.occurredAt,
   content: item.summary, tags: item.tags,
-  time: new Date(item.occurredAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+  time: new Date(item.occurredAt).toLocaleTimeString(intlTag(), { hour: '2-digit', minute: '2-digit' })
 });
 
 export default function Home() {
+  const t = useT();
+  const locale = useLocale();
+  const rtl = localeInfo(locale).rtl === true;
+  // The document follows the language: screen readers, hyphenation, form controls and RTL text.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.lang = localeInfo(locale).tag;
+    document.documentElement.dir = rtl ? 'rtl' : 'ltr';
+  }, [locale, rtl]);
   const device = useColorScheme();
   const [override, setOverride] = useState<'light' | 'dark' | null>(null);
   // The static export is rendered without a device: keep the first client render identical
@@ -163,7 +173,7 @@ export default function Home() {
 
   async function refreshCloud(): Promise<boolean> {
     const api = apiRef.current;
-    if (!api) throw new Error('Connessione API non disponibile.');
+    if (!api) throw new Error(t('notice.apiMissing'));
     resetConsentLedger();
     // A new first-page refresh supersedes in-flight older pages. Neither
     // previous-account nor old-page responses may repopulate the timeline.
@@ -194,7 +204,7 @@ export default function Home() {
       });
     } catch {
       if (sameSession(epoch) && pageRequestRef.current === request)
-        setOlderError('Impossibile caricare le note precedenti. Riprova.');
+        setOlderError(t('notice.olderFailed'));
     } finally {
       if (pageRequestRef.current === request) {
         pagingInProgressRef.current = false;
@@ -220,7 +230,7 @@ export default function Home() {
       });
     } catch {
       if (sameSession(epoch) && ledgerRequestRef.current === request)
-        setLedgerError('Registro non disponibile. Riprova; nessuna revoca è stata eseguita.');
+        setLedgerError(t('notice.ledgerFailed'));
     } finally {
       if (ledgerRequestRef.current === request) {
         ledgerInProgressRef.current = false;
@@ -246,7 +256,7 @@ export default function Home() {
       });
     } catch {
       if (sameSession(epoch) && ledgerRequestRef.current === request)
-        setLedgerError('Pagina dei consensi non caricata. Riprova.');
+        setLedgerError(t('notice.ledgerPageFailed'));
     } finally {
       if (ledgerRequestRef.current === request) {
         ledgerInProgressRef.current = false;
@@ -271,18 +281,14 @@ export default function Home() {
       if (!sameSession(epoch)) return;
       if (item.source === 'manual' && item.purpose === 'memory.capture')
         setGrant(null);
-      setNotice('Consenso revocato per ' + item.source +
-        '. I dati precedenti non sono cancellati. Aggiorna il registro.');
+      setNotice(t('notice.sourceRevoked', { source: item.source }));
       try {
         await refreshCloud();
       } catch {
-        if (sameSession(epoch))
-          setNotice('Revoca confermata per ' + item.source +
-            ', ma aggiornamento non disponibile. Aggiorna timeline e registro.');
+        if (sameSession(epoch)) setNotice(t('notice.sourceRevokedStale', { source: item.source }));
       }
     } catch {
-      if (sameSession(epoch))
-        setNotice('Revoca non confermata: verifica il registro prima di riprovare.');
+      if (sameSession(epoch)) setNotice(t('notice.sourceRevokeFailed'));
     } finally { if (sameSession(epoch)) setBusy(false); }
   }
 
@@ -299,10 +305,10 @@ export default function Home() {
         // Never await a provider here: clear all visible personal data first.
         clearSignedInView();
         const epoch = sessionEpochRef.current;
-        setNotice('Sessione non valida. Accedi di nuovo.');
+        setNotice(translateNow('notice.sessionInvalid'));
         void auth.discardLocalSession().catch(() => {
           if (sameSession(epoch))
-            setNotice('Sessione non valida. Chiudi la scheda e accedi di nuovo.');
+            setNotice(translateNow('notice.sessionInvalidClose'));
         });
       }
     });
@@ -324,7 +330,7 @@ export default function Home() {
       } catch (error) {
         if (live && sameSession(bootEpoch)) {
           setAuthState('error');
-          setNotice(error instanceof Error ? error.message : 'Autenticazione non riuscita.');
+          setNotice(error instanceof Error ? error.message : translateNow('notice.authFailed'));
         }
       }
     })();
@@ -338,7 +344,7 @@ export default function Home() {
   async function login(idpHint?: ConnectorProviderId) {
     if (busy) return;
     try { await authRef.current?.login(idpHint); }
-    catch { setNotice('Impossibile avviare il login OIDC. Verifica il provider.'); }
+    catch { setNotice(t('notice.loginFailed')); }
   }
 
   async function logout() {
@@ -355,12 +361,8 @@ export default function Home() {
     finally {
       logoutInProgressRef.current = false;
       setBusy(false);
-      const uncertainty = hadPendingRequest
-        ? ' Una richiesta già inviata potrebbe essere stata elaborata dal server. Verifica i dati al prossimo accesso.'
-        : '';
-      setNotice((revoked ? 'Sessione locale chiusa e revoca token richiesta.' :
-        'Sessione locale chiusa; revoca remota non confermata. Chiudi anche la sessione del provider.') +
-        uncertainty);
+      const uncertainty = hadPendingRequest ? ' ' + t('notice.pendingRequest') : '';
+      setNotice(t(revoked ? 'notice.loggedOut' : 'notice.loggedOutUnconfirmed') + uncertainty);
     }
   }
 
@@ -374,10 +376,10 @@ export default function Home() {
       await apiRef.current.grantManualCapture();
       if (!sameSession(epoch) || !await refreshCloud() || !sameSession(epoch)) return;
       setAccepted(false);
-      setNotice('Autorizzazione attiva per le tue note manuali (30 giorni).');
+      setNotice(t('notice.consentOn'));
     } catch (error) {
       if (sameSession(epoch))
-        setNotice(error instanceof Error ? error.message : 'Consenso non salvato.');
+        setNotice(error instanceof Error ? error.message : t('notice.consentFailed'));
     } finally { if (sameSession(epoch)) setBusy(false); }
   }
 
@@ -392,10 +394,10 @@ export default function Home() {
       if (!sameSession(epoch)) return;
       setGrant(null);
       setAccepted(false);
-      setNotice('Consenso revocato: niente nuove note. I dati precedenti restano finché non saranno cancellati.');
+      setNotice(t('notice.consentOff'));
     } catch (error) {
       if (sameSession(epoch))
-        setNotice(error instanceof Error ? error.message : 'Impossibile revocare il consenso.');
+        setNotice(error instanceof Error ? error.message : t('notice.consentRevokeFailed'));
     } finally { if (sameSession(epoch)) setBusy(false); }
   }
 
@@ -406,7 +408,7 @@ export default function Home() {
     try {
       const archive = await apiRef.current.exportPersonalData();
       if (!sameSession(epoch)) return; // never download an old session's archive
-      if (archive.size === 0) throw new Error('Il server ha restituito un file vuoto.');
+      if (archive.size === 0) throw new Error(t('notice.exportEmpty'));
       const objectUrl = URL.createObjectURL(archive);
       try {
         const element = document.createElement('a');
@@ -419,16 +421,16 @@ export default function Home() {
         // Browser downloads may still be initializing immediately after click.
         setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
       }
-      setNotice('Esportazione JSON avviata. Contiene dati riservati: conserva il file al sicuro.');
+      setNotice(t('notice.exportStarted'));
     } catch (error) {
       if (sameSession(epoch))
-        setNotice(error instanceof Error ? error.message : 'Esportazione non riuscita.');
+        setNotice(error instanceof Error ? error.message : t('notice.exportFailed'));
     } finally { if (sameSession(epoch)) setBusy(false); }
   }
 
   async function erasePersonalData() {
     if (webMode.kind !== 'cloud' || authState !== 'signed-in' || !apiRef.current ||
-        busy || erasePhrase !== 'ELIMINA' || !eraseAcknowledged) return;
+        busy || erasePhrase !== t('privacy.erasePhrase') || !eraseAcknowledged) return;
     const epoch = sessionEpochRef.current;
     cloudViewRef.current.invalidate();
     resetConsentLedger();
@@ -450,12 +452,10 @@ export default function Home() {
       setAccepted(false);
       setErasePhrase('');
       setEraseAcknowledged(false);
-      setNotice('Cancellazione sul database principale confermata: ' +
-        receipt.deletedMemories + ' note e ' + receipt.deletedConsents +
-        ' consensi. Backup e sistemi esterni non inclusi.');
+      setNotice(t('notice.erased', { memories: receipt.deletedMemories, consents: receipt.deletedConsents }));
     } catch (error) {
       if (sameSession(epoch))
-        setNotice(error instanceof Error ? error.message : 'Cancellazione non confermata. Riprova.');
+        setNotice(error instanceof Error ? error.message : t('notice.eraseFailed'));
     } finally { if (sameSession(epoch)) setBusy(false); }
   }
 
@@ -468,22 +468,22 @@ export default function Home() {
           id: normalized.externalId, source: normalized.source,
           occurredAt: normalized.occurredAt,
           content: normalized.content, tags: normalized.tags,
-          time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+          time: new Date().toLocaleTimeString(intlTag(), { hour: '2-digit', minute: '2-digit' })
         }, ...current]);
         setDraft('');
-        setNotice('Memo aggiunto a questa sessione. La sincronizzazione richiederà un accesso sicuro.');
+        setNotice(t('notice.localMemo'));
         return;
       }
       if (authState !== 'signed-in') {
-        setNotice('Accedi con OIDC prima di salvare nel cloud.');
+        setNotice(t('notice.signInFirst'));
         return;
       }
       if (!grant) {
-        setNotice('Autorizza prima il salvataggio delle note manuali.');
+        setNotice(t('notice.consentFirst'));
         return;
       }
       const api = apiRef.current;
-      if (!api) throw new Error('API non inizializzata.');
+      if (!api) throw new Error(t('notice.apiMissing'));
       const epoch = sessionEpochRef.current;
       const entry = retryRef.current?.raw === normalized.content ? retryRef.current.entry : normalized;
       retryRef.current = { raw: normalized.content, entry };
@@ -493,18 +493,18 @@ export default function Home() {
         if (!sameSession(epoch)) return;
         retryRef.current = null;
         setDraft('');
-        setNotice('Nota salvata nel cloud.');
+        setNotice(t('notice.noteSaved'));
         try { await refreshCloud(); }
         catch {
           if (sameSession(epoch))
-            setNotice('Nota salvata, ma la timeline non è aggiornata. Usa Aggiorna.');
+            setNotice(t('notice.noteSavedStale'));
         }
       } catch (error) {
         if (sameSession(epoch))
-          setNotice(error instanceof Error ? error.message : 'Salvataggio non confermato. Riprova.');
+          setNotice(error instanceof Error ? error.message : t('notice.saveUnconfirmed'));
       } finally { if (sameSession(epoch)) setBusy(false); }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Nota non valida.');
+      setNotice(error instanceof Error ? error.message : t('notice.invalidNote'));
     }
   }
 
@@ -514,24 +514,26 @@ export default function Home() {
         await recorder.stop();
         setRecording(false);
         setAudioUri(recorder.uri ?? null);
-        setNotice('Registrazione completata sul dispositivo. Nessun audio inviato al server.');
+        setNotice(t('notice.recorded'));
         return;
       }
       const { granted } = await requestRecordingPermissionsAsync();
-      if (!granted) { setNotice('Permesso microfono non concesso.'); return; }
+      if (!granted) { setNotice(t('notice.micDenied')); return; }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
       setAudioUri(null);
       setRecording(true);
-      setNotice('Registrazione microfono in corso. Premi di nuovo per fermare.');
+      setNotice(t('notice.recording'));
     } catch {
       setRecording(false);
-      setNotice('Registrazione non disponibile su questo dispositivo/browser.');
+      setNotice(t('notice.recordingUnavailable'));
     }
   }
 
   const cardStyle = { backgroundColor: p.surface, borderColor: p.border };
+  const tagName = (tag: string) => (['lavoro', 'relazioni', 'attualita', 'benessere', 'personale'].includes(tag)
+    ? t(`tag.${tag}` as MessageKey) : tag);
   const heading = { color: p.text };
   const signedIn = webMode.kind === 'cloud' && authState === 'signed-in' && apiRef.current !== null;
   const canSettings = signedIn || webMode.kind === 'demo';
@@ -542,18 +544,18 @@ export default function Home() {
     .map(x => x[0]!.toUpperCase()).join('') || '⚙︎';
   const glass = { backgroundColor: p.mode === 'dark' ? 'rgba(20,22,30,0.55)' : 'rgba(255,255,255,0.7)' };
   return (
-    <View style={styles.app}>
+    <View style={styles.app} {...({ dir: rtl ? 'rtl' : 'ltr', lang: localeInfo(locale).tag } as object)}>
       <Backdrop theme={p} still={still} />
       {/* A tiny header: the brand brings back the chat, the right button opens settings or the sign-in. */}
       <View style={[styles.header, { paddingHorizontal: compact ? 14 : 22 }]}>
-        <Pressable testID="open-chat" accessibilityRole="button" accessibilityLabel="Torna alla chat"
+        <Pressable testID="open-chat" accessibilityRole="button" accessibilityLabel={t('nav.backToChat')}
           onPress={() => setView('chat')} style={styles.brand}>
-          {activeView !== 'chat' && <Text style={[styles.back, { color: p.subtle }]}>‹</Text>}
+          {activeView !== 'chat' && <Text style={[styles.back, { color: p.subtle }]}>{rtl ? '\u203A' : '\u2039'}</Text>}
           <Text style={[styles.glyph, heading]}>道</Text>
           <Text style={[styles.wordmark, heading]}>tao</Text>
         </Pressable>
         {canSettings ? (
-          <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Account e impostazioni"
+          <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel={t('nav.settings')}
             onPress={() => setView(activeView === 'settings' ? 'chat' : 'settings')}
             style={[styles.avatar, { borderColor: p.border }, glass, signedIn ? { backgroundColor: p.accent } : null]}>
             <Text style={{ color: signedIn ? p.accentText : p.text, fontWeight: '800', fontSize: 12 }}>
@@ -561,15 +563,15 @@ export default function Home() {
             </Text>
           </Pressable>
         ) : webMode.kind === 'cloud' && authState !== 'checking' ? (
-          <Pressable testID="header-login" accessibilityRole="button" accessibilityLabel="Accedi"
+          <Pressable testID="header-login" accessibilityRole="button" accessibilityLabel={t('nav.signIn')}
             onPress={() => { void login(); }} style={[styles.pill, { borderColor: p.border }, glass]}>
-            <Text style={[styles.pillText, heading]}>Accedi</Text>
+            <Text style={[styles.pillText, heading]}>{t('nav.signIn')}</Text>
           </Pressable>
         ) : <View style={styles.avatarSpace} />}
       </View>
       {/* The chat stays mounted so its conversation survives a visit to the other views. */}
       <View style={activeView === 'chat' ? styles.fill : styles.hidden}>
-        <ChatHome theme={p} mode={chatMode} invalidReason={webMode.kind === 'invalid' ? webMode.reason : undefined}
+        <ChatHome theme={p} mode={chatMode} invalidReason={webMode.kind === 'invalid' ? t(webMode.reason) : undefined}
           api={signedIn ? apiRef.current : null} demo={demoToday} profileName={profile?.name ?? null}
           socialProviders={socialProviders} onLogin={idp => { void login(idp); }}
           onOpenMemory={prefill => { if (prefill !== undefined) setDraft(prefill); setView('memory'); }}
@@ -589,25 +591,25 @@ export default function Home() {
       )}
       {activeView === 'memory' && <ScrollView style={styles.fill} contentContainerStyle={[styles.page, { paddingHorizontal: compact ? 14 : 22 }]}>
       <View style={styles.hero}>
-        <Text style={[styles.eyebrow, { color: p.accent }]}>MEMORIA E PRIVACY</Text>
-        <Text style={[styles.title, heading]}>Le tue note.{"\n"}I tuoi dati.</Text>
-        <Text style={[styles.description, { color: p.subtle }]}>Cattura momenti, gestisci i consensi, esporta o cancella tutto quello che Tao conserva.</Text>
+        <Text style={[styles.eyebrow, { color: p.accent }]}>{t('memory.kicker')}</Text>
+        <Text style={[styles.title, heading]}>{t('memory.title')}</Text>
+        <Text style={[styles.description, { color: p.subtle }]}>{t('memory.description')}</Text>
       </View>
       <View style={[styles.card, cardStyle, { minHeight: 0, marginBottom: 20 }]}>
-        <Text style={[styles.kicker, { color: p.subtle }]}>ACCESSO E DATI</Text>
+        <Text style={[styles.kicker, { color: p.subtle }]}>{t('memory.accessKicker')}</Text>
         <Text testID="auth-status" style={[styles.hint, heading]}>
-          {webMode.kind === 'demo' ? 'Modalità demo locale: nessun dato sincronizzato.' :
-            webMode.kind === 'invalid' ? webMode.reason :
-            authState === 'checking' ? 'Verifica della sessione OIDC…' :
-            authState === 'signed-in' ? 'Sessione autenticata. Le note sono lette dal server.' :
-            'Accesso necessario per memorizzare le note nel cloud.'}
+          {webMode.kind === 'demo' ? t('memory.statusDemo') :
+            webMode.kind === 'invalid' ? t(webMode.reason) :
+            authState === 'checking' ? t('memory.statusChecking') :
+            authState === 'signed-in' ? t('memory.statusSignedIn') :
+            t('memory.statusSignedOut')}
         </Text>
         {webMode.kind === 'cloud' && authState !== 'checking' && (
           <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             {authState !== 'signed-in' ? (
               <Pressable testID="auth-login" onPress={() => { void login(); }}
                 disabled={busy} accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16 }]}>
-                <Text style={[styles.buttonText, heading]}>Accedi con OIDC</Text>
+                <Text style={[styles.buttonText, heading]}>{t('memory.signIn')}</Text>
               </Pressable>
             ) : (
               <>
@@ -617,17 +619,17 @@ export default function Home() {
                   setBusy(true);
                   void refreshCloud().catch(() => {
                     if (sameSession(epoch))
-                      setNotice('Impossibile aggiornare la timeline. Riprova.');
+                      setNotice(t('notice.reloadFailed'));
                   }).finally(() => {
                     if (sameSession(epoch)) setBusy(false);
                   });
                 }} disabled={busy}
                   accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16 }]}>
-                  <Text style={[styles.buttonText, heading]}>Aggiorna timeline</Text>
+                  <Text style={[styles.buttonText, heading]}>{t('memory.reload')}</Text>
                 </Pressable>
                 <Pressable testID="auth-logout" onPress={() => { void logout(); }}
                   accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16 }]}>
-                  <Text style={[styles.buttonText, heading]}>Esci</Text>
+                  <Text style={[styles.buttonText, heading]}>{t('memory.logout')}</Text>
                 </Pressable>
               </>
             )}
@@ -638,33 +640,28 @@ export default function Home() {
             {grant ? (
               <>
                 <Text testID="consent-state" style={[styles.hint, heading]}>
-                  Autorizzazione attiva: note manuali fino al {new Date(grant.expiresAt).toLocaleDateString('it-IT')}.
+                  {t('memory.consentActive', { date: new Date(grant.expiresAt).toLocaleDateString(intlTag()) })}
                 </Text>
                 <Pressable testID="revoke-consent" accessibilityRole="button"
                   onPress={() => { void revokeConsent(); }} disabled={busy}
                   style={[styles.secondaryButton, { backgroundColor: p.card2, paddingHorizontal: 16, marginTop: 9, alignSelf: 'flex-start' }]}>
-                  <Text style={[styles.buttonText, heading]}>Revoca autorizzazione</Text>
+                  <Text style={[styles.buttonText, heading]}>{t('memory.consentRevoke')}</Text>
                 </Pressable>
               </>
             ) : (
               <>
-                <Text testID="consent-state" style={[styles.hint, heading]}>Nessun consenso attivo per le note manuali.</Text>
+                <Text testID="consent-state" style={[styles.hint, heading]}>{t('memory.consentNone')}</Text>
                 <Pressable testID="consent-accept" accessibilityRole="checkbox"
                   accessibilityState={{ checked: accepted }} onPress={() => setAccepted(!accepted)}
                   style={{ marginTop: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
                   <Text style={heading}>{accepted ? '☑' : '☐'}</Text>
-                  <Text style={[styles.hint, heading, { flex: 1, marginTop: 0 }]}>
-                    Autorizzo per 30 giorni la conservazione e l'elaborazione delle mie note manuali.
-                    La revoca blocca i nuovi salvataggi, non cancella quelli precedenti.
-                    Gli eventuali modelli AI configurati sul server possono elaborare il testo.
-                    Non caricherò contenuti di altre persone senza averne il diritto.
-                  </Text>
+                  <Text style={[styles.hint, heading, { flex: 1, marginTop: 0 }]}>{t('memory.consentText')}</Text>
                 </Pressable>
                 <Pressable testID="grant-consent" accessibilityRole="button"
                   disabled={!accepted || busy} onPress={() => { void grantConsent(); }}
                   style={[styles.secondaryButton, { backgroundColor: p.card2,
                     paddingHorizontal: 16, marginTop: 11, opacity: accepted && !busy ? 1 : 0.5, alignSelf: 'flex-start' }]}>
-                  <Text style={[styles.buttonText, heading]}>Attiva salvataggio note</Text>
+                  <Text style={[styles.buttonText, heading]}>{t('memory.consentGrant')}</Text>
                 </Pressable>
               </>
             )}
@@ -673,13 +670,8 @@ export default function Home() {
         {webMode.kind === 'cloud' && authState === 'signed-in' && (
           <View testID="consent-ledger" style={{ marginTop: 18, borderTopWidth: 1,
             borderTopColor: p.border, paddingTop: 15 }}>
-            <Text style={[styles.kicker, { color: p.subtle }]}>REGISTRO DEI CONSENSI</Text>
-            <Text style={[styles.hint, heading]}>
-              Storico delle autorizzazioni first-party per sorgente. Ogni pagina
-              mostra al massimo 25 record, anche scaduti o revocati.
-              Usa Carica altri consensi per vedere il resto dello storico.
-              Revocare blocca nuovi salvataggi, non cancella dati già conservati.
-            </Text>
+            <Text style={[styles.kicker, { color: p.subtle }]}>{t('ledger.kicker')}</Text>
+            <Text style={[styles.hint, heading]}>{t('ledger.hint')}</Text>
             <Pressable testID="consent-ledger-open" accessibilityRole="button"
               disabled={busy || ledgerLoading}
               onPress={() => { void openConsentLedger(); }}
@@ -687,17 +679,15 @@ export default function Home() {
                 paddingHorizontal: 16, marginTop: 11, alignSelf: 'flex-start',
                 opacity: busy || ledgerLoading ? 0.5 : 1 }]}>
               <Text style={[styles.buttonText, heading]}>
-                {ledgerVisible ? 'Aggiorna registro consensi' : 'Consulta registro consensi'}
+                {ledgerVisible ? t('ledger.refresh') : t('ledger.open')}
               </Text>
             </Pressable>
             {ledgerVisible && (
               <View style={{ marginTop: 11 }}>
                 <Text testID="consent-ledger-count" style={[styles.hint, heading]}>
                   {ledgerLoaded
-                    ? 'Visualizzati ' + ledgerRows.length + ' consensi. ' +
-                      (ledgerCursor ? 'Altre pagine disponibili.' : 'Fine dello storico.')
-                    : ledgerLoading ? 'Caricamento registro…' :
-                      'Registro da aggiornare. Premi Aggiorna registro consensi.'}
+                    ? t('ledger.count', { count: ledgerRows.length }) + ' ' + t(ledgerCursor ? 'ledger.more' : 'ledger.end')
+                    : ledgerLoading ? t('ledger.loading') : t('ledger.stale')}
                 </Text>
                 {ledgerRows.map(item => (
                   <View key={item.id} testID="consent-ledger-row"
@@ -708,22 +698,22 @@ export default function Home() {
                     </Text>
                     <Text style={[styles.hint, { color: p.subtle }]}>
                       {item.active
-                        ? 'Attivo fino al ' + new Date(item.expiresAt).toLocaleDateString('it-IT')
+                        ? t('ledger.activeUntil', { date: new Date(item.expiresAt).toLocaleDateString(intlTag()) })
                         : item.revokedAt
-                          ? 'Revocato il ' + new Date(item.revokedAt).toLocaleDateString('it-IT')
-                          : 'Scaduto il ' + new Date(item.expiresAt).toLocaleDateString('it-IT')}
-                      {' · policy ' + item.policyVersion}
+                          ? t('ledger.revokedOn', { date: new Date(item.revokedAt).toLocaleDateString(intlTag()) })
+                          : t('ledger.expiredOn', { date: new Date(item.expiresAt).toLocaleDateString(intlTag()) })}
+                      {' \u00B7 ' + t('ledger.policy', { version: item.policyVersion })}
                     </Text>
                     {item.active && (
                       <Pressable testID="consent-ledger-revoke" accessibilityRole="button"
-                        accessibilityLabel={'Revoca consenso per ' + item.source}
+                        accessibilityLabel={t('ledger.revokeLabel', { source: item.source })}
                         disabled={busy || ledgerLoading}
                         onPress={() => { void revokeSourceConsent(item); }}
                         style={[styles.secondaryButton, { backgroundColor: p.card2,
                           paddingHorizontal: 12, marginTop: 8, alignSelf: 'flex-start',
                           opacity: busy || ledgerLoading ? 0.5 : 1 }]}>
                         <Text style={[styles.buttonText, heading]}>
-                          {'Revoca ' + item.source}
+                          {t('ledger.revoke', { source: item.source })}
                         </Text>
                       </Pressable>
                     )}
@@ -736,7 +726,7 @@ export default function Home() {
                     style={[styles.secondaryButton, { backgroundColor: p.card2,
                       paddingHorizontal: 16, marginTop: 12, alignSelf: 'flex-start' }]}>
                     <Text style={[styles.buttonText, heading]}>
-                      {ledgerLoading ? 'Caricamento…' : 'Carica altri consensi'}
+                      {ledgerLoading ? t('common.loading') : t('ledger.loadMore')}
                     </Text>
                   </Pressable>
                 )}
@@ -751,95 +741,80 @@ export default function Home() {
         {webMode.kind === 'cloud' && authState === 'signed-in' && (
           <View testID="privacy-actions" style={{ marginTop: 20, borderTopWidth: 1,
             borderTopColor: p.border, paddingTop: 15 }}>
-            <Text style={[styles.kicker, { color: p.subtle }]}>I TUOI DATI</Text>
-            <Text style={[styles.hint, heading]}>
-              Puoi esportare in JSON note, originali, dati elaborati e consensi dal database principale.
-              Il file contiene dati personali: custodiscilo in un luogo sicuro.
-              Le note scadono 30 giorni dopo la ricezione nel database; la pulizia
-              automatica avviene periodicamente e non riguarda backup o servizi esterni.
-            </Text>
+            <Text style={[styles.kicker, { color: p.subtle }]}>{t('privacy.kicker')}</Text>
+            <Text style={[styles.hint, heading]}>{t('privacy.exportText')}</Text>
             <Pressable testID="export-data" accessibilityRole="button"
               disabled={busy} onPress={() => { void exportPersonalData(); }}
               style={[styles.secondaryButton, { backgroundColor: p.card2,
                 paddingHorizontal: 16, alignSelf: 'flex-start', marginTop: 12 }]}>
-              <Text style={[styles.buttonText, heading]}>Esporta i miei dati (JSON)</Text>
+              <Text style={[styles.buttonText, heading]}>{t('privacy.export')}</Text>
             </Pressable>
-            <Text style={[styles.hint, { color: p.subtle, marginTop: 19 }]}>
-              La cancellazione elimina definitivamente note, embedding e cronologia
-              dei consensi dal database PostgreSQL principale. Non elimina backup,
-              copie dei provider AI o account presso il gestore dell'identità.
-            </Text>
+            <Text style={[styles.hint, { color: p.subtle, marginTop: 19 }]}>{t('privacy.eraseText')}</Text>
             <Pressable testID="erase-acknowledge" accessibilityRole="checkbox"
               accessibilityState={{ checked: eraseAcknowledged }}
               onPress={() => setEraseAcknowledged(value => !value)}
               style={{ flexDirection: 'row', marginTop: 12, gap: 9 }}>
               <Text style={heading}>{eraseAcknowledged ? '☑' : '☐'}</Text>
-              <Text style={[styles.hint, heading, { flex: 1, marginTop: 0 }]}>
-                Comprendo che la cancellazione sul database principale è irreversibile
-                e che i backup o servizi esterni richiedono procedure separate.
-              </Text>
+              <Text style={[styles.hint, heading, { flex: 1, marginTop: 0 }]}>{t('privacy.eraseAck')}</Text>
             </Pressable>
-            <TextInput testID="erase-confirmation" accessibilityLabel="Digita ELIMINA per confermare"
-              placeholder="Digita ELIMINA per confermare"
+            <TextInput testID="erase-confirmation"
+              accessibilityLabel={t('privacy.erasePlaceholder', { phrase: t('privacy.erasePhrase') })}
+              placeholder={t('privacy.erasePlaceholder', { phrase: t('privacy.erasePhrase') })}
               placeholderTextColor={p.subtle} value={erasePhrase}
               onChangeText={setErasePhrase}
               style={[styles.input, { minHeight: 42, marginTop: 9, color: p.text,
                 backgroundColor: p.bg, borderColor: p.border }]} />
             <Pressable testID="erase-data" accessibilityRole="button"
-              disabled={busy || !eraseAcknowledged || erasePhrase !== 'ELIMINA'}
+              disabled={busy || !eraseAcknowledged || erasePhrase !== t('privacy.erasePhrase')}
               onPress={() => { void erasePersonalData(); }}
               style={[styles.secondaryButton, { backgroundColor: p.card2,
                 alignSelf: 'flex-start', paddingHorizontal: 16, marginTop: 9,
-                opacity: !busy && eraseAcknowledged && erasePhrase === 'ELIMINA' ? 1 : 0.45 }]}>
-              <Text style={[styles.buttonText, heading]}>Cancella tutti i miei dati dal database</Text>
+                opacity: !busy && eraseAcknowledged && erasePhrase === t('privacy.erasePhrase') ? 1 : 0.45 }]}>
+              <Text style={[styles.buttonText, heading]}>{t('privacy.erase')}</Text>
             </Pressable>
           </View>
         )}
       </View>
       <View style={styles.columns}>
         <View style={[styles.card, cardStyle, styles.primaryCard]}>
-          <Text style={[styles.kicker, { color: p.subtle }]}>CATTURA UN MOMENTO</Text>
-          <Text style={[styles.cardTitle, heading]}>Cosa vuoi ricordare?</Text>
-          <TextInput testID="memo-input" placeholder="Una riunione, un pensiero, un'intuizione…" placeholderTextColor={p.subtle} multiline value={draft} onChangeText={value => {
+          <Text style={[styles.kicker, { color: p.subtle }]}>{t('capture.kicker')}</Text>
+          <Text style={[styles.cardTitle, heading]}>{t('capture.title')}</Text>
+          <TextInput testID="memo-input" placeholder={t('capture.placeholder')} placeholderTextColor={p.subtle} multiline value={draft} onChangeText={value => {
             setDraft(value);
             retryRef.current = null;
           }} style={[styles.input, { color: p.text, backgroundColor: p.bg, borderColor: p.border }]} />
           <Pressable testID="save-memo" onPress={() => { void captureText(); }} disabled={busy}
             accessibilityRole="button" style={[styles.mainButton, { backgroundColor: p.accent }]}>
-            <Text style={[styles.buttonText, { color: p.accentText }]}>＋ Salva nota rapida</Text>
+            <Text style={[styles.buttonText, { color: p.accentText }]}>{t('capture.save')}</Text>
           </Pressable>
           <View style={[styles.separator, { backgroundColor: p.border }]} />
           <Pressable testID="record-audio" onPress={() => { void captureAudio(); }} accessibilityRole="button" style={[styles.secondaryButton, { backgroundColor: p.card2 }]}>
-            <Text style={[styles.buttonText, heading]}>{recording ? '■ Ferma registrazione' : '◉ Registra memo vocale'}</Text>
+            <Text style={[styles.buttonText, heading]}>{recording ? t('capture.stop') : t('capture.record')}</Text>
           </Pressable>
-          <Text style={[styles.hint, { color: p.subtle }]}>Registra il microfono con consenso esplicito. Le chiamate telefoniche non vengono intercettate.</Text>
-          {audioUri && <Text testID="audio-result" style={[styles.hint, heading]}>Memo audio creato sul dispositivo.</Text>}
+          <Text style={[styles.hint, { color: p.subtle }]}>{t('capture.recordHint')}</Text>
+          {audioUri && <Text testID="audio-result" style={[styles.hint, heading]}>{t('capture.audioDone')}</Text>}
           {!!notice && <Text accessibilityRole="alert" testID="notice" style={[styles.notice, { color: p.text }]}>{notice}</Text>}
         </View>
         <View testID="memory-timeline" style={[styles.card, cardStyle, styles.sideCard]}>
-          <Text style={[styles.kicker, { color: p.subtle }]}>LA TUA MEMORIA</Text>
-          <Text style={[styles.cardTitle, heading]}>I tuoi momenti</Text>
+          <Text style={[styles.kicker, { color: p.subtle }]}>{t('timeline.kicker')}</Text>
+          <Text style={[styles.cardTitle, heading]}>{t('timeline.title')}</Text>
           {webMode.kind === 'cloud' && authState === 'signed-in' && memos.length > 0 && (
             <View testID="memory-source-filter" style={{ marginBottom: 12 }}>
-              <Text style={[styles.hint, { color: p.subtle }]}>
-                Filtra per sorgente le {memos.length} note già caricate. Non è una
-                ricerca nell'intero archivio: per includere le precedenti usa
-                Carica altre note, anche se il filtro non mostra risultati.
-              </Text>
+              <Text style={[styles.hint, { color: p.subtle }]}>{t('timeline.filtersHint')}</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 11 }}>
                 <Pressable testID="memory-source-all" accessibilityRole="button"
-                  accessibilityLabel="Mostra tutte le sorgenti"
+                  accessibilityLabel={t('timeline.allSourcesLabel')}
                   accessibilityState={{ selected: sourceFilter === null }}
                   onPress={() => setSourceFilter(null)}
                   style={[styles.secondaryButton, { backgroundColor: p.card2,
                     paddingHorizontal: 12, minHeight: 38,
                     borderWidth: sourceFilter === null ? 2 : 0, borderColor: p.accent }]}>
-                  <Text style={[styles.buttonText, heading]}>Tutte</Text>
+                  <Text style={[styles.buttonText, heading]}>{t('timeline.allSources')}</Text>
                 </Pressable>
                 {loadedSources.map(source => (
                   <Pressable key={source} testID="memory-source-option"
                     accessibilityRole="button"
-                    accessibilityLabel={'Filtra sorgente ' + source}
+                    accessibilityLabel={t('timeline.sourceLabel', { source })}
                     accessibilityState={{ selected: sourceFilter === source }}
                     onPress={() => setSourceFilter(source)}
                     style={[styles.secondaryButton, { backgroundColor: p.card2,
@@ -850,55 +825,45 @@ export default function Home() {
                 ))}
               </View>
               <View testID="memory-tag-filter" style={{ marginTop: 14 }}>
-                <Text style={[styles.hint, { color: p.subtle }]}>
-                  Filtra anche per tag presenti solo nelle note caricate.
-                  Le etichette attuali derivano da regole di parole chiave,
-                  non da analisi AI né da permessi per servizi esterni.
-                </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 11 }}>
                   <Pressable testID="memory-tag-all" accessibilityRole="button"
-                    accessibilityLabel="Mostra tutti i tag"
+                    accessibilityLabel={t('timeline.allTagsLabel')}
                     accessibilityState={{ selected: tagFilter === null }}
                     onPress={() => setTagFilter(null)}
                     style={[styles.secondaryButton, { backgroundColor: p.card2,
                       paddingHorizontal: 12, minHeight: 38,
                       borderWidth: tagFilter === null ? 2 : 0, borderColor: p.accent }]}>
-                    <Text style={[styles.buttonText, heading]}>Tutti i tag</Text>
+                    <Text style={[styles.buttonText, heading]}>{t('timeline.allTags')}</Text>
                   </Pressable>
                   {loadedTags.map(tag => (
                     <Pressable key={tag} testID="memory-tag-option"
                       accessibilityRole="button"
-                      accessibilityLabel={'Filtra tag ' + tag}
+                      accessibilityLabel={t('timeline.tagLabel', { tag: tagName(tag) })}
                       accessibilityState={{ selected: tagFilter === tag }}
                       onPress={() => setTagFilter(tag)}
                       style={[styles.secondaryButton, { backgroundColor: p.card2,
                         paddingHorizontal: 12, minHeight: 38,
                         borderWidth: tagFilter === tag ? 2 : 0, borderColor: p.accent }]}>
-                      <Text style={[styles.buttonText, heading]}>{tag}</Text>
+                      <Text style={[styles.buttonText, heading]}>{tagName(tag)}</Text>
                     </Pressable>
                   ))}
                 </View>
               </View>
               <View testID="memory-day-filter" style={{ marginTop: 14 }}>
-                <Text style={[styles.hint, { color: p.subtle }]}>
-                  Scegli una giornata locale fra quelle già caricate.
-                  La data dipende dal fuso di questo dispositivo; le giornate
-                  di pagine non ancora richieste non sono elencate.
-                </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 11 }}>
                   <Pressable testID="memory-day-all" accessibilityRole="button"
-                    accessibilityLabel="Mostra tutti i giorni caricati"
+                    accessibilityLabel={t('timeline.allDaysLabel')}
                     accessibilityState={{ selected: dayFilter === null }}
                     onPress={() => setDayFilter(null)}
                     style={[styles.secondaryButton, { backgroundColor: p.card2,
                       paddingHorizontal: 12, minHeight: 38,
                       borderWidth: dayFilter === null ? 2 : 0, borderColor: p.accent }]}>
-                    <Text style={[styles.buttonText, heading]}>Tutti i giorni</Text>
+                    <Text style={[styles.buttonText, heading]}>{t('timeline.allDays')}</Text>
                   </Pressable>
                   {loadedDays.map(day => (
                     <Pressable key={day.key} testID="memory-day-option"
                       accessibilityRole="button"
-                      accessibilityLabel={'Filtra giornata ' + day.label}
+                      accessibilityLabel={t('timeline.dayLabel', { day: day.label })}
                       accessibilityState={{ selected: dayFilter === day.key }}
                       onPress={() => setDayFilter(day.key)}
                       style={[styles.secondaryButton, { backgroundColor: p.card2,
@@ -910,14 +875,9 @@ export default function Home() {
                 </View>
               </View>
               <View testID="memory-text-filter-container" style={{ marginTop: 14 }}>
-                <Text style={[styles.hint, { color: p.subtle }]}>
-                  Cerca testo solo nelle note già caricate, insieme agli altri
-                  filtri. La ricerca non consulta l'intero archivio né carica
-                  automaticamente altre pagine.
-                </Text>
                 <TextInput testID="memory-text-filter"
-                  accessibilityLabel="Cerca testo nelle note caricate"
-                  placeholder="Cerca nelle note caricate…"
+                  accessibilityLabel={t('timeline.searchLabel')}
+                  placeholder={t('timeline.search')}
                   placeholderTextColor={p.subtle}
                   value={textFilter} maxLength={100} autoCapitalize="none"
                   autoCorrect={false}
@@ -926,32 +886,30 @@ export default function Home() {
                     color: p.text, backgroundColor: p.bg, borderColor: p.border }]} />
                 {textFilter.length > 0 && (
                   <Pressable testID="memory-text-clear" accessibilityRole="button"
-                    accessibilityLabel="Cancella ricerca testuale"
+                    accessibilityLabel={t('timeline.clearSearchLabel')}
                     onPress={() => setTextFilter('')}
                     style={[styles.secondaryButton, { backgroundColor: p.card2,
                       paddingHorizontal: 12, marginTop: 8,
                       alignSelf: 'flex-start', minHeight: 38 }]}>
-                    <Text style={[styles.buttonText, heading]}>Cancella ricerca</Text>
+                    <Text style={[styles.buttonText, heading]}>{t('timeline.clearSearch')}</Text>
                   </Pressable>
                 )}
               </View>
               <Text testID="memory-source-count" style={[styles.hint, { color: p.subtle }]}>
-                {visibleMemos.length} di {memos.length} note caricate visualizzate
-                dopo i filtri sorgente, tag, giornata e testo.
-                {nextCursor ? ' Altre pagine disponibili.' : ' Fine delle pagine caricate.'}
+                {t('timeline.count', { visible: visibleMemos.length, total: memos.length })}{' '}
+                {t(nextCursor ? 'timeline.morePages' : 'timeline.endPages')}
               </Text>
             </View>
           )}
           {memos.length === 0 ? (
             <View style={styles.empty}>
               <Text style={{ fontSize: 35 }}>✦</Text>
-              <Text style={[styles.emptyTitle, heading]}>Si comincia da qui.</Text>
-              <Text style={[styles.hint, { color: p.subtle }]}>{webMode.kind === 'cloud' ? 'Le note salvate nel cloud appariranno qui dopo l’accesso.' : 'Le note di questa sessione appariranno qui. Non sono ancora sincronizzate sul cloud.'}</Text>
+              <Text style={[styles.emptyTitle, heading]}>{t('timeline.emptyTitle')}</Text>
+              <Text style={[styles.hint, { color: p.subtle }]}>{t(webMode.kind === 'cloud' ? 'timeline.emptyCloud' : 'timeline.emptyLocal')}</Text>
             </View>
           ) : visibleMemos.length === 0 ? (
             <Text testID="memory-source-empty" style={[styles.hint, { color: p.subtle }]}>
-              Nessuna nota per i filtri selezionati tra quelle già caricate.
-              {nextCursor ? ' Puoi caricare altre note senza rimuovere i filtri.' : ''}
+              {t('timeline.noMatch')}{nextCursor ? ' ' + t('timeline.noMatchMore') : ''}
             </Text>
           ) : timelineDays.map(day => (
             <View key={day.key} testID="memory-day-group">
@@ -963,7 +921,7 @@ export default function Home() {
                 <View key={memo.id} testID="memory-day-item"
                   style={[styles.memo, { borderColor: p.border }]}>
                   <Text style={[styles.memoTime, { color: p.subtle }]}>
-                    {memo.time} · {memo.source} · {memo.tags.join(', ')}
+                    {memo.time} · {memo.source} · {memo.tags.map(tagName).join(', ')}
                   </Text>
                   <Text style={[styles.memoText, heading]}>{memo.content}</Text>
                 </View>
@@ -972,13 +930,13 @@ export default function Home() {
           ))}
           {webMode.kind === 'cloud' && authState === 'signed-in' && nextCursor && (
             <Pressable testID="load-older" accessibilityRole="button"
-              accessibilityLabel="Carica note precedenti"
+              accessibilityLabel={t('timeline.loadOlderLabel')}
               disabled={busy || loadingOlder}
               onPress={() => { void loadOlder(); }}
               style={[styles.secondaryButton, { backgroundColor: p.card2,
                 marginTop: 12, opacity: busy || loadingOlder ? 0.5 : 1 }]}>
               <Text style={[styles.buttonText, heading]}>
-                {loadingOlder ? 'Caricamento…' : 'Carica altre note'}
+                {loadingOlder ? t('common.loading') : t('timeline.loadOlder')}
               </Text>
             </Pressable>
           )}
@@ -992,9 +950,9 @@ export default function Home() {
       </View>
       <View style={styles.features}>
         {[
-          { icon: '◈', title: 'Connetti', detail: 'Microsoft 365 e Google Workspace: calendario, email, attività, chat', state: webMode.kind === 'cloud' ? 'ATTIVO' : 'SERVER ON-PREM' },
-          { icon: '✧', title: 'Smista', detail: 'Una carta alla volta: fatto, non fatto, dopo, scarta', state: webMode.kind === 'cloud' ? 'ATTIVO' : 'SERVER ON-PREM' },
-          { icon: '◇', title: 'Agisci', detail: 'Azioni sulle tue app solo con conferma esplicita e audit', state: 'CON CONFERMA' }
+          { icon: '◈', title: t('feature.connect'), detail: t('feature.connectDetail'), state: webMode.kind === 'cloud' ? t('feature.active') : t('feature.onPrem') },
+          { icon: '✧', title: t('feature.triage'), detail: t('feature.triageDetail'), state: webMode.kind === 'cloud' ? t('feature.active') : t('feature.onPrem') },
+          { icon: '◇', title: t('feature.act'), detail: t('feature.actDetail'), state: t('feature.confirmed') }
         ].map(feature => <View key={feature.title} style={[styles.feature, { borderColor: p.border }]}>
           <Text style={{ color: p.accent, fontSize: 25 }}>{feature.icon}</Text>
           <View style={{ flex: 1 }}><Text style={[styles.featureTitle, heading]}>{feature.title}</Text><Text style={[styles.hint, { color: p.subtle }]}>{feature.detail}</Text></View>

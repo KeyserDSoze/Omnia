@@ -1,4 +1,5 @@
 import type { ConnectorProviderDto, TodayItemDto, TriageDecision, WorkItemDto, WorkItemKind } from './memoryApi';
+import { intlTag, t } from '../i18n';
 
 /**
  * The daily deck is a VIEW over live provider signals. The order comes from the server's
@@ -50,36 +51,36 @@ export function canApplyToSource(item: WorkItemDto, providers: readonly Connecto
     providers.some(p => p.id === item.provider && p.capabilities.includes('tasks.complete'));
 }
 
-export const kindLabels: Record<WorkItemKind, string> = {
-  event: 'Riunione', mail: 'Email', task: 'Attività', chat: 'Chat'
-};
+export const kindLabel = (kind: WorkItemKind): string => t(`kind.${kind}`);
 
 export const providerTaskApp: Record<string, string> = {
   microsoft: 'Microsoft To Do', google: 'Google Tasks'
 };
 
 export function whenLabel(item: WorkItemDto, now: Date, timeZone?: string): string {
-  const time = (iso: string) => new Date(iso).toLocaleTimeString('it-IT',
+  const time = (iso: string) => new Date(iso).toLocaleTimeString(intlTag(),
     { hour: '2-digit', minute: '2-digit', timeZone });
-  const day = (iso: string) => new Date(iso).toLocaleDateString('it-IT',
+  const day = (iso: string) => new Date(iso).toLocaleDateString(intlTag(),
     { day: 'numeric', month: 'short', timeZone });
   const sameDay = (iso: string) => day(iso) === day(now.toISOString());
   switch (item.kind) {
     case 'event':
-      if (!item.startsAt) return 'Evento';
-      if (item.endsAt && new Date(item.endsAt) <= now) return 'Terminato alle ' + time(item.endsAt);
+      if (!item.startsAt) return t('when.event');
+      if (item.endsAt && new Date(item.endsAt) <= now) return t('when.ended', { time: time(item.endsAt) });
       if (new Date(item.startsAt) <= now)
-        return item.endsAt ? 'In corso, fino alle ' + time(item.endsAt) : 'In corso';
-      return (sameDay(item.startsAt) ? 'Oggi alle ' : day(item.startsAt) + ' alle ') + time(item.startsAt);
+        return item.endsAt ? t('when.ongoingUntil', { time: time(item.endsAt) }) : t('when.ongoing');
+      return sameDay(item.startsAt) ? t('when.todayAt', { time: time(item.startsAt) })
+        : t('when.dayAt', { day: day(item.startsAt), time: time(item.startsAt) });
     case 'task':
-      if (!item.dueAt) return 'Senza scadenza';
-      if (new Date(item.dueAt) < now) return 'Scaduta (' + day(item.dueAt) + ')';
-      return sameDay(item.dueAt) ? 'Scade oggi' : 'Scade il ' + day(item.dueAt);
+      if (!item.dueAt) return t('when.noDue');
+      if (new Date(item.dueAt) < now) return t('when.overdue', { day: day(item.dueAt) });
+      return sameDay(item.dueAt) ? t('when.dueToday') : t('when.dueOn', { day: day(item.dueAt) });
     case 'mail':
-      return item.startsAt ? 'Ricevuta ' + (sameDay(item.startsAt) ? 'alle ' : 'il ' + day(item.startsAt) + ' alle ') +
-        time(item.startsAt) : 'Email';
+      if (!item.startsAt) return t('kind.mail');
+      return sameDay(item.startsAt) ? t('when.receivedAt', { time: time(item.startsAt) })
+        : t('when.receivedOn', { day: day(item.startsAt), time: time(item.startsAt) });
     case 'chat':
-      return item.startsAt ? 'Messaggio delle ' + time(item.startsAt) : 'Chat';
+      return item.startsAt ? t('when.chatAt', { time: time(item.startsAt) }) : t('kind.chat');
   }
 }
 

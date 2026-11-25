@@ -5,9 +5,10 @@ import {
 } from '../services/memoryApi';
 import type { TodaySource } from '../services/demoToday';
 import {
-  canApplyToSource, decisionCounts, deckWindow, kindLabels, pendingCards, providerTaskApp, safeWebLink,
+  canApplyToSource, decisionCounts, deckWindow, kindLabel, pendingCards, providerTaskApp, safeWebLink,
   whenLabel, withDecision
 } from '../services/todayDeck';
+import { useT } from '../i18n';
 
 export type Palette = {
   bg: string; surface: string; text: string; subtle: string; border: string;
@@ -30,6 +31,7 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
   /** AI pre-actions by item key (from the opt-in briefing); displayed, never executed. */
   suggestions?: Readonly<Record<string, string>>;
 }) {
+  const t = useT();
   const [snapshot, setSnapshot] = useState<TodayDto | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -51,7 +53,7 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
       setSnapshot(result);
       setNow(current);
     } catch (e) {
-      if (live.current) setError(e instanceof CloudApiError ? e.message : 'Giornata non disponibile. Riprova.');
+      if (live.current) setError(e instanceof CloudApiError ? e.message : t('today.loadFailed'));
     } finally {
       if (live.current) setLoading(false);
     }
@@ -89,7 +91,7 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
       setNow(decidedAt);
       setApplyToSource(false);
     } catch (e) {
-      if (live.current) setError(e instanceof CloudApiError ? e.message : 'Decisione non salvata. Riprova.');
+      if (live.current) setError(e instanceof CloudApiError ? e.message : t('today.decideFailed'));
     } finally {
       if (live.current) {
         setBusy(false);
@@ -118,31 +120,28 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
     <View testID="today-panel" style={[styles.card, { backgroundColor: p.surface, borderColor: p.border }]}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.kicker, { color: p.subtle }]}>{demo ? 'OGGI · DEMO CON DATI DI ESEMPIO' : 'OGGI'}</Text>
+          <Text style={[styles.kicker, { color: p.subtle }]}>{demo ? t('today.kickerDemo') : t('today.kicker')}</Text>
           <Text style={[styles.title, heading]}>
-            {card ? 'Cosa ne facciamo?' : snapshot && snapshot.accounts.length > 0 ? 'Giornata in ordine' : 'La tua giornata'}
+            {card ? t('today.titleCard') : snapshot && snapshot.accounts.length > 0 ? t('today.titleClear') : t('today.title')}
           </Text>
         </View>
         <Pressable testID="today-reload" accessibilityRole="button" onPress={() => { void load(); }}
           disabled={loading || busy} style={[styles.smallButton, { backgroundColor: p.card2, opacity: loading ? 0.5 : 1 }]}>
-          <Text style={[styles.smallText, heading]}>{loading ? 'Carico…' : 'Aggiorna'}</Text>
+          <Text style={[styles.smallText, heading]}>{loading ? t('today.loading') : t('today.reload')}</Text>
         </Pressable>
       </View>
 
       {troubled.map(account => (
         <View key={account.accountId} testID="today-account-warning" style={[styles.warning, { borderColor: p.border }]}>
           <Text style={[styles.hint, heading, { marginTop: 0 }]}>
-            {account.displayName}: {account.status === 'reconnect_required'
-              ? 'accesso scaduto, ricollega l’account nelle connessioni.' : 'provider non raggiungibile, dati parziali.'}
+            {t(account.status === 'reconnect_required' ? 'today.reconnect'
+              : account.status === 'paused' ? 'today.paused' : 'today.unavailable', { account: account.displayName })}
           </Text>
         </View>
       ))}
 
       {snapshot && snapshot.accounts.length === 0 && (
-        <Text testID="today-empty-accounts" style={[styles.hint, { color: p.subtle }]}>
-          Collega Microsoft 365 o Google Workspace qui sotto: riunioni, email da leggere, attività e chat
-          arriveranno qui come carte da smistare.
-        </Text>
+        <Text testID="today-empty-accounts" style={[styles.hint, { color: p.subtle }]}>{t('today.empty')}</Text>
       )}
 
       {card && (
@@ -151,8 +150,8 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
             transform: [{ translateX: position }, { rotate: position.interpolate({
               inputRange: [-300, 0, 300], outputRange: ['-6deg', '0deg', '6deg'] }) }] }]}>
           <Text style={[styles.kind, { color: p.accent }]}>
-            {kindIcons[card.item.kind]} {kindLabels[card.item.kind].toUpperCase()}
-            {card.item.important ? ' · IMPORTANTE' : ''}{card.item.unread ? ' · NON LETTA' : ''}
+            {kindIcons[card.item.kind]} {kindLabel(card.item.kind).toLocaleUpperCase()}
+            {card.item.important ? ' · ' + t('today.important') : ''}{card.item.unread ? ' · ' + t('today.unread') : ''}
           </Text>
           <Text testID="today-card-title" style={[styles.cardTitle, heading]}>{card.item.title}</Text>
           <Text style={[styles.hint, { color: p.subtle }]}>
@@ -161,13 +160,13 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
           {!!card.item.detail && <Text style={[styles.detail, heading]}>{card.item.detail}</Text>}
           {!!suggestions[card.key] && (
             <View testID="today-pre-action" style={[styles.preAction, { borderColor: p.accent }]}>
-              <Text style={[styles.kind, { color: p.accent }]}>PRE-AZIONE SUGGERITA · AI</Text>
+              <Text style={[styles.kind, { color: p.accent }]}>{t('today.preAction')}</Text>
               <Text style={[styles.detail, heading, { marginTop: 4 }]}>{suggestions[card.key]}</Text>
             </View>
           )}
           {link && (
             <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(link); }}>
-              <Text style={[styles.hint, { color: p.accent }]}>Apri nell’app di origine ↗</Text>
+              <Text style={[styles.hint, { color: p.accent }]}>{t('today.openSource')}</Text>
             </Pressable>
           )}
           {canApply && (
@@ -176,30 +175,28 @@ export function TodayPanel({ api, providers, p, demo = false, suggestions = {} }
               style={styles.checkRow}>
               <Text style={[styles.check, { borderColor: p.text, color: p.text }]}>{applyToSource ? '✓' : ' '}</Text>
               <Text style={[styles.hint, heading, { flex: 1, marginTop: 0 }]}>
-                Con “Fatto”, segna completata anche su {providerTaskApp[card.item.provider] ?? card.item.provider}
-                {' '}(azione registrata nel tuo audit).
+                {t('today.applySource', { app: providerTaskApp[card.item.provider] ?? card.item.provider })}
               </Text>
             </Pressable>
           )}
           <View style={styles.actions}>
-            <Action testID="today-not-done" label="✗ Non fatto" onPress={() => { void decide('not_done'); }} p={p} disabled={busy} />
-            <Action testID="today-later" label="⏱ Dopo" onPress={() => { void decide('later'); }} p={p} disabled={busy} />
-            <Action testID="today-dismiss" label="Scarta" onPress={() => { void decide('dismissed'); }} p={p} disabled={busy} />
-            <Action testID="today-done" label="✓ Fatto" onPress={() => { void decide('done'); }} p={p} disabled={busy} primary />
+            <Action testID="today-not-done" label={t('today.notDone')} onPress={() => { void decide('not_done'); }} p={p} disabled={busy} />
+            <Action testID="today-later" label={t('today.later')} onPress={() => { void decide('later'); }} p={p} disabled={busy} />
+            <Action testID="today-dismiss" label={t('today.dismiss')} onPress={() => { void decide('dismissed'); }} p={p} disabled={busy} />
+            <Action testID="today-done" label={t('today.done')} onPress={() => { void decide('done'); }} p={p} disabled={busy} primary />
           </View>
           <Text style={[styles.hint, { color: p.subtle }]}>
-            {Platform.OS === 'web' ? 'Trascina la carta: destra = fatto, sinistra = non fatto. ' : ''}
-            In coda: {pending.length}.
+            {Platform.OS === 'web' ? t('today.dragHint') + ' ' : ''}{t('today.queue', { count: pending.length })}
           </Text>
         </Animated.View>
       )}
 
       {snapshot && !card && snapshot.accounts.length > 0 && (
-        <Text testID="today-clear" style={[styles.hint, heading]}>Nessuna carta in sospeso. Ottimo lavoro.</Text>
+        <Text testID="today-clear" style={[styles.hint, heading]}>{t('today.clear')}</Text>
       )}
       {snapshot && items.length > 0 && (
         <Text testID="today-summary" style={[styles.hint, { color: p.subtle }]}>
-          Fatte {counts.done} · Non fatte {counts.not_done} · Rimandate {counts.later} · Scartate {counts.dismissed}
+          {t('today.summary', { done: counts.done, notDone: counts.not_done, later: counts.later, dismissed: counts.dismissed })}
         </Text>
       )}
       {!!error && <Text accessibilityRole="alert" testID="today-error" style={[styles.hint, heading]}>{error}</Text>}

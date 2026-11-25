@@ -6,7 +6,7 @@ export type WebCloudConfig = {
 
 export type WebMode =
   | { kind: 'demo' }
-  | { kind: 'invalid'; reason: string }
+  | { kind: 'invalid'; reason: 'config.incomplete' | 'config.unsafe' }
   | { kind: 'cloud'; config: WebCloudConfig };
 
 export function isAllowedPublicEndpoint(value: string): boolean {
@@ -27,10 +27,10 @@ export function resolveWebMode(raw: { issuer?: string; clientId?: string; apiBas
   const apiBaseUrl = raw.apiBaseUrl?.trim() ?? '';
   if (!issuer && !clientId && !apiBaseUrl) return { kind: 'demo' };
   if (!issuer || !clientId || !apiBaseUrl)
-    return { kind: 'invalid', reason: 'Configurazione OIDC/API incompleta.' };
+    return { kind: 'invalid', reason: 'config.incomplete' };
   if (!isAllowedPublicEndpoint(issuer) || !isAllowedPublicEndpoint(apiBaseUrl) ||
       !/^[A-Za-z0-9._:-]{1,120}$/.test(clientId))
-    return { kind: 'invalid', reason: 'Indirizzo OIDC/API non sicuro o client ID non valido.' };
+    return { kind: 'invalid', reason: 'config.unsafe' };
   return { kind: 'cloud', config: {
     issuer: issuer.replace(/\/$/, ''),
     clientId,

@@ -1,4 +1,5 @@
 import type { EngineRegistry, Listening, SpeechToTextEngine, TextToSpeechEngine } from './aiRouter';
+import { t } from '../i18n';
 
 /** Browser engines of the AI router, built on the Web Speech API. */
 
@@ -50,12 +51,12 @@ export function speechErrorMessage(code: string): string | null {
     case 'aborted': return null;
     case 'not-allowed':
     case 'service-not-allowed':
-      return 'Il browser non mi lascia usare il microfono: consentilo nelle impostazioni del sito.';
-    case 'no-speech': return 'Non ho sentito nulla. Riprova quando vuoi.';
-    case 'audio-capture': return 'Non trovo un microfono su questo dispositivo.';
-    case 'network': return 'Il riconoscimento vocale del browser non è raggiungibile. Puoi scrivere.';
-    case 'language-not-supported': return 'Il browser non riconosce l’italiano. Puoi scrivere.';
-    default: return 'Dettatura non riuscita. Puoi scrivere.';
+      return t('speech.errorMic');
+    case 'no-speech': return t('speech.errorSilence');
+    case 'audio-capture': return t('speech.errorNoMic');
+    case 'network': return t('speech.errorNetwork');
+    case 'language-not-supported': return t('speech.errorLanguage');
+    default: return t('speech.errorOther');
   }
 }
 
@@ -104,12 +105,21 @@ export function createBrowserSpeechToText(env: SpeechEnvironment = globalThis): 
   };
 }
 
-/** An Italian voice installed on the device first; an online vendor voice only when allowed. */
-export function pickVoice(voices: readonly Voice[], allowOnline = false, language = 'it'): Voice | null {
-  const italian = voices.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith(language));
-  const local = italian.filter(v => v.localService);
-  const pool = local.length > 0 ? local : allowOnline ? italian : [];
-  return pool.find(v => v.default) ?? pool[0] ?? null;
+/**
+ * A voice for the BCP 47 tag: same primary language, the tag's region first. A voice installed
+ * on the device wins; an online vendor voice only when allowed.
+ */
+export function pickVoice(voices: readonly Voice[], allowOnline: boolean, tag: string): Voice | null {
+  const parts = (lang: string) => lang.toLowerCase().replace(/_/g, '-').split('-');
+  const [language, region] = parts(tag);
+  const same = voices.filter(v => parts(v.lang)[0] === language);
+  const best = (pool: Voice[]) => {
+    const regional = pool.filter(v => region !== undefined && parts(v.lang)[1] === region);
+    const list = regional.length > 0 ? regional : pool;
+    return list.find(v => v.default) ?? list[0] ?? null;
+  };
+  const local = same.filter(v => v.localService);
+  return local.length > 0 ? best(local) : allowOnline ? best(same) : null;
 }
 
 export function createBrowserTextToSpeech(env: SpeechEnvironment = globalThis): TextToSpeechEngine | null {
@@ -131,12 +141,12 @@ export function createBrowserTextToSpeech(env: SpeechEnvironment = globalThis): 
   });
   return {
     engine: 'browser',
-    async availability() {
+    async availability(lang) {
       const list = await voices();
-      return pickVoice(list) ? 'local' : pickVoice(list, true) ? 'online' : 'none';
+      return pickVoice(list, false, lang) ? 'local' : pickVoice(list, true, lang) ? 'online' : 'none';
     },
-    async ready(allowOnline) {
-      voice = pickVoice(await voices(), allowOnline);
+    async ready(allowOnline, lang) {
+      voice = pickVoice(await voices(), allowOnline, lang);
       return voice !== null;
     },
     speak(text, events) {

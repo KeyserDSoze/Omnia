@@ -16,15 +16,18 @@ jobs:
       pages_enabled: ${{ steps.pages.outputs.enabled }}
       artifact_name: ${{ steps.artifact.outputs.name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: src/mobile/package-lock.json
-      - name: Build Expo web
+      # Public demo: no OIDC/API configuration, so the bundle runs in local demo mode.
+      - name: Build Expo web for https://<owner>.github.io/Tao/
         working-directory: src/mobile
-        run: node scripts/verify-mobile-lockfile.mjs && node scripts/verify-sdk58-security.mjs && npm ci --no-audit --no-fund && npm run typecheck && npm run build:web
+        env:
+          TAO_WEB_BASE_PATH: /Tao
+        run: npm ci --no-audit --no-fund && npm run typecheck && npm run build:web
       - name: Pages enabled?
         id: pages
         env:
@@ -36,12 +39,12 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/pages")
-          if [ "$status" = "200" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Pages not enabled. Use Settings > Pages > Source: GitHub Actions."
-          fi
+          case "$status" in
+            200) echo "enabled=true" >> "$GITHUB_OUTPUT" ;;
+            404) echo "enabled=false" >> "$GITHUB_OUTPUT"
+                 echo "Pages not enabled. Use Settings > Pages > Source: GitHub Actions." ;;
+            *)   echo "Unexpected Pages API status $status" >&2; exit 1 ;;
+          esac
       # A new artifact per workflow attempt avoids rerun name conflicts.
       # The separate deployment job consumes the ACTUAL output of the
       # completed build job; do not recalculate run_attempt on a partial rerun.
@@ -67,7 +70,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       # deploy-pages uses the internal Actions artifact service; REST visibility
       # does NOT imply internal visibility. The prior job completion acts as
       # the publication boundary and a bounded grace period mitigates lag.
@@ -75,6 +78,6 @@ jobs:
         shell: bash
         run: sleep 15
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
         with:
           artifact_name: ${{ needs.build.outputs.artifact_name }}

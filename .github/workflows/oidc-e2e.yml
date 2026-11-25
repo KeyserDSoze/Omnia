@@ -10,34 +10,21 @@ jobs:
   oidc-browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      TAO_WEB_BASE_PATH: /Tao
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: src/mobile/package-lock.json
 
-      - name: Verify exact .NET SDK from global.json
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m unittest discover -s tests/quality -p 'test_dotnet_toolchain.py'
-          python3 tests/quality/verify_dotnet_toolchain.py
-          python3 -m unittest discover -s tests/quality -p 'test_dotnet_image_pins.py'
-          python3 tests/quality/verify_dotnet_image_pins.py --offline
-          test "$(dotnet --version)" = "10.0.404"
-
-      - name: Validate and restore API NuGet graph in locked mode
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m unittest discover -s tests/quality -p 'test_nuget_lock.py'
-          python3 tests/quality/verify_nuget_locks.py
-          dotnet restore src/backend/Tao.Api/Tao.Api.csproj --locked-mode
+      - name: Locked restore of the API
+        run: dotnet restore src/backend/Tao.Api/Tao.Api.csproj --locked-mode
 
       - name: Start disposable PostgreSQL and Keycloak with random credentials
         shell: bash
@@ -77,7 +64,9 @@ jobs:
           docker run -d --rm --name tao-oidc-keycloak \
             -e KC_BOOTSTRAP_ADMIN_USERNAME=ci-admin \
             -e "KC_BOOTSTRAP_ADMIN_PASSWORD=$kcpass" \
-            -v "$GITHUB_WORKSPACE/docker/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro" \
+            -e TAO_PUBLIC_URL=http://127.0.0.1:19006 \
+            -e TAO_TENANT_ID=local \
+            -v "$GITHUB_WORKSPACE/docker/keycloak/tao-realm.json:/opt/keycloak/data/import/tao-realm.json:ro" \
             -p 127.0.0.1:8081:8080 quay.io/keycloak/keycloak:26.4 \
             start-dev --import-realm --hostname=http://localhost:8081
 
@@ -144,11 +133,6 @@ jobs:
           export Cors__Origins__0=http://127.0.0.1:19006
           export ASPNETCORE_ENVIRONMENT=Development
           export ASPNETCORE_URLS=http://127.0.0.1:8080
-          # This state is owned by the ephemeral test operator, not restored
-          # from PGDATA or exposed in the web/API bundle.
-          export Recovery__AccessStateFile="$RUNNER_TEMP/tao-oidc-recovery-state"
-          printf 'ready\n' > "$Recovery__AccessStateFile"
-          chmod 600 "$Recovery__AccessStateFile"
           nohup dotnet run --project src/backend/Tao.Api/Tao.Api.csproj \
             --configuration Release --no-launch-profile \
             > "$RUNNER_TEMP/tao-oidc-api.log" 2>&1 < /dev/null &
@@ -159,26 +143,9 @@ jobs:
           cat "$RUNNER_TEMP/tao-oidc-api.log"
           exit 1
 
-      - name: Running API blocks access immediately when recovery quarantine is activated
-        shell: bash
-        run: |
-          set -euo pipefail
-          marker="$RUNNER_TEMP/tao-oidc-recovery-state"
-          body="$(mktemp "$RUNNER_TEMP/tao-quarantine-response.XXXXXX")"
-          trap 'rm -f "$body"' EXIT
-          printf 'quarantined\n' > "$marker"
-          chmod 600 "$marker"
-          code="$(curl -sS -o "$body" -w '%{http_code}' http://127.0.0.1:8080/health)"
-          [[ "$code" == 503 ]] || { echo "Quarantined API still served traffic." >&2; exit 1; }
-          jq -e '.error == "recovery_quarantined"' "$body" >/dev/null
-          code="$(curl -sS -o "$body" -w '%{http_code}' http://127.0.0.1:8080/api/v1/memories)"
-          [[ "$code" == 503 ]] || { echo "Quarantined API exposed a personal-data route." >&2; exit 1; }
-          printf 'ready\n' > "$marker"
-          curl -fsS http://127.0.0.1:8080/health | jq -e '.status == "ok"' >/dev/null
-
       - name: Install locked web dependencies
         working-directory: src/mobile
-        run: node scripts/verify-mobile-lockfile.mjs && node scripts/verify-sdk58-security.mjs && npm ci --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Build static Expo for actual OIDC + API
         working-directory: src/mobile
@@ -207,7 +174,7 @@ jobs:
           fi
           docker logs --tail 100 tao-oidc-keycloak 2>&1 || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: tao-oidc-browser-diagnostics

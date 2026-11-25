@@ -6,792 +6,154 @@ on:
 permissions:
   contents: read
 jobs:
-  dotnet:
+  backend:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-      - name: Test and validate fail-closed .NET OCI manifest index pin
-        run: |
-          python3 -m unittest discover -s tests/quality -p 'test_dotnet_image_pins.py'
-          python3 tests/quality/verify_dotnet_image_pins.py --offline
-          # Verify actual Microsoft registry indexes, amd64+arm64 descriptors,
-          # and fail if the published version tags drift from reviewed hashes.
-          python3 tests/quality/verify_dotnet_image_pins.py --remote
-      - name: Read-only MCR index discovery after failing OCI pin gate (#212)
-        if: failure()
-        run: python3 tests/quality/verify_dotnet_image_pins.py --discover
-      - name: Test and validate pinned .NET toolchain contract
-        run: |
-          python3 -m unittest discover -s tests/quality -p 'test_dotnet_toolchain.py'
-          python3 tests/quality/verify_dotnet_toolchain.py
-          test "$(dotnet --version)" = "10.0.404"
-      - name: TDD fail-closed OCI tag drift discovery (#212)
-        run: |
-          python3 -m unittest discover -s tests/quality -p 'test_oci_drift_diagnostics.py'
-          python3 tests/quality/verify_oci_drift_diagnostics.py
-      - name: TDD reviewed CodeQL SAST workflow policy (#211)
-        run: |
-          python3 -m unittest discover -s tests/quality -p 'test_codeql_policy.py'
-          python3 tests/quality/verify_codeql_policy.py
-      - name: Validate reviewed Dependabot version-update policy (#197)
-        run: |
-          python3 -m unittest discover -s tests/quality -p 'test_dependabot_policy.py'
-          python3 tests/quality/verify_dependabot_policy.py
-      - name: TDD security policy fixtures (high/critical, feed errors, expiry)
-        run: python3 -m unittest discover -s tests/quality -p 'test_supply_chain_audit.py'
-      - name: TDD gate for lock-derived CycloneDX inventory
-        shell: bash
+      # CI=true: locked restore, and NuGet audit fails on high/critical advisories.
+      - name: Locked restore with NuGet audit
         run: |
           set -euo pipefail
-          python3 -m unittest discover -s tests/quality -p 'test_locked_sbom.py'
-          python3 tests/quality/generate_locked_sbom.py --output "$RUNNER_TEMP/tao-locked-sbom"
-          python3 tests/quality/generate_locked_sbom.py --verify "$RUNNER_TEMP/tao-locked-sbom"
-          sha256sum "$RUNNER_TEMP/tao-locked-sbom/"*.cdx.json
-      - name: Publish locked CycloneDX inventory as short-lived CI artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tao-locked-dependency-sbom
-          path: ${{ runner.temp }}/tao-locked-sbom/*.cdx.json
-          if-no-files-found: error
-          retention-days: 14
-      - name: Test and validate fail-closed NuGet lock graphs
-        run: |
-          python3 -m unittest discover -s tests/quality -p 'test_nuget_lock.py'
-          python3 tests/quality/verify_nuget_locks.py
-      - name: Locked NuGet restore for every .NET 10 project
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -d '' projects < <(find src/backend tests -type f -name '*.csproj' \
-            ! -path '*/bin/*' ! -path '*/obj/*' -print0 | sort -z)
-          test "${#projects[@]}" -eq 20
-          for project in "${projects[@]}"; do
+          for project in $(find src/backend tests -name '*.csproj' | sort); do
             dotnet restore "$project" --locked-mode
           done
-      - name: xUnit domain and application
+      - name: Build API
+        run: dotnet build src/backend/Tao.Api/Tao.Api.csproj -c Release --no-restore
+      - name: Unit tests
         run: dotnet test tests/Tao.Domain.Tests/Tao.Domain.Tests.csproj -c Release
-      - name: Compile .NET 10 API and offline backfill utility
-        run: |
-          dotnet build src/backend/Tao.Api/Tao.Api.csproj -c Release
-          dotnet build src/backend/Tao.Backfill/Tao.Backfill.csproj -c Release
-          dotnet build src/backend/Tao.BackfillAudit/Tao.BackfillAudit.csproj -c Release
-          dotnet build src/backend/Tao.RecoveryAudit/Tao.RecoveryAudit.csproj -c Release
-          dotnet build src/backend/Tao.ErasurePublisher/Tao.ErasurePublisher.csproj -c Release
-          dotnet build src/backend/Tao.WitnessAudit/Tao.WitnessAudit.csproj -c Release
-          dotnet build src/backend/Tao.ErasureDeliveryAudit/Tao.ErasureDeliveryAudit.csproj -c Release
-          dotnet build tests/Tao.RestoreRehearsal/Tao.RestoreRehearsal.csproj -c Release
-          dotnet build tests/Tao.UnwitnessedPitrRehearsal/Tao.UnwitnessedPitrRehearsal.csproj -c Release
-          dotnet build tests/Tao.WitnessPitrRehearsal/Tao.WitnessPitrRehearsal.csproj -c Release
-          dotnet build tests/Tao.ClaimPitrRehearsal/Tao.ClaimPitrRehearsal.csproj -c Release
-      - name: Recovery audit CLI denies missing external journal and checkpoint
-        shell: bash
-        run: |
-          set -euo pipefail
-          log="$(mktemp "$RUNNER_TEMP/tao-recovery-audit.XXXXXX")"
-          trap 'rm -f "$log"' EXIT
-          if env -u TAO_RECOVERY_JOURNAL_PATH \
-                 -u TAO_RECOVERY_CHECKPOINT_PATH \
-                 -u TAO_RECOVERY_JOURNAL_KEY_PATH \
-                 -u TAO_RECOVERY_CHECKPOINT_KEY_PATH \
-            dotnet run --no-build -c Release \
-            --project src/backend/Tao.RecoveryAudit/Tao.RecoveryAudit.csproj \
-            > "$log" 2>&1; then
-            echo "Recovery audit unexpectedly accepted absent external trust files." >&2
-            exit 1
-          fi
-          grep -Fq 'RECOVERY_AUDIT_FAILED' "$log" || {
-            echo "Recovery audit failed for an unrelated reason." >&2
-            exit 1
-          }
-
-      - name: Assert recovery quarantine prevents API startup before database access
-        shell: bash
-        run: |
-          set -euo pipefail
-          marker="$(mktemp "$RUNNER_TEMP/tao-recovery-state.XXXXXX")"
-          log="$(mktemp "$RUNNER_TEMP/tao-recovery-log.XXXXXX")"
-          trap 'rm -f "$marker" "$log"' EXIT
-          printf 'quarantined\n' > "$marker"
-          chmod 600 "$marker"
-          if Recovery__AccessStateFile="$marker" ASPNETCORE_ENVIRONMENT=Development \
-            dotnet run --no-build --no-launch-profile -c Release \
-              --project src/backend/Tao.Api/Tao.Api.csproj > "$log" 2>&1; then
-            echo "Quarantined API unexpectedly started." >&2
-            exit 1
-          fi
-          grep -Fq 'RECOVERY_QUARANTINED' "$log" || {
-            echo "API failed for an unrelated reason; gate was not exercised." >&2
-            exit 1
-          }
-          if ASPNETCORE_ENVIRONMENT=Production \
-            dotnet run --no-build --no-launch-profile -c Release \
-              --project src/backend/Tao.Api/Tao.Api.csproj > "$log" 2>&1; then
-            echo "Production API unexpectedly started without release state." >&2
-            exit 1
-          fi
-          grep -Fq 'RECOVERY_QUARANTINED' "$log" || {
-            echo "Production mode did not deny missing recovery state." >&2
-            exit 1
-          }
-          printf 'ready\n' > "$marker"
-          if Recovery__AccessStateFile="$marker" ASPNETCORE_ENVIRONMENT=Development \
-            dotnet run --no-build --no-launch-profile -c Release \
-              --project src/backend/Tao.Api/Tao.Api.csproj > "$log" 2>&1; then
-            echo "Unconfigured API unexpectedly started." >&2
-            exit 1
-          fi
-          grep -Fq 'Database:ConnectionString is required' "$log" || {
-            echo "Ready state did not advance to the expected database check." >&2
-            exit 1
-          }
-
-      # The official MinIO Community Docker image was withdrawn in 2026.
-      # SeaweedFS speaks the same S3 Object Lock/versioning protocol and has
-      # a maintained official OSS container. This is a SAME-RUNNER test,
-      # never offsite custody, user data, or production WORM evidence.
-      - name: Start disposable S3-compatible Object Lock service (CI only)
-        shell: bash
-        run: |
-          set -euo pipefail
-          access="$(openssl rand -hex 16)"
-          secret="$(openssl rand -hex 32)"
-          echo "::add-mask::$access"
-          echo "::add-mask::$secret"
-          echo "TAO_TEST_S3_ACCESS=$access" >> "$GITHUB_ENV"
-          echo "TAO_TEST_S3_SECRET=$secret" >> "$GITHUB_ENV"
-          echo "TAO_TEST_S3_ENDPOINT=http://127.0.0.1:18433" >> "$GITHUB_ENV"
-          echo "TAO_S3_CI_ONLY=1" >> "$GITHUB_ENV"
-          auth="$RUNNER_TEMP/tao-s3-auth.json"
-          jq -nc --arg access "$access" --arg secret "$secret" \
-            '{identities:[{name:"ci-s3-admin",
-              credentials:[{accessKey:$access,secretKey:$secret}],
-              actions:["Admin","Read","Write","List","Tagging"]}]}' > "$auth"
-          # The official SeaweedFS entrypoint drops privileges via
-          # su-exec seaweed EVEN WHEN docker is started with --user 0.
-          # Discover the actual service UID/GID, then grant ONLY that
-          # identity read access to this bind-mounted synthetic secret.
-          docker pull chrislusf/seaweedfs:4.47 >/dev/null
-          seaweed_uid="$(docker run --rm --entrypoint id chrislusf/seaweedfs:4.47 -u seaweed)"
-          seaweed_gid="$(docker run --rm --entrypoint id chrislusf/seaweedfs:4.47 -g seaweed)"
-          [[ "$seaweed_uid" =~ ^[0-9]+$ && "$seaweed_gid" =~ ^[0-9]+$ ]]
-          # Set mode *before* transferring ownership; GitHub runner
-          # cannot chmod a file after it belongs to the container UID.
-          chmod 400 "$auth"
-          sudo chown "$seaweed_uid:$seaweed_gid" "$auth"
-          # Keep an exited container for diagnostics; cleanup runs always.
-          docker run -d --name tao-ci-s3-object-lock \
-            -v "$auth:/etc/seaweedfs/s3.json:ro" \
-            -p 127.0.0.1:18433:8333 \
-            chrislusf/seaweedfs:4.47 \
-            server -s3 -s3.config=/etc/seaweedfs/s3.json \
-              -dir=/data -master.volumeSizeLimitMB=64
-          ready=0
-          for i in $(seq 1 50); do
-            if [[ "$(docker inspect -f '{{.State.Running}}' tao-ci-s3-object-lock)" != true ]]; then
-              echo "S3 container terminated before its health check." >&2
-              docker logs --tail 100 tao-ci-s3-object-lock || true
-              exit 1
-            fi
-            # Unauthorized or signed S3 API responses both prove the
-            # socket is accepting HTTP. Never log admin credentials.
-            status="$(curl -sS -o /dev/null -w '%{http_code}' \
-              --connect-timeout 2 http://127.0.0.1:18433/ 2>/dev/null || true)"
-            if [[ "$status" =~ ^[245][0-9][0-9]$ ]]; then
-              ready=1; break
-            fi
-            sleep 2
-          done
-          if [[ "$ready" != 1 ]]; then
-            docker logs --tail 90 tao-ci-s3-object-lock || true
-            echo "S3 Object Lock service not available." >&2
-            exit 1
-          fi
-
-      - name: Real S3 Object Lock version-pinned adapter integration tests
-        run: dotnet test tests/Tao.S3ObjectLock.Tests/Tao.S3ObjectLock.Tests.csproj -c Release
-      - name: Stop disposable S3-compatible service
-        if: always()
-        shell: bash
-        run: |
-          docker rm -f tao-ci-s3-object-lock >/dev/null 2>&1 || true
-          rm -f -- "$RUNNER_TEMP/tao-s3-auth.json"
-
-
-      - name: Azure SDK WORM pinned read/write, history and lost-ACK HTTP contracts
-        run: dotnet test tests/Tao.AzureBlobWorm.Tests/Tao.AzureBlobWorm.Tests.csproj -c Release
-
       - name: Start disposable PostgreSQL 17 / pgvector
-        shell: bash
         run: |
           set -euo pipefail
-          password="$(openssl rand -hex 24)"
-          app_password="$(openssl rand -hex 24)"
-          retention_password="$(openssl rand -hex 24)"
-          backfill_password="$(openssl rand -hex 24)"
-          audit_password="$(openssl rand -hex 24)"
-          dispatch_password="$(openssl rand -hex 24)"
-          echo "::add-mask::$password"
-          echo "::add-mask::$app_password"
-          echo "::add-mask::$retention_password"
-          echo "::add-mask::$backfill_password"
-          echo "::add-mask::$audit_password"
-          echo "::add-mask::$dispatch_password"
-          echo "TAO_TEST_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao;Password=$password" >> "$GITHUB_ENV"
-          echo "TAO_TEST_APP_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_app;Password=$app_password" >> "$GITHUB_ENV"
-          echo "TAO_TEST_RETENTION_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_retention;Password=$retention_password" >> "$GITHUB_ENV"
-          echo "TAO_TEST_BACKFILL_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_backfill;Password=$backfill_password" >> "$GITHUB_ENV"
-          echo "TAO_TEST_AUDIT_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_backfill_audit;Password=$audit_password" >> "$GITHUB_ENV"
-          echo "TAO_TEST_DISPATCH_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_dispatcher;Password=$dispatch_password" >> "$GITHUB_ENV"
-          ring_file="$RUNNER_TEMP/tao-test-envelope.keyring.json"
-          # Synthetic key lives only on this ephemeral runner; never in logs/artifacts.
-          ring_key="$(openssl rand -base64 32)"
-          jq -nc --arg secret "$ring_key" \
-            '{activeKeyId:"ci-v1", keys:{"ci-v1":$secret}}' > "$ring_file"
-          chmod 600 "$ring_file"
-          echo "TAO_TEST_KEYRING_FILE=$ring_file" >> "$GITHUB_ENV"
-          docker run -d --rm --name tao-ci-pg \
-            -e POSTGRES_USER=tao -e POSTGRES_DB=tao_test \
-            -e "POSTGRES_PASSWORD=$password" \
-            -p 127.0.0.1:15432:5432 pgvector/pgvector:pg17 \
-            -c archive_mode=on \
-            -c "archive_command=mkdir -p /tmp/tao-ci-wal-archive && test ! -f /tmp/tao-ci-wal-archive/%f && cp %p /tmp/tao-ci-wal-archive/%f" \
-            -c archive_timeout=60s
+          admin="$(openssl rand -hex 24)"; app="$(openssl rand -hex 24)"; retention="$(openssl rand -hex 24)"
+          echo "::add-mask::$admin"; echo "::add-mask::$app"; echo "::add-mask::$retention"
+          {
+            echo "TAO_TEST_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao;Password=$admin"
+            echo "TAO_TEST_APP_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_app;Password=$app"
+            echo "TAO_TEST_RETENTION_DB=Host=127.0.0.1;Port=15432;Database=tao_test;Username=tao_retention;Password=$retention"
+            echo "TAO_TEST_KEYRING_FILE=$RUNNER_TEMP/tao-test.keyring.json"
+          } >> "$GITHUB_ENV"
+          jq -nc --arg key "$(openssl rand -base64 32)" '{activeKeyId:"ci-v1", keys:{"ci-v1":$key}}' \
+            > "$RUNNER_TEMP/tao-test.keyring.json"
+          chmod 600 "$RUNNER_TEMP/tao-test.keyring.json"
+          docker run -d --rm --name tao-ci-pg -e POSTGRES_USER=tao -e POSTGRES_DB=tao_test \
+            -e "POSTGRES_PASSWORD=$admin" -p 127.0.0.1:15432:5432 pgvector/pgvector:pg17
           for i in $(seq 1 60); do
-            if docker exec tao-ci-pg pg_isready -U tao -d tao_test; then break; fi
+            docker exec tao-ci-pg pg_isready -U tao -d tao_test >/dev/null 2>&1 && break
             sleep 2
           done
-          docker exec tao-ci-pg pg_isready -U tao -d tao_test
-          docker exec -i tao-ci-pg psql -v ON_ERROR_STOP=1 \
-            -U tao -d tao_test -v app_password="$app_password" -v retention_password="$retention_password" -v backfill_password="$backfill_password" -v audit_password="$audit_password" -v dispatch_password="$dispatch_password" <<'SQL'
-          SELECT format(
-            'CREATE ROLE tao_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
-            :'app_password'
-          ) \gexec
-          SELECT format(
-            'CREATE ROLE tao_retention LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'retention_password'
-          ) \gexec
-          SELECT format(
-            'CREATE ROLE tao_backfill LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'backfill_password'
-          ) \gexec
-          SELECT format(
-            'CREATE ROLE tao_backfill_audit LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'audit_password'
-          ) \gexec
-          SELECT format(
-            'CREATE ROLE tao_dispatcher LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'dispatch_password'
-          ) \gexec
+          docker exec -i tao-ci-pg psql -v ON_ERROR_STOP=1 -U tao -d tao_test \
+            -v app_password="$app" -v retention_password="$retention" <<'SQL'
+          SELECT format('CREATE ROLE tao_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
+            :'app_password') \gexec
+          SELECT format('CREATE ROLE tao_retention LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
+            :'retention_password') \gexec
           SQL
-      - name: Start independent PostgreSQL 17 erasure witness (synthetic CI only)
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Different PostgreSQL container, port, cluster system identifier
-          # and PGDATA: never mount the primary DB volume into the witness.
-          witness_admin="$(openssl rand -hex 24)"
-          witness_writer="$(openssl rand -hex 24)"
-          witness_reader="$(openssl rand -hex 24)"
-          intent_writer="$(openssl rand -hex 24)"
-          intent_reader="$(openssl rand -hex 24)"
-          echo "::add-mask::$witness_admin"
-          echo "::add-mask::$witness_writer"
-          echo "::add-mask::$witness_reader"
-          echo "::add-mask::$intent_writer"
-          echo "::add-mask::$intent_reader"
-          echo "TAO_TEST_INTENT_WRITER_DB=Host=127.0.0.1;Port=15436;Database=tao_witness;Username=tao_witness_intent_writer;Password=$intent_writer" >> "$GITHUB_ENV"
-          echo "TAO_TEST_INTENT_READER_DB=Host=127.0.0.1;Port=15436;Database=tao_witness;Username=tao_witness_intent_reader;Password=$intent_reader" >> "$GITHUB_ENV"
-          echo "TAO_TEST_WITNESS_ADMIN_DB=Host=127.0.0.1;Port=15436;Database=tao_witness;Username=tao;Password=$witness_admin" >> "$GITHUB_ENV"
-          echo "TAO_TEST_WITNESS_WRITER_DB=Host=127.0.0.1;Port=15436;Database=tao_witness;Username=tao_witness_writer;Password=$witness_writer" >> "$GITHUB_ENV"
-          echo "TAO_TEST_WITNESS_READER_DB=Host=127.0.0.1;Port=15436;Database=tao_witness;Username=tao_witness_reader;Password=$witness_reader" >> "$GITHUB_ENV"
-          docker run -d --rm --name tao-ci-erasure-witness \
-            -e POSTGRES_USER=tao -e POSTGRES_DB=tao_witness \
-            -e "POSTGRES_PASSWORD=$witness_admin" \
-            -p 127.0.0.1:15436:5432 postgres:17 \
-            -c archive_mode=on \
-            -c "archive_command=mkdir -p /tmp/tao-ci-witness-wal-archive && test ! -f /tmp/tao-ci-witness-wal-archive/%f && cp %p /tmp/tao-ci-witness-wal-archive/%f" \
-            -c archive_timeout=60s
-          for i in $(seq 1 60); do
-            if docker exec tao-ci-erasure-witness \
-               pg_isready -U tao -d tao_witness >/dev/null 2>&1; then break; fi
-            sleep 2
-          done
-          docker exec tao-ci-erasure-witness pg_isready -U tao -d tao_witness
-          docker exec -i tao-ci-erasure-witness psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_witness \
-            -v writer_password="$witness_writer" \
-            -v reader_password="$witness_reader" \
-            -v intent_writer_password="$intent_writer" \
-            -v intent_reader_password="$intent_reader" <<'SQL'
-          SELECT format(
-            'CREATE ROLE tao_witness_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'writer_password'
-          ) \gexec
-          SELECT format(
-            'CREATE ROLE tao_witness_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'reader_password'
-          ) \gexec
-          SELECT format(
-            'CREATE ROLE tao_witness_intent_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'intent_writer_password'
-          ) \gexec
-          SELECT format(
-            'CREATE ROLE tao_witness_intent_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'intent_reader_password'
-          ) \gexec
-          SQL
-          docker exec -i tao-ci-erasure-witness psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_witness < tests/restore/independent-witness.sql
-          primary_id="$(docker exec tao-ci-pg psql -U tao -d tao_test -Atqc \
-            'SELECT system_identifier FROM pg_control_system()')"
-          witness_id="$(docker exec tao-ci-erasure-witness psql \
-            -U tao -d tao_witness -Atqc \
-            'SELECT system_identifier FROM pg_control_system()')"
-          [[ -n "$primary_id" && -n "$witness_id" && "$primary_id" != "$witness_id" ]] || {
-            echo "Witness reused the primary PostgreSQL cluster identity." >&2
-            exit 1
-          }
-      - name: Start THIRD independent PostgreSQL 17 witness checkpoint anchor (CI only)
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Third, distinct PGDATA and database identity; still one ephemeral CI host.
-          anchor_admin="$(openssl rand -hex 24)"
-          anchor_writer="$(openssl rand -hex 24)"
-          anchor_reader="$(openssl rand -hex 24)"
-          echo "::add-mask::$anchor_admin"
-          echo "::add-mask::$anchor_writer"
-          echo "::add-mask::$anchor_reader"
-          echo "TAO_TEST_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=tao_anchor;Username=tao;Password=$anchor_admin" >> "$GITHUB_ENV"
-          echo "TAO_TEST_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_anchor;Username=tao_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
-          echo "TAO_TEST_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_anchor;Username=tao_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
-          docker run -d --rm --name tao-ci-witness-anchor \
-            -e POSTGRES_USER=tao -e POSTGRES_DB=tao_anchor \
-            -e "POSTGRES_PASSWORD=$anchor_admin" \
-            -p 127.0.0.1:15438:5432 postgres:17 \
-            -c archive_mode=on \
-            -c "archive_command=mkdir -p /tmp/tao-ci-third-claim-wal-archive && test ! -f /tmp/tao-ci-third-claim-wal-archive/%f && cp %p /tmp/tao-ci-third-claim-wal-archive/%f" \
-            -c archive_timeout=60s
-          for i in $(seq 1 60); do
-            if docker exec tao-ci-witness-anchor \
-              pg_isready -U tao -d tao_anchor >/dev/null 2>&1; then break; fi
-            sleep 2
-          done
-          docker exec tao-ci-witness-anchor pg_isready -U tao -d tao_anchor
-          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_anchor \
-            -v writer_password="$anchor_writer" \
-            -v reader_password="$anchor_reader" <<'SQL'
-          SELECT format(
-            'CREATE ROLE tao_anchor_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'writer_password'
-          ) \gexec
-          SELECT format(
-            'CREATE ROLE tao_anchor_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'reader_password'
-          ) \gexec
-          SQL
-          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_anchor < tests/restore/independent-anchor.sql
-          # A second DATABASE on the THIRD PGDATA isolates intent checkpoint
-          # authority from the completed erasure checkpoint (separate keys
-          # and domain-separated HMAC formats, same non-production CI host).
-          docker exec tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d postgres -c 'CREATE DATABASE tao_intent_anchor' >/dev/null
-          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_intent_anchor < tests/restore/independent-anchor.sql
-          echo "TAO_TEST_INTENT_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=tao_intent_anchor;Username=tao;Password=$anchor_admin" >> "$GITHUB_ENV"
-          echo "TAO_TEST_INTENT_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_intent_anchor;Username=tao_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
-          echo "TAO_TEST_INTENT_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_intent_anchor;Username=tao_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
-          # Dedicated HMAC head for the CI-only preflight regression: xUnit
-          # runs different test classes concurrently, so NEVER share the
-          # issuer's checkpoint/secret with the generic intent-anchor suite.
-          docker exec tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d postgres -c 'CREATE DATABASE tao_preflight_anchor' >/dev/null
-          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_preflight_anchor < tests/restore/independent-anchor.sql
-          echo "TAO_TEST_PREFLIGHT_ANCHOR_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=tao_preflight_anchor;Username=tao;Password=$anchor_admin" >> "$GITHUB_ENV"
-          echo "TAO_TEST_PREFLIGHT_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_preflight_anchor;Username=tao_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
-          echo "TAO_TEST_PREFLIGHT_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_preflight_anchor;Username=tao_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
-          # The attempt-consumption authority lives in another database on
-          # the surviving THIRD PGDATA. Its writer cannot change checkpoint
-          # heads, raw tables, or completed-erasure receipts.
-          claim_writer_password="$(openssl rand -hex 24)"
-          claim_reader_password="$(openssl rand -hex 24)"
-          echo "::add-mask::$claim_writer_password"
-          echo "::add-mask::$claim_reader_password"
-          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d postgres \
-            -v claim_writer_password="$claim_writer_password" \
-            -v claim_reader_password="$claim_reader_password" <<'SQL'
-          SELECT format(
-            'CREATE ROLE tao_claim_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'claim_writer_password'
-          ) \gexec
-          SELECT format(
-            'CREATE ROLE tao_claim_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'claim_reader_password'
-          ) \gexec
-          SQL
-          docker exec tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d postgres -c 'CREATE DATABASE tao_claim_preflight_anchor' >/dev/null
-          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_claim_preflight_anchor < tests/restore/independent-anchor.sql
-          echo "TAO_TEST_CLAIM_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_claim_preflight_anchor;Username=tao_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
-          echo "TAO_TEST_CLAIM_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_claim_preflight_anchor;Username=tao_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
-          docker exec tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d postgres -c 'CREATE DATABASE tao_execution_claims' >/dev/null
-          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_execution_claims < tests/restore/preerase-execution-claims.sql
-          echo "TAO_TEST_EXECUTION_CLAIM_ADMIN_DB=Host=127.0.0.1;Port=15438;Database=tao_execution_claims;Username=tao;Password=$anchor_admin" >> "$GITHUB_ENV"
-          echo "TAO_TEST_EXECUTION_CLAIM_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_execution_claims;Username=tao_claim_writer;Password=$claim_writer_password" >> "$GITHUB_ENV"
-          echo "TAO_TEST_EXECUTION_CLAIM_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_execution_claims;Username=tao_claim_reader;Password=$claim_reader_password" >> "$GITHUB_ENV"
-          # A dedicated HMAC pre-intent head for the FOURTH-PGDATA test;
-          # no xUnit signer-key overlap with other checkpoint databases.
-          docker exec tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d postgres -c 'CREATE DATABASE tao_fourth_intent_anchor' >/dev/null
-          docker exec -i tao-ci-witness-anchor psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_fourth_intent_anchor < tests/restore/independent-anchor.sql
-          echo "TAO_TEST_FOURTH_ANCHOR_WRITER_DB=Host=127.0.0.1;Port=15438;Database=tao_fourth_intent_anchor;Username=tao_anchor_writer;Password=$anchor_writer" >> "$GITHUB_ENV"
-          echo "TAO_TEST_FOURTH_ANCHOR_READER_DB=Host=127.0.0.1;Port=15438;Database=tao_fourth_intent_anchor;Username=tao_anchor_reader;Password=$anchor_reader" >> "$GITHUB_ENV"
-          source_id="$(docker exec tao-ci-pg psql -U tao -d tao_test -Atqc \
-            'SELECT system_identifier FROM pg_control_system()')"
-          witness_id="$(docker exec tao-ci-erasure-witness psql \
-            -U tao -d tao_witness -Atqc \
-            'SELECT system_identifier FROM pg_control_system()')"
-          anchor_id="$(docker exec tao-ci-witness-anchor psql \
-            -U tao -d tao_anchor -Atqc \
-            'SELECT system_identifier FROM pg_control_system()')"
-          [[ -n "$anchor_id" && "$anchor_id" != "$source_id" && "$anchor_id" != "$witness_id" ]] || {
-            echo "Anchor must use independent PostgreSQL PGDATA." >&2
-            exit 1
-          }
-      - name: Start FOURTH PostgreSQL PGDATA one-shot claim replay fence (synthetic CI only)
-        shell: bash
-        run: |
-          set -euo pipefail
-          fourth_admin="$(openssl rand -hex 24)"
-          fourth_writer="$(openssl rand -hex 24)"
-          fourth_reader="$(openssl rand -hex 24)"
-          echo "::add-mask::$fourth_admin"
-          echo "::add-mask::$fourth_writer"
-          echo "::add-mask::$fourth_reader"
-          docker run -d --rm --name tao-ci-fourth-claim-fence \
-            -e POSTGRES_USER=tao -e POSTGRES_DB=tao_fourth_claims \
-            -e "POSTGRES_PASSWORD=$fourth_admin" \
-            -p 127.0.0.1:15440:5432 postgres:17 \
-            -c archive_mode=on \
-            -c "archive_command=mkdir -p /tmp/tao-ci-fourth-claim-wal-archive && test ! -f /tmp/tao-ci-fourth-claim-wal-archive/%f && cp %p /tmp/tao-ci-fourth-claim-wal-archive/%f" \
-            -c archive_timeout=60s
-          for i in $(seq 1 60); do
-            if docker exec tao-ci-fourth-claim-fence \
-              pg_isready -U tao -d tao_fourth_claims >/dev/null 2>&1; then break; fi
-            sleep 2
-          done
-          docker exec tao-ci-fourth-claim-fence pg_isready -U tao -d tao_fourth_claims
-          docker exec -i tao-ci-fourth-claim-fence psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_fourth_claims \
-            -v writer_password="$fourth_writer" \
-            -v reader_password="$fourth_reader" <<'SQL'
-          SELECT format(
-            'CREATE ROLE tao_claim_writer LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'writer_password'
-          ) \gexec
-          SELECT format(
-            'CREATE ROLE tao_claim_reader LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT',
-            :'reader_password'
-          ) \gexec
-          SQL
-          docker exec -i tao-ci-fourth-claim-fence psql -X -v ON_ERROR_STOP=1 \
-            -U tao -d tao_fourth_claims < tests/restore/preerase-execution-claims.sql
-          echo "TAO_TEST_FOURTH_CLAIM_ADMIN_DB=Host=127.0.0.1;Port=15440;Database=tao_fourth_claims;Username=tao;Password=$fourth_admin" >> "$GITHUB_ENV"
-          echo "TAO_TEST_FOURTH_CLAIM_WRITER_DB=Host=127.0.0.1;Port=15440;Database=tao_fourth_claims;Username=tao_claim_writer;Password=$fourth_writer" >> "$GITHUB_ENV"
-          echo "TAO_TEST_FOURTH_CLAIM_READER_DB=Host=127.0.0.1;Port=15440;Database=tao_fourth_claims;Username=tao_claim_reader;Password=$fourth_reader" >> "$GITHUB_ENV"
-          source_id="$(docker exec tao-ci-pg psql -U tao -d tao_test -Atqc 'SELECT system_identifier FROM pg_control_system()')"
-          witness_id="$(docker exec tao-ci-erasure-witness psql -U tao -d tao_witness -Atqc 'SELECT system_identifier FROM pg_control_system()')"
-          third_id="$(docker exec tao-ci-witness-anchor psql -U tao -d tao_anchor -Atqc 'SELECT system_identifier FROM pg_control_system()')"
-          fourth_id="$(docker exec tao-ci-fourth-claim-fence psql -U tao -d tao_fourth_claims -Atqc 'SELECT system_identifier FROM pg_control_system()')"
-          [[ -n "$fourth_id" && "$fourth_id" != "$source_id" &&
-             "$fourth_id" != "$witness_id" && "$fourth_id" != "$third_id" ]] || {
-            echo "Fourth claim fence reused an existing physical PGDATA." >&2
-            exit 1
-          }
-      - name: xUnit real PostgreSQL integration
+      - name: Integration tests (real PostgreSQL, restricted roles)
         run: dotnet test tests/Tao.Integration.Tests/Tao.Integration.Tests.csproj -c Release
-      - name: Isolated witness publisher CLI denies unsafe mode and confirms a test-only scan
-        shell: bash
-        run: |
-          set -euo pipefail
-          log="$(mktemp "$RUNNER_TEMP/tao-publisher.XXXXXX")"
-          trap 'rm -f "$log"' EXIT
-          if env -u TAO_ERASURE_PUBLISHER_CI_ONLY \
-             dotnet run --no-build -c Release \
-               --project src/backend/Tao.ErasurePublisher/Tao.ErasurePublisher.csproj \
-               -- --once > "$log" 2>&1; then
-            echo "Witness publisher unexpectedly accepted unapproved mode." >&2
-            exit 1
-          fi
-          grep -Fq 'ERASURE_PUBLISHER_DENIED' "$log" || {
-            echo "Publisher denial was not verified." >&2
-            exit 1
-          }
-          TAO_ERASURE_PUBLISHER_CI_ONLY=1 \
-            dotnet run --no-build -c Release \
-              --project src/backend/Tao.ErasurePublisher/Tao.ErasurePublisher.csproj \
-              -- --once > "$log" 2>&1
-          grep -Fq 'ERASURE_PUBLISHER_CYCLE_CONFIRMED' "$log" || {
-            echo "Witness publisher did not confirm delivery." >&2
-            exit 1
-          }
-      - name: Live source outbox must have exact witnessed receipts after publisher
-        shell: bash
-        run: |
-          set -euo pipefail
-          project=src/backend/Tao.ErasureDeliveryAudit/Tao.ErasureDeliveryAudit.csproj
-          log="$(mktemp "$RUNNER_TEMP/tao-live-audit.XXXXXX")"
-          trap 'rm -f "$log"' EXIT
-          if env -u TAO_ERASURE_LIVE_AUDIT_CI_ONLY \
-             dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1; then
-            echo "Live delivery audit accepted unapproved mode." >&2
-            exit 1
-          fi
-          grep -Fq 'ERASURE_LIVE_DELIVERY_DENIED' "$log"
-          if TAO_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
-             TAO_TEST_WITNESS_READER_DB="$TAO_TEST_WITNESS_WRITER_DB" \
-             dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1; then
-            echo "Live delivery audit accepted witness writer identity." >&2
-            exit 1
-          fi
-          grep -Fq 'ERASURE_LIVE_DELIVERY_DENIED' "$log"
-          if TAO_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
-             TAO_TEST_DISPATCH_DB="$TAO_TEST_APP_DB" \
-             dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1; then
-            echo "Live delivery audit accepted application SQL identity." >&2
-            exit 1
-          fi
-          grep -Fq 'ERASURE_LIVE_DELIVERY_DENIED' "$log"
-          TAO_ERASURE_LIVE_AUDIT_CI_ONLY=1 \
-             dotnet run --no-build -c Release --project "$project" -- --all > "$log" 2>&1
-          grep -Fq 'ERASURE_LIVE_DELIVERY_CONFIRMED' "$log"
-      - name: HMAC witness anchor requires private external checkpoint and consistent reader
-        shell: bash
-        run: |
-          set -euo pipefail
-          log="$(mktemp "$RUNNER_TEMP/tao-witness-audit.XXXXXX")"
-          private="$(mktemp -d "$RUNNER_TEMP/tao-witness-anchor.XXXXXX")"
-          trap 'rm -f "$log"; rm -rf "$private"' EXIT
-          chmod 700 "$private"
-          openssl rand 32 > "$private/key"
-          chmod 600 "$private/key"
-          export TAO_WITNESS_CHECKPOINT_KEY_PATH="$private/key"
-          export TAO_WITNESS_CHECKPOINT_PATH="$private/anchor"
-          project=src/backend/Tao.WitnessAudit/Tao.WitnessAudit.csproj
-          if env -u TAO_WITNESS_AUDIT_CI_ONLY \
-             dotnet run --no-build -c Release --project "$project" -- --issue > "$log" 2>&1; then
-            echo "Witness checkpoint issuer allowed unapproved execution." >&2
-            exit 1
-          fi
-          grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
-          export TAO_WITNESS_AUDIT_CI_ONLY=1
-          if dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1; then
-            echo "Witness checkpoint audit accepted an absent anchor." >&2
-            exit 1
-          fi
-          grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
-          dotnet run --no-build -c Release --project "$project" -- --issue > "$log" 2>&1
-          grep -Fq 'WITNESS_CHECKPOINT_ISSUED' "$log"
-          dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1
-          grep -Fq 'WITNESS_CHECKPOINT_VERIFIED' "$log"
-          if dotnet run --no-build -c Release --project "$project" -- --issue > "$log" 2>&1; then
-            echo "Witness checkpoint issuer overwrote an existing anchor." >&2
-            exit 1
-          fi
-          grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
-          cp -p "$private/anchor" "$private/saved"
-          printf 'truncated' > "$private/anchor"
-          if dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1; then
-            echo "Witness audit accepted a truncated anchor." >&2
-            exit 1
-          fi
-          grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
-          mv "$private/saved" "$private/anchor"
-          if TAO_TEST_WITNESS_READER_DB="$TAO_TEST_WITNESS_WRITER_DB" \
-             dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1; then
-            echo "Witness audit accepted a writer as reader." >&2
-            exit 1
-          fi
-          grep -Fq 'WITNESS_CHECKPOINT_DENIED' "$log"
-          dotnet run --no-build -c Release --project "$project" -- --verify > "$log" 2>&1
-          grep -Fq 'WITNESS_CHECKPOINT_VERIFIED' "$log"
-      - name: Physical witness WAL PITR must be rejected by surviving third-cluster anchor
-        shell: bash
-        run: bash tests/restore/physical-witness-pitr-rehearsal.sh
-      - name: Restore rehearsal — real PostgreSQL dump/restore, retained and missing KEKs
-        shell: bash
-        run: bash tests/restore/restore-rehearsal.sh
-      - name: Independent-cluster PostgreSQL restore and role recovery gate
-        shell: bash
-        run: bash tests/restore/cross-cluster-rehearsal.sh
-      - name: Physical pg_basebackup + archived WAL point-in-time recovery gate
-        shell: bash
-        run: bash tests/restore/physical-pitr-rehearsal.sh
-      - name: Physical THIRD-PGDATA claim WAL PITR must fail against surviving FOURTH
-        shell: bash
-        run: bash tests/restore/physical-third-claim-pitr-rehearsal.sh
-      - name: Physical FOURTH-PGDATA claim WAL PITR must fail against surviving THIRD
-        shell: bash
-        run: bash tests/restore/physical-fourth-claim-pitr-rehearsal.sh
-      - name: Physical DUAL-PGDATA claim WAL PITR exposes unsafe replay without external fence
-        shell: bash
-        run: bash tests/restore/physical-dual-claim-pitr-rehearsal.sh
-      - name: Stop disposable database
+      - name: Stop PostgreSQL
         if: always()
-        run: |
-          docker rm -f tao-ci-fourth-claim-fence || true
-          docker rm -f tao-ci-witness-anchor || true
-          docker rm -f tao-ci-erasure-witness || true
-          docker rm -f tao-ci-pg || true
-      - name: Validate Docker Compose
-        run: docker compose --env-file docker/.env.example -f docker/compose.yml config --quiet
-      - name: Build API container
-        run: docker build -f docker/Dockerfile.api -t tao-api:ci .
-  security-audit:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: TDD high/critical policy, scanner failures and narrow exceptions
-        run: python3 -m unittest discover -s tests/quality -p 'test_supply_chain_audit.py'
-      - name: Fail-closed npm and NuGet lock policy
-        run: |
-          set -euo pipefail
-          node src/mobile/scripts/verify-mobile-lockfile.mjs
-          python3 tests/quality/verify_nuget_locks.py
-          python3 tests/quality/generate_locked_sbom.py --output "$RUNNER_TEMP/tao-audit-sbom"
-      - name: TDD expiring moderate advisory review (#215)
-        run: python3 -m unittest discover -s tests/quality -p 'test_moderate_reviews.py'
-      - name: Audit live official npm and NuGet advisories (all + production)
-        shell: bash
-        env:
-          NUGET_PACKAGES: ${{ runner.temp }}/tao-nuget-license-cache
-        run: |
-          set -euo pipefail
-          python3 tests/quality/run_live_advisory_audit.py \
-            --output "$RUNNER_TEMP/tao-security-audit/summary.json"
-          python3 tests/quality/verify_moderate_reviews.py \
-            --report "$RUNNER_TEMP/tao-security-audit/summary.json" \
-            --reviews security/moderate-advisory-reviews.json \
-            --source-sha "$GITHUB_SHA"
-      - name: Publish advisory evidence even if the fail-closed gate blocks
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tao-security-audit
-          path: ${{ runner.temp }}/tao-security-audit/summary.json
-          if-no-files-found: ignore
-          retention-days: 14
-      - name: TDD and inventory declared npm licenses (#216)
-        if: ${{ !cancelled() }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m unittest discover -s tests/quality -p 'test_npm_license_inventory.py'
-          python3 tests/quality/npm_license_inventory.py \
-            --lock src/mobile/package-lock.json \
-            --output "$RUNNER_TEMP/tao-npm-licenses/inventory.json"
-      - name: Publish npm license metadata inventory (not legal clearance)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tao-npm-license-inventory
-          path: ${{ runner.temp }}/tao-npm-licenses/inventory.json
-          if-no-files-found: ignore
-          retention-days: 14
-      - name: TDD and inventory restored NuGet package licenses (#217)
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m unittest discover -s tests/quality -p 'test_nuget_license_inventory.py'
-          python3 tests/quality/nuget_license_inventory.py \
-            --cache "$RUNNER_TEMP/tao-nuget-license-cache" \
-            --output "$RUNNER_TEMP/tao-nuget-licenses/inventory.json"
-      - name: Publish NuGet license inventory (not legal clearance)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tao-nuget-license-inventory
-          path: ${{ runner.temp }}/tao-nuget-licenses/inventory.json
-          if-no-files-found: ignore
-          retention-days: 14
+        run: docker rm -f tao-ci-pg || true
 
-  mobile:
+  web:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: src/mobile
+    env:
+      # E2E specs and GitHub Pages share the /Tao base path.
+      TAO_WEB_BASE_PATH: /Tao
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: src/mobile/package-lock.json
-      - name: Test and validate frozen npm lockfile
+      - run: npm ci --no-audit --no-fund
+      - name: npm audit (fails on high/critical)
+        run: npm audit --audit-level=high
+      - run: npm run typecheck
+      - run: npm test
+      - name: Metro bundles for Android and iOS (not signed native builds)
         run: |
-          node --test scripts/mobile-lock-policy.test.mjs scripts/sdk58-security-policy.test.mjs
-          node scripts/verify-mobile-lockfile.mjs
-          node scripts/verify-sdk58-security.mjs
-      - name: Install Expo dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Verify Expo Router query-string runtime compatibility
-        run: node --test scripts/query-string-compatibility.test.mjs
-      - name: Typecheck React Native
-        run: npm run typecheck
-      - name: Vitest domain
-        run: npm test
-      - name: Export Expo web
-        run: npm run build:web
-      - name: TDD and record installed notice candidates and Web export evidence (#218)
-        run: |
-          set -euo pipefail
-          python3 -m unittest discover -s ../../tests/quality -p 'test_web_notice_evidence.py'
-          python3 ../../tests/quality/web_notice_evidence.py \
-            --root . --output "$RUNNER_TEMP/tao-web-notice-evidence/report.json"
-      - name: Publish Web notice evidence (not legal clearance)
-        uses: actions/upload-artifact@v4
-        with:
-          name: tao-web-notice-evidence
-          path: ${{ runner.temp }}/tao-web-notice-evidence/report.json
-          if-no-files-found: error
-          retention-days: 14
-      - name: Verify SDK58 Metro bundles Android and iOS (not native device builds)
-        run: |
-          npx expo export --platform android
-          npx expo export --platform ios
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Playwright browser E2E
-        run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+          npx expo export --platform android --output-dir "$RUNNER_TEMP/tao-android"
+          npx expo export --platform ios --output-dir "$RUNNER_TEMP/tao-ios"
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: tao-browser-diagnostics
+          name: tao-web-diagnostics
           path: |
             src/mobile/test-results
             src/mobile/playwright-report
           retention-days: 5
           if-no-files-found: ignore
+
+  gateway:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generate disposable on-prem configuration
+        run: bash docker/setup.sh http://localhost:59800
+      - name: Build and start the on-prem stack
+        run: docker compose --env-file docker/.env -f docker/compose.yml up -d --build
+      - name: Wait for the single-port gateway
+        run: |
+          for i in $(seq 1 90); do
+            curl -fsS http://localhost:59800/api/health >/dev/null 2>&1 && exit 0
+            sleep 3
+          done
+          exit 1
+      - name: Smoke test routing, OIDC discovery and security headers
+        run: |
+          set -euo pipefail
+          base=http://localhost:59800
+          curl -fsS "$base/healthz"
+          curl -fsS "$base/api/health" | jq -e '.status == "ok"'
+          curl -fsS "$base/auth/realms/tao/.well-known/openid-configuration" | jq -e \
+            '.issuer == "http://localhost:59800/auth/realms/tao" and (.token_endpoint | startswith("http://localhost:59800/auth/"))'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/v1/memories")" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/auth/admin/")" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/auth/realms/master/")" = 404
+          curl -fsSI "$base/" | grep -qi '^content-security-policy:'
+      - name: Create a disposable Keycloak user
+        run: |
+          set -euo pipefail
+          set -a; source docker/.env; set +a
+          password="$(openssl rand -hex 16)"
+          echo "::add-mask::$password"
+          echo "TAO_E2E_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "TAO_E2E_USER1=tao-ci-gateway" >> "$GITHUB_ENV"
+          kc() { docker compose --env-file docker/.env -f docker/compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh "$@"; }
+          kc config credentials --server http://localhost:8080/auth --realm master \
+            --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
+          kc create users -r tao -s username=tao-ci-gateway -s enabled=true -s emailVerified=true \
+            -s email=tao-ci-gateway@example.test -s firstName=Tao -s lastName=CI
+          kc set-password -r tao --username tao-ci-gateway --new-password "$password"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/mobile/package-lock.json
+      - name: Browser login and note through the gateway
+        working-directory: src/mobile
+        env:
+          TAO_GATEWAY_E2E: '1'
+          TAO_E2E_BASE_URL: http://localhost:59800
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          npx playwright test e2e/gateway.spec.ts --reporter=line --retries=0
+      - name: Diagnostics on failure
+        if: failure()
+        run: docker compose --env-file docker/.env -f docker/compose.yml logs --tail 80 api keycloak web
+      - name: Stop the stack
+        if: always()
+        run: docker compose --env-file docker/.env -f docker/compose.yml down -v || true

@@ -1,57 +1,54 @@
-{
-  "version": 2,
-  "updates": [
-    {
-      "package-ecosystem": "npm",
-      "directory": "/src/mobile",
-      "schedule": {
-        "interval": "weekly"
-      },
-      "open-pull-requests-limit": 5,
-      "labels": [
-        "area:quality"
-      ]
-    },
-    {
-      "package-ecosystem": "nuget",
-      "directories": [
-        "/src/backend/*",
-        "/tests/*"
-      ],
-      "schedule": {
-        "interval": "weekly"
-      },
-      "open-pull-requests-limit": 5,
-      "labels": [
-        "area:quality"
-      ],
-      "groups": {
-        "nuget-across-projects": {
-          "group-by": "dependency-name"
-        }
-      }
-    },
-    {
-      "package-ecosystem": "github-actions",
-      "directory": "/",
-      "schedule": {
-        "interval": "weekly"
-      },
-      "open-pull-requests-limit": 5,
-      "labels": [
-        "area:quality"
-      ]
-    },
-    {
-      "package-ecosystem": "docker",
-      "directory": "/docker",
-      "schedule": {
-        "interval": "weekly"
-      },
-      "open-pull-requests-limit": 5,
-      "labels": [
-        "area:quality"
-      ]
-    }
-  ]
-}
+version: 2
+# Monthly, one grouped pull request per ecosystem. Security updates stay immediate.
+updates:
+  - package-ecosystem: npm
+    directory: /src/mobile
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    labels: [area:quality]
+    # Expo SDK packages move together via `npx expo install --fix` on SDK upgrades.
+    ignore:
+      - dependency-name: expo
+      - dependency-name: expo-*
+      - dependency-name: "@expo/*"
+      - dependency-name: react
+      - dependency-name: react-dom
+      - dependency-name: "@types/react"
+      - dependency-name: react-native
+      - dependency-name: react-native-*
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+    groups:
+      npm:
+        patterns: ["*"]
+
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    labels: [area:quality]
+    groups:
+      nuget:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    labels: [area:quality]
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    labels: [area:quality]
+    groups:
+      docker:
+        patterns: ["*"]

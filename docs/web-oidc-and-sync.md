@@ -2,7 +2,14 @@
 
 Status: **implementation slice** of #39/#41. Browser only, pending real OIDC→API→DB integration confirmation and production/privacy gates. `src/mobile/src/services/webAuth.ts` uses maintained `oidc-client-ts` to validate state/nonce/issuer and manage code + PKCE; does not implement OAuth cryptography by hand.
 
-## Public static Expo configuration
+## Same-origin gateway mode (on-prem)
+
+The on-prem image is built with `EXPO_PUBLIC_TAO_SAME_ORIGIN=true` and base path `''`: issuer
+`<origin>/auth/realms/tao`, client `tao-web` and API `<origin>` are derived from the page origin, so
+no URL is baked into the bundle. Keycloak's realm is `docker/keycloak/tao-realm.json` (redirect URIs
+and web origins from `TAO_PUBLIC_URL`).
+
+## Public static Expo configuration (separate API origin)
 
 Build-time public settings (all required to activate cloud mode):
 
@@ -15,7 +22,7 @@ EXPO_PUBLIC_TAO_API_URL=https://your-api.example
 - `EXPO_PUBLIC_*` are *public*. Never include secret/password, client_secret, client certificate or app refresh token in these values, GitHub Pages or git. Enable HTTPS only off loopback.
 - Register public OIDC client with Authorization Code and PKCE S256. Redirect URI `https://keyserdsoze.github.io/Tao/` (or `http://127.0.0.1:19006/Tao/`/localhost dev); disable implicit and password grants. Configure API audience JWT claim `tao-api` and custom `tenant_id` mapped from trusted issuer, not editable browser values.
 - API must validate bearer JWT via JWKS, issuer, audience, expiry and one unique `sub` + `tenant_id`. CORS must allow only the app's exact origin and no credentials.
-- Configure Keycloak dev realm in `docker/keycloak/realm.json`; use synthetic local account. SPA relies on OIDC discovery/token endpoint CORS allowed by Keycloak client `webOrigins`.
+- For local development with a separate API, configure a realm like `docker/keycloak/tao-realm.json`; use a synthetic local account. SPA relies on OIDC discovery/token endpoint CORS allowed by Keycloak client `webOrigins`.
 - No environment vars in Pages CI → explicitly local demo only, not cloud persistence. All three vars set → cloud mode; partial configuration → error, no silent fallback.
 
 ## Browser security

@@ -1,6 +1,15 @@
-# Consent API — first-party memory capture (v0.2 slice)
+# Consent API — first-party consents
 
-**Issue:** #29 (partially implemented). **Protected resources:** all endpoints require a valid OIDC bearer JWT, with exactly one `sub` and `tenant_id` claim. Owner/tenant are **never accepted in request bodies**.
+**Protected resources:** all endpoints require a valid OIDC bearer JWT, with exactly one `sub` and `tenant_id` claim. Owner/tenant are **never accepted in request bodies**.
+
+Purposes accepted by this release:
+
+| Purpose | Source | Authorizes |
+|---|---|---|
+| `memory.capture` | e.g. `manual` | saving notes from that source |
+| `assistant.briefing` | `assistant` | sending minimized open cards to the configured model ([assistant.md](assistant.md), ADR 0100) |
+
+A grant for one purpose never authorizes another (tested at API level).
 
 ## Create or renew authorization
 

@@ -187,4 +187,11 @@ describe('connector and today API calls', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 502, json: async () => ({ error: '<script>' }) }));
     await expect(api.today(now, now)).rejects.toMatchObject({ status: 502, code: undefined });
   });
+
+  it('says that the daily AI budget is spent', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 429, json: async () => ({ error: 'assistant_budget_exceeded' }) }));
+    const api = new MemoryApi(cfg, async () => 'token');
+    await expect(api.briefing(now, now, 'Europe/Rome', 'it')).rejects.toMatchObject({
+      status: 429, code: 'assistant_budget_exceeded', message: expect.stringContaining('limite giornaliero') });
+  });
 });

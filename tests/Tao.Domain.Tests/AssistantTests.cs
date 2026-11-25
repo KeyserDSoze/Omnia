@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Tao.Domain.Tests;
 
-public sealed class AssistantTests
+public sealed partial class AssistantTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 25, 8, 0, 0, TimeSpan.Zero);
     private static readonly TimeZoneInfo Rome = TimeZoneInfo.FindSystemTimeZoneById("Europe/Rome");
@@ -27,7 +27,7 @@ public sealed class AssistantTests
     public async Task NothingLeavesTaoWithoutConfigurationOrConsent()
     {
         var model = new FakeModel { Configured = false };
-        var (service, consent, provider) = Create(model);
+        var (service, consent, provider, _) = Create(model);
         await Assert.ThrowsAsync<AssistantNotConfiguredException>(() => Generate(service));
         model.Configured = true;
         consent.Active = false;
@@ -40,7 +40,7 @@ public sealed class AssistantTests
     public async Task PromptIsMinimizedAndTreatsCardTextAsUntrusted()
     {
         var model = new FakeModel();
-        var (service, _, _) = Create(model);
+        var (service, _, _, _) = Create(model);
         model.Reply = """{"summary":"Focus sull'offerta.","suggestions":[]}""";
 
         await Generate(service);
@@ -65,7 +65,7 @@ public sealed class AssistantTests
     public async Task SuggestionsMapOnlyToKnownCardsAndInvalidOutputIsRejected()
     {
         var model = new FakeModel();
-        var (service, _, _) = Create(model);
+        var (service, _, _, _) = Create(model);
         model.Reply = """
             {"summary":"Giornata   piena.","suggestions":[
               {"ref":"c1","preAction":"Prepara il listino aggiornato."},
@@ -91,7 +91,7 @@ public sealed class AssistantTests
     public async Task WithoutOpenCardsTheModelIsNotCalled()
     {
         var model = new FakeModel();
-        var (service, _, provider) = Create(model);
+        var (service, _, provider, _) = Create(model);
         provider.Empty = true;
         var briefing = await Generate(service);
         Assert.Empty(model.Calls);
@@ -104,7 +104,7 @@ public sealed class AssistantTests
     public async Task ThePlanIsWrittenInTheRequestedLanguageWithGregorianDates()
     {
         var model = new FakeModel();
-        var (service, _, _) = Create(model);
+        var (service, _, _, _) = Create(model);
         model.Reply = """{"summary":"Focus on the offer.","suggestions":[]}""";
 
         await Generate(service, AssistantLanguages.Find("en"));
@@ -136,27 +136,106 @@ public sealed class AssistantTests
     }
 
     [Fact]
+    public async Task TheDailyBudgetStopsTheModelBeforeAnotherCallAndResetsOnTheLocalDay()
+    {
+        var model = new FakeModel { Prompt = 600, Completion = 300 };
+        var (service, _, _, clock) = Create(model, new AssistantBudget(DailyCalls: 3, DailyTokens: 1000, MaxOutputTokens: 500));
+
+        var first = await Generate(service);
+        Assert.Equal((1, 3, 900L, 1000L), (first.Usage.Calls, first.Usage.CallsLimit, first.Usage.Tokens, first.Usage.TokensLimit));
+        // 900 < 1000: one more call is allowed, then the token budget is spent.
+        await Generate(service);
+        var exceeded = await Assert.ThrowsAsync<AssistantBudgetExceededException>(() => Generate(service));
+        Assert.Equal("assistant_budget_exceeded", exceeded.Message);
+        Assert.Equal(2, model.Calls.Count);
+
+        // 23:30 Rome is still the same local day; 00:30 the next day starts a new budget.
+        clock.Set(new DateTimeOffset(2026, 11, 25, 22, 30, 0, TimeSpan.Zero));
+        await Assert.ThrowsAsync<AssistantBudgetExceededException>(() => Generate(service));
+        clock.Set(new DateTimeOffset(2026, 11, 25, 23, 30, 0, TimeSpan.Zero));
+        Assert.Equal(1, (await Generate(service)).Usage.Calls);
+    }
+
+    [Fact]
+    public async Task TheCallLimitAppliesEvenWhenTheProviderReportsNoUsage()
+    {
+        var model = new FakeModel();
+        var (service, _, _, _) = Create(model, new AssistantBudget(DailyCalls: 2, DailyTokens: 1_000_000, MaxOutputTokens: 500));
+        var briefing = await Generate(service);
+        // No usage from the provider: estimated from the text (about four characters per token), never zero.
+        Assert.True(briefing.Usage.Tokens > 0);
+        await Generate(service);
+        await Assert.ThrowsAsync<AssistantBudgetExceededException>(() => Generate(service));
+    }
+
+    [Fact]
+    public async Task NothingIsCountedWhenNoModelCallHappens()
+    {
+        var model = new FakeModel { Configured = false };
+        var (service, consent, provider, _) = Create(model, new AssistantBudget(1, 1_000, 500));
+        await Assert.ThrowsAsync<AssistantNotConfiguredException>(() => Generate(service));
+        model.Configured = true;
+        consent.Active = false;
+        await Assert.ThrowsAsync<ConsentRequiredException>(() => Generate(service));
+        consent.Active = true;
+        provider.Empty = true;
+        Assert.Equal(0, (await Generate(service)).Usage.Calls);
+        provider.Empty = false;
+        Assert.Equal(1, (await Generate(service)).Usage.Calls);
+    }
+
+    [Fact]
+    public async Task TheModelIsAskedForABoundedAnswer()
+    {
+        var model = new FakeModel();
+        var (service, _, _, _) = Create(model, new AssistantBudget(5, 100_000, 321));
+        await Generate(service);
+        Assert.Equal(321, model.LastMaxOutputTokens);
+    }
+
+    [Fact]
+    public async Task TheAnswerNeverCarriesLinksOrAddressesTheCardsDidNotContain()
+    {
+        var model = new FakeModel();
+        var (service, _, _, _) = Create(model);
+        model.Reply = """
+            {"summary":"Controlla https://evil.example/login subito e scrivi a boss@evil.test. Poi pranzo.","suggestions":[
+              {"ref":"c1","preAction":"Apri www.evil.example/pay e conferma."},
+              {"ref":"c2","preAction":"Rispondi a boss@evil.test con i dati."},
+              {"ref":"c1","preAction":"Prepara il listino."}]}
+            """;
+        var briefing = await Generate(service);
+        Assert.DoesNotContain("evil", briefing.Summary);
+        Assert.DoesNotContain("http", briefing.Summary);
+        Assert.Contains("Poi pranzo.", briefing.Summary);
+        Assert.Equal(["Prepara il listino."], briefing.Suggestions.Select(s => s.PreAction));
+    }
+
+    [Fact]
     public async Task OpenAiCompatibleModelSendsJsonModeAndAuthenticates()
     {
         var http = new RecordingHandler(HttpStatusCode.OK,
-            """{"choices":[{"message":{"role":"assistant","content":"{\"summary\":\"ok\"}"}}]}""");
+            """{"choices":[{"message":{"role":"assistant","content":"{\"summary\":\"ok\"}"}}],"usage":{"prompt_tokens":120,"completion_tokens":30}}""");
         var model = new OpenAiCompatibleChatModel(new HttpClient(http), new LlmOptions
         {
             Endpoint = "https://llm.example.test/openai/v1", ApiKey = "key-1", Model = "gpt-test", AuthHeader = "api-key"
         });
 
-        Assert.Equal("""{"summary":"ok"}""", await model.CompleteJsonAsync([new("user", "ciao")], default));
+        var answer = await model.CompleteJsonAsync([new("user", "ciao")], 400, default);
+        Assert.Equal("""{"summary":"ok"}""", answer.Json);
+        Assert.Equal((120, 30), (answer.PromptTokens, answer.CompletionTokens));
         Assert.Equal("https://llm.example.test/openai/v1/chat/completions", http.Uri!.ToString());
         Assert.Equal("key-1", http.ApiKey);
         Assert.Null(http.Authorization);
         using var body = JsonDocument.Parse(http.Body!);
         Assert.Equal("gpt-test", body.RootElement.GetProperty("model").GetString());
         Assert.Equal("json_object", body.RootElement.GetProperty("response_format").GetProperty("type").GetString());
+        Assert.Equal(400, body.RootElement.GetProperty("max_tokens").GetInt32());
 
         var failing = new OpenAiCompatibleChatModel(new HttpClient(new RecordingHandler(HttpStatusCode.InternalServerError,
             """{"error":"secret upstream detail"}""")), new LlmOptions { Endpoint = "http://ollama:11434/v1", Model = "m" });
         var error = await Assert.ThrowsAsync<AssistantUnavailableException>(() =>
-            failing.CompleteJsonAsync([new("user", "x")], default));
+            failing.CompleteJsonAsync([new("user", "x")], 400, default));
         Assert.Equal("model_error", error.Code);
         Assert.DoesNotContain("secret upstream detail", error.ToString());
     }
@@ -180,30 +259,65 @@ public sealed class AssistantTests
         service.GenerateAsync("t", "alice", Now.AddHours(-8), Now.AddHours(16), Rome,
             language ?? AssistantLanguages.Default, default);
 
-    private static (DailyBriefingService, FakeConsent, FakeProvider) Create(FakeModel model)
+    private static (DailyBriefingService, FakeConsent, FakeProvider, TestClock) Create(FakeModel model,
+        AssistantBudget? budget = null)
     {
-        var clock = new FixedClock();
+        var clock = new TestClock();
         var provider = new FakeProvider();
         var connectors = new ConnectorService([provider], new SingleAccountStore(), clock,
             new ConnectorSettings(new Uri("https://tao.example.test/connections/callback")));
         var triage = new DecidedTriage();
         var consent = new FakeConsent();
-        return (new DailyBriefingService(new TodayService(connectors, triage, clock), model, consent, clock),
-            consent, provider);
+        return (new DailyBriefingService(new TodayService(connectors, triage, clock), model, consent,
+                new InMemoryUsage(), budget ?? new AssistantBudget(50, 1_000_000, 600), clock),
+            consent, provider, clock);
+    }
+
+    private sealed class InMemoryUsage : IAssistantUsageStore
+    {
+        private readonly Dictionary<(string, string, DateOnly), (int Calls, long Tokens)> _rows = [];
+
+        public Task<AssistantUsage> GetAsync(string tenantId, string ownerSubject, DateOnly day, CancellationToken ct)
+        {
+            var row = _rows.GetValueOrDefault((tenantId, ownerSubject, day));
+            return Task.FromResult(new AssistantUsage(row.Calls, row.Tokens));
+        }
+
+        public Task<bool> TryReserveCallAsync(string tenantId, string ownerSubject, DateOnly day, int maxCalls,
+            CancellationToken ct)
+        {
+            var row = _rows.GetValueOrDefault((tenantId, ownerSubject, day));
+            if (row.Calls >= maxCalls) return Task.FromResult(false);
+            _rows[(tenantId, ownerSubject, day)] = (row.Calls + 1, row.Tokens);
+            return Task.FromResult(true);
+        }
+
+        public Task AddTokensAsync(string tenantId, string ownerSubject, DateOnly day, long tokens, CancellationToken ct)
+        {
+            var row = _rows.GetValueOrDefault((tenantId, ownerSubject, day));
+            _rows[(tenantId, ownerSubject, day)] = (row.Calls, row.Tokens + tokens);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeModel : IChatModel
     {
         public bool Configured { get; set; } = true;
         public string Reply { get; set; } = """{"summary":"ok","suggestions":[]}""";
+        public Func<IReadOnlyList<ChatMessage>, string>? ReplyFor { get; set; }
+        public int? Prompt { get; set; }
+        public int? Completion { get; set; }
+        public int LastMaxOutputTokens { get; private set; }
         public List<IReadOnlyList<ChatMessage>> Calls { get; } = [];
         public bool IsConfigured => Configured;
         public string Model => "fake-model";
 
-        public Task<string> CompleteJsonAsync(IReadOnlyList<ChatMessage> messages, CancellationToken ct)
+        public Task<ChatCompletion> CompleteJsonAsync(IReadOnlyList<ChatMessage> messages, int maxOutputTokens,
+            CancellationToken ct)
         {
             Calls.Add(messages);
-            return Task.FromResult(Reply);
+            LastMaxOutputTokens = maxOutputTokens;
+            return Task.FromResult(new ChatCompletion(ReplyFor?.Invoke(messages) ?? Reply, Prompt, Completion));
         }
     }
 
@@ -222,6 +336,7 @@ public sealed class AssistantTests
         public static readonly Guid AccountId = Guid.Parse("11111111-2222-3333-4444-555555555555");
         public int Fetches;
         public bool Empty { get; set; }
+        public IReadOnlyList<WorkItem>? Custom { get; set; }
         public string Id => ConnectorProviders.Microsoft;
         public string DisplayName => "Microsoft 365";
         public bool IsConfigured => true;
@@ -241,6 +356,8 @@ public sealed class AssistantTests
         {
             Interlocked.Increment(ref Fetches);
             if (Empty) return Task.FromResult<IReadOnlyList<WorkItem>>([]);
+            if (Custom is not null)
+                return Task.FromResult<IReadOnlyList<WorkItem>>(Custom.Select(i => i with { AccountId = accountId }).ToArray());
             return Task.FromResult<IReadOnlyList<WorkItem>>(
             [
                 new WorkItem(Id, accountId, WorkItemKind.Task, "L|T1", "Offerta ACME", Detail: "Clienti",
@@ -289,9 +406,11 @@ public sealed class AssistantTests
             CancellationToken ct) => Task.FromResult<IReadOnlyList<TriageRecord>>([]);
     }
 
-    private sealed class FixedClock : TimeProvider
+    private sealed class TestClock : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => Now;
+        private DateTimeOffset _now = Now;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Set(DateTimeOffset value) => _now = value;
     }
 
     private sealed class RecordingHandler(HttpStatusCode status, string reply) : HttpMessageHandler

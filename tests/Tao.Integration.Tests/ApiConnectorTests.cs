@@ -293,13 +293,68 @@ public sealed class ApiConnectorTests
         public bool IsConfigured => Configured;
         public string Model => "scripted-model";
 
-        public Task<string> CompleteJsonAsync(IReadOnlyList<ChatMessage> messages, CancellationToken ct)
+        public Task<ChatCompletion> CompleteJsonAsync(IReadOnlyList<ChatMessage> messages, int maxOutputTokens,
+            CancellationToken ct)
         {
             Interlocked.Increment(ref Calls);
             LastPrompt = string.Join("\n", messages.Select(m => m.Content));
             LastSystem = messages[0].Content;
-            return Task.FromResult(Reply);
+            return Task.FromResult(new ChatCompletion(Reply, 100, 50));
         }
+    }
+
+    [Fact]
+    public async Task BriefingStopsAtTheDailyBudgetAndReportsUsage()
+    {
+        var provider = new ScriptedProvider();
+        var model = new ScriptedModel();
+        var settings = Settings().ToDictionary(x => x.Key.Replace(":", "__"), x => x.Value);
+        settings["Llm__DailyCallsPerUser"] = "2";
+        using var environment = new TemporaryEnvironment(settings);
+        using var host = Host(provider, model);
+        using var http = host.CreateClient();
+        var tenant = "api-budget-" + Guid.NewGuid().ToString("N");
+
+        using (var info = await Send(http, HttpMethod.Get, "/api/v1/assistant", tenant))
+        {
+            using var json = await Json(info);
+            Assert.Equal(2, json.RootElement.GetProperty("dailyCalls").GetInt32());
+            Assert.True(json.RootElement.GetProperty("dailyTokens").GetInt64() > 0);
+        }
+        string state;
+        using (var start = await Send(http, HttpMethod.Post, "/api/v1/connectors/microsoft/authorize", tenant, new { }))
+        {
+            using var json = await Json(start);
+            state = HttpUtility.ParseQueryString(
+                new Uri(json.RootElement.GetProperty("authorizationUrl").GetString()!).Query)["state"]!;
+        }
+        using (await Send(http, HttpMethod.Post, "/api/v1/connectors/complete", tenant, new { state, code = "c" })) { }
+        using (await Send(http, HttpMethod.Post, "/api/v1/consents", tenant, new
+        {
+            source = "assistant", purpose = "assistant.briefing", policyVersion = "assistant-v1",
+            expiresAt = DateTimeOffset.UtcNow.AddDays(30), accepted = true
+        })) { }
+
+        var briefing = new { timeZone = "Europe/Rome" };
+        for (var call = 1; call <= 2; call++)
+        {
+            using var ok = await Send(http, HttpMethod.Post, "/api/v1/today/briefing", tenant, briefing);
+            Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+            using var json = await Json(ok);
+            var usage = json.RootElement.GetProperty("usage");
+            Assert.Equal((call, 2, call * 150L), (usage.GetProperty("calls").GetInt32(),
+                usage.GetProperty("callsLimit").GetInt32(), usage.GetProperty("tokens").GetInt64()));
+        }
+        using (var exceeded = await Send(http, HttpMethod.Post, "/api/v1/today/briefing", tenant, briefing))
+        {
+            Assert.Equal(HttpStatusCode.TooManyRequests, exceeded.StatusCode);
+            using var json = await Json(exceeded);
+            Assert.Equal("assistant_budget_exceeded", json.RootElement.GetProperty("error").GetString());
+        }
+        Assert.Equal(2, model.Calls);
+        // Another user has a budget of their own.
+        using (var other = await Send(http, HttpMethod.Post, "/api/v1/today/briefing", tenant, briefing, subject: "bob"))
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, other.StatusCode);
     }
 
     [Fact]

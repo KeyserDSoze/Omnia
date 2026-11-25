@@ -37,7 +37,8 @@ public sealed class OpenAiCompatibleChatModel(HttpClient http, LlmOptions option
     public bool IsConfigured => _endpoint is not null && !string.IsNullOrWhiteSpace(options.Model);
     public string Model => options.Model ?? "";
 
-    public async Task<string> CompleteJsonAsync(IReadOnlyList<ChatMessage> messages, CancellationToken ct)
+    public async Task<ChatCompletion> CompleteJsonAsync(IReadOnlyList<ChatMessage> messages, int maxOutputTokens,
+        CancellationToken ct)
     {
         if (!IsConfigured) throw new AssistantNotConfiguredException();
         var body = JsonSerializer.Serialize(new
@@ -45,6 +46,7 @@ public sealed class OpenAiCompatibleChatModel(HttpClient http, LlmOptions option
             model = options.Model,
             messages = messages.Select(m => new { role = m.Role, content = m.Content }),
             temperature = 0.2,
+            max_tokens = maxOutputTokens,
             response_format = new { type = "json_object" }
         });
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_endpoint!, "chat/completions"))
@@ -70,7 +72,9 @@ public sealed class OpenAiCompatibleChatModel(HttpClient http, LlmOptions option
             {
                 using var json = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync(ct));
                 var content = json.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content");
-                return content.GetString() ?? throw new AssistantUnavailableException("invalid_model_output");
+                return new ChatCompletion(
+                    content.GetString() ?? throw new AssistantUnavailableException("invalid_model_output"),
+                    Tokens(json.RootElement, "prompt_tokens"), Tokens(json.RootElement, "completion_tokens"));
             }
             catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException
                 or IndexOutOfRangeException)
@@ -79,4 +83,10 @@ public sealed class OpenAiCompatibleChatModel(HttpClient http, LlmOptions option
             }
         }
     }
+
+    /// <summary>Usage as reported by the provider; absent or odd values mean "unknown".</summary>
+    private static int? Tokens(JsonElement root, string name) =>
+        root.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object &&
+        usage.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number &&
+        value.TryGetInt32(out var tokens) && tokens >= 0 ? tokens : null;
 }

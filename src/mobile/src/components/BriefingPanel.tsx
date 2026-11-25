@@ -122,6 +122,11 @@ export function BriefingPanel({ api, p, onSuggestions }: {
                   </Text>
                 </>
               )}
+              {briefing.usage && (
+                <Text testID="briefing-usage" style={[styles.hint, { color: p.subtle }]}>
+                  {t('briefing.usage', { calls: briefing.usage.calls, limit: briefing.usage.callsLimit })}
+                </Text>
+              )}
             </View>
           )}
         </>

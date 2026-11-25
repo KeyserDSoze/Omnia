@@ -240,6 +240,26 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
             }
         }
         writer.WriteEndArray();
+
+        writer.WritePropertyName("assistantUsage");
+        writer.WriteStartArray();
+        await using (var command = Command(actor, tenantId, ownerSubject, """
+            SELECT day, calls, tokens, expires_at FROM assistant_usage
+            WHERE tenant_id = @tenant AND owner_sub = @owner ORDER BY day
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("day", reader.GetFieldValue<DateOnly>(0).ToString("yyyy-MM-dd"));
+                writer.WriteNumber("calls", reader.GetInt32(1));
+                writer.WriteNumber("tokens", reader.GetInt64(2));
+                writer.WriteString("expiresAt", reader.GetFieldValue<DateTimeOffset>(3));
+                writer.WriteEndObject();
+            }
+        }
+        writer.WriteEndArray();
     }
 
     private static NpgsqlCommand Command(PostgresActorScope actor, string tenantId, string ownerSubject,
@@ -279,7 +299,8 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
             "DELETE FROM connector_accounts WHERE tenant_id = @tenant AND owner_sub = @owner"))
             accounts = await accountDelete.ExecuteNonQueryAsync(ct);
         var workState = 0;
-        foreach (var table in new[] { "connector_authorizations", "triage_decisions", "connector_actions", "user_settings" })
+        foreach (var table in new[] { "connector_authorizations", "triage_decisions", "connector_actions", "user_settings",
+                     "assistant_usage" })
         {
             await using var delete = Command(actor, tenantId, ownerSubject,
                 $"DELETE FROM {table} WHERE tenant_id = @tenant AND owner_sub = @owner");

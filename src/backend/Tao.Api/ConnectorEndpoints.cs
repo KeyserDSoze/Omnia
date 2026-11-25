@@ -105,7 +105,22 @@ public static class ConnectorEndpoints
         });
         services.AddTransient<IChatModel>(sp => sp.GetRequiredService<OpenAiCompatibleChatModel>());
         services.AddScoped<DailyBriefingService>();
+        services.AddScoped<IAssistantUsageStore, PostgresAssistantUsageStore>();
+        services.AddSingleton(BudgetFrom(configuration));
         return services;
+    }
+
+    /// <summary>Llm:DailyCallsPerUser, Llm:DailyTokensPerUser and Llm:MaxOutputTokens, with safe bounds.</summary>
+    public static AssistantBudget BudgetFrom(IConfiguration configuration)
+    {
+        static T Bounded<T>(string name, T value, T min, T max) where T : IComparable<T> =>
+            value.CompareTo(min) >= 0 && value.CompareTo(max) <= 0 ? value
+                : throw new InvalidOperationException($"{name} must be between {min} and {max}.");
+        var fallback = AssistantBudget.Default;
+        return new AssistantBudget(
+            Bounded("Llm:DailyCallsPerUser", configuration.GetValue("Llm:DailyCallsPerUser", fallback.DailyCalls), 1, 1000),
+            Bounded("Llm:DailyTokensPerUser", configuration.GetValue("Llm:DailyTokensPerUser", fallback.DailyTokens), 1000L, 100_000_000L),
+            Bounded("Llm:MaxOutputTokens", configuration.GetValue("Llm:MaxOutputTokens", fallback.MaxOutputTokens), 64, 8000));
     }
 
     public static void MapTaoConnectors(this IEndpointRouteBuilder app)
@@ -193,11 +208,13 @@ public static class ConnectorEndpoints
             return Results.Ok(saved);
         }));
 
-        app.MapGet("/api/v1/assistant", (IChatModel model, LlmOptions options) => Results.Ok(new
+        app.MapGet("/api/v1/assistant", (IChatModel model, LlmOptions options, AssistantBudget budget) => Results.Ok(new
         {
             configured = model.IsConfigured,
             model = model.IsConfigured ? model.Model : null,
-            host = model.IsConfigured ? LlmOptions.ValidatedEndpoint(options.Endpoint)?.Host : null
+            host = model.IsConfigured ? LlmOptions.ValidatedEndpoint(options.Endpoint)?.Host : null,
+            dailyCalls = budget.DailyCalls,
+            dailyTokens = budget.DailyTokens
         })).RequireAuthorization();
     }
 
@@ -242,6 +259,10 @@ public static class ConnectorEndpoints
         catch (AssistantUnavailableException e)
         {
             return Results.Json(new { error = e.Code }, statusCode: StatusCodes.Status502BadGateway);
+        }
+        catch (AssistantBudgetExceededException)
+        {
+            return Results.Json(new { error = "assistant_budget_exceeded" }, statusCode: StatusCodes.Status429TooManyRequests);
         }
         catch (DelegationRequiredException)
         {

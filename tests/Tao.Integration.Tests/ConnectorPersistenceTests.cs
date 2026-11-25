@@ -267,6 +267,56 @@ public sealed class ConnectorPersistenceTests
                 () => forbidden.ExecuteScalarAsync())).SqlState);
     }
 
+    [Fact]
+    public async Task AssistantUsageIsAtomicScopedExportedErasedAndExpires()
+    {
+        await using var db = await DatabasesAsync();
+        var (admin, app) = (db.Admin, db.App);
+        var retentionCs = Environment.GetEnvironmentVariable("TAO_TEST_RETENTION_DB");
+        Assert.False(string.IsNullOrWhiteSpace(retentionCs));
+        await new PostgresMigrator(admin, "tao_app", "tao_retention").MigrateAsync();
+        await using var worker = NpgsqlDataSource.Create(retentionCs!);
+        var repository = new PostgresRetentionRepository(worker);
+        while (await repository.PurgeWorkStateBatchAsync(500, default) > 0) { }
+
+        var usage = new PostgresAssistantUsageStore(app);
+        var data = new PostgresPersonalDataService(app, TestEnvelopeCrypto.Create());
+        var tenant = "usage-" + Guid.NewGuid().ToString("N");
+        var day = new DateOnly(2026, 11, 25);
+
+        // The call budget is enforced by one atomic statement: concurrent requests cannot overshoot it.
+        var reserved = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+            usage.TryReserveCallAsync(tenant, "alice", day, 3, default)));
+        Assert.Equal(3, reserved.Count(r => r));
+        await usage.AddTokensAsync(tenant, "alice", day, 1200, default);
+        await usage.AddTokensAsync(tenant, "alice", day, 300, default);
+        Assert.Equal(new AssistantUsage(3, 1500), await usage.GetAsync(tenant, "alice", day, default));
+        Assert.Equal(new AssistantUsage(0, 0), await usage.GetAsync(tenant, "alice", day.AddDays(1), default));
+        Assert.Equal(new AssistantUsage(0, 0), await usage.GetAsync(tenant, "bob", day, default));
+        Assert.True(await usage.TryReserveCallAsync(tenant, "bob", day, 3, default));
+
+        await using (var output = new MemoryStream())
+        {
+            await data.WriteExportAsync(tenant, "alice", output, default);
+            using var json = JsonDocument.Parse(output.ToArray());
+            var row = Assert.Single(json.RootElement.GetProperty("assistantUsage").EnumerateArray());
+            Assert.Equal(("2026-11-25", 3, 1500L), (row.GetProperty("day").GetString(),
+                row.GetProperty("calls").GetInt32(), row.GetProperty("tokens").GetInt64()));
+        }
+
+        await using (var age = admin.CreateCommand(
+            "UPDATE assistant_usage SET expires_at = now() - interval '1 second' WHERE tenant_id = @t AND owner_sub = 'bob'"))
+        {
+            age.Parameters.AddWithValue("t", tenant);
+            Assert.Equal(1, await age.ExecuteNonQueryAsync());
+        }
+        Assert.Equal(1, await repository.PurgeWorkStateBatchAsync(500, default));
+        Assert.Equal(new AssistantUsage(3, 1500), await usage.GetAsync(tenant, "alice", day, default));
+
+        Assert.Equal(1, (await data.EraseAsync(tenant, "alice", default)).DeletedWorkState);
+        Assert.Equal(new AssistantUsage(0, 0), await usage.GetAsync(tenant, "alice", day, default));
+    }
+
     private sealed record Databases(NpgsqlDataSource Admin, NpgsqlDataSource App) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()

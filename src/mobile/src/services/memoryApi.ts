@@ -103,7 +103,9 @@ export type TriageResultDto = {
   appliedToSource: boolean;
 };
 
-export type AssistantInfoDto = { configured: boolean; model: string | null; host: string | null };
+export type AssistantInfoDto = {
+  configured: boolean; model: string | null; host: string | null; dailyCalls?: number; dailyTokens?: number;
+};
 /** AI output: shown with an explicit label and never stored by Tao. */
 export type BriefingDto = {
   summary: string;
@@ -111,6 +113,8 @@ export type BriefingDto = {
   model: string;
   generatedAt: string;
   cardsSent: number;
+  /** What the user has used today against the daily budget. */
+  usage?: { calls: number; callsLimit: number; tokens: number; tokensLimit: number };
 };
 export const ASSISTANT_SOURCE = 'assistant';
 export const ASSISTANT_PURPOSE = 'assistant.briefing';
@@ -146,7 +150,8 @@ const knownErrors = new Set([
   'authorization_failed', 'invalid_identity', 'provider_error', 'rate_limited', 'permission_missing', 'apply_failed',
   'apply_not_supported', 'applied_to_source', 'invalid_item', 'invalid_decision', 'invalid_snooze', 'invalid_window',
   'assistant_not_configured', 'assistant_consent_required', 'model_error', 'model_unreachable', 'model_rate_limited',
-  'invalid_model_output', 'invalid_time_zone', 'invalid_language', 'delegation_required', 'invalid_settings'
+  'invalid_model_output', 'invalid_time_zone', 'invalid_language', 'delegation_required', 'invalid_settings',
+  'assistant_budget_exceeded'
 ] as const);
 type KnownError = typeof knownErrors extends Set<infer C> ? C : never;
 const isKnownError = (code: string): code is KnownError => knownErrors.has(code as KnownError);

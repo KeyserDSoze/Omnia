@@ -10,7 +10,6 @@ export const th: Messages = {
   'welcome.demo': 'นี่คือเดโมของ Tao: ไม่มีบัญชีจริง และไม่มีการบันทึกอะไรทั้งสิ้น เข้าสู่ระบบเหมือนที่ทำกับบัญชีของคุณเอง',
   'welcome.invalid': 'มีบางอย่างผิดปกติ',
   'login.continueWith': 'ดำเนินการต่อด้วย {provider}',
-  'login.email': 'เข้าสู่ระบบด้วยอีเมลและรหัสผ่าน',
   'login.signIn': 'เข้าสู่ระบบ',
   'language.label': 'ภาษา',
 
@@ -249,7 +248,6 @@ export const th: Messages = {
   'settings.console': 'การเข้าสู่ระบบและโซเชียลล็อกอิน (Google, Microsoft)',
   'settings.yourAccount': 'บัญชีของคุณ',
   'settings.logout': 'ออกจากระบบ',
-  'settings.socialHint': 'คุณเข้าสู่ระบบ Tao ด้วย Google หรือ Microsoft ได้ด้วยหากผู้ดูแลเปิดใช้: ผูกตัวตนจากหน้า “การเข้าสู่ระบบและโซเชียลล็อกอิน” ในส่วนบัญชีที่เชื่อมโยง',
   'settings.demoKicker': 'เดโม',
   'settings.demoText': 'ไม่มีบัญชี: ที่นี่คุณลองหน้าตา ภาษา เสียง และโน้ตได้ ไม่มีอะไรถูกบันทึก',
   'settings.languageKicker': 'ภาษา',

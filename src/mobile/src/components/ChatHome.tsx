@@ -348,7 +348,7 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
   submitRef.current = submitText;
 
   function demoLogin(idp?: ConnectorProviderId) {
-    say(idp ? tr('login.continueWith', { provider: providerLabel[idp] }) : tr('login.email'), 'user');
+    say(idp ? tr('login.continueWith', { provider: providerLabel[idp] }) : tr('login.signIn'), 'user');
     setDemoIn(true);
     say(tr('chat.demoSignedIn'));
     say(greeting(null, null, new Date()), 'tao', true);
@@ -706,13 +706,7 @@ function LoginButtons({ t, providers, still, delay, onLogin }: {
           </Pressable>
         </Emerge>
       ))}
-      {providers.length > 0 ? (
-        <Emerge theme={t} still={still} delay={delay + providers.length * step}>
-          <Pressable testID="chat-login" accessibilityRole="button" onPress={() => onLogin()} style={styles.textButton}>
-            <Text style={[styles.linkText, { color: t.subtle }]}>{tr('login.email')}</Text>
-          </Pressable>
-        </Emerge>
-      ) : (
+      {providers.length === 0 && (
         <Emerge theme={t} still={still} delay={delay} pulse={999}>
           <Pressable testID="chat-login" accessibilityRole="button" onPress={() => onLogin()}
             style={state => [styles.primary, { backgroundColor: t.accent }, hovered(state) ? styles.lift : null]}>

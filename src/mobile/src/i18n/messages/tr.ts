@@ -10,7 +10,6 @@ export const tr: Messages = {
   'welcome.demo': 'Bu Tao demosu: gerçek hesap yok, hiçbir şey kaydedilmez. Kendi hesabınla yapacağın gibi giriş yap.',
   'welcome.invalid': 'Bir şeyler ters gitti.',
   'login.continueWith': '{provider} ile devam et',
-  'login.email': 'E-posta ve parola ile giriş yap',
   'login.signIn': 'Giriş yap',
   'language.label': 'Dil',
 
@@ -255,7 +254,6 @@ export const tr: Messages = {
   'settings.console': 'Giriş ve sosyal oturum (Google, Microsoft)',
   'settings.yourAccount': 'Hesabın',
   'settings.logout': 'Çıkış yap',
-  'settings.socialHint': 'Yönetici etkinleştirdiyse Tao’ya Google veya Microsoft ile de girebilirsin: kimliği “Giriş ve sosyal oturum” sayfasındaki bağlı hesaplar bölümünden bağla.',
   'settings.demoKicker': 'DEMO',
   'settings.demoText': 'Hesap yok: burada görünümü, dili, sesi ve notları deneyebilirsin. Hiçbir şey kaydedilmez.',
   'settings.languageKicker': 'DİL',

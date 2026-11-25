@@ -9,7 +9,6 @@ export const it = {
   'welcome.demo': 'Questa è la demo di Tao: niente account veri, niente salvato. Entra come faresti con il tuo account.',
   'welcome.invalid': 'Qualcosa non va.',
   'login.continueWith': 'Continua con {provider}',
-  'login.email': 'Accedi con email e password',
   'login.signIn': 'Accedi',
   'language.label': 'Lingua',
 
@@ -255,7 +254,6 @@ export const it = {
   'settings.console': 'Accesso e social login (Google, Microsoft)',
   'settings.yourAccount': 'Il tuo account',
   'settings.logout': 'Esci',
-  'settings.socialHint': 'Puoi accedere a Tao anche con Google o Microsoft se l’amministratore li ha attivati: collega l’identità dalla pagina «Accesso e social login», nella sezione account collegati.',
   'settings.demoKicker': 'DEMO',
   'settings.demoText': 'Nessun account: qui provi aspetto, lingua, voce e note. Niente viene salvato.',
   'settings.languageKicker': 'LINGUA',

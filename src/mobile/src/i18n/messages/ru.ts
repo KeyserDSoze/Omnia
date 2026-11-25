@@ -10,7 +10,6 @@ export const ru: Messages = {
   'welcome.demo': 'Это демо Tao: настоящих аккаунтов нет, ничего не сохраняется. Входи так же, как со своим аккаунтом.',
   'welcome.invalid': 'Что-то не так.',
   'login.continueWith': 'Продолжить через {provider}',
-  'login.email': 'Войти по почте и паролю',
   'login.signIn': 'Войти',
   'language.label': 'Язык',
 
@@ -269,7 +268,6 @@ export const ru: Messages = {
   'settings.console': 'Вход и социальные сети (Google, Microsoft)',
   'settings.yourAccount': 'Твой аккаунт',
   'settings.logout': 'Выйти',
-  'settings.socialHint': 'В Tao можно входить и через Google или Microsoft, если администратор их включил: свяжи личность на странице «Вход и социальные сети», в разделе связанных аккаунтов.',
   'settings.demoKicker': 'ДЕМО',
   'settings.demoText': 'Без аккаунта: здесь можно попробовать оформление, язык, голос и заметки. Ничего не сохраняется.',
   'settings.languageKicker': 'ЯЗЫК',

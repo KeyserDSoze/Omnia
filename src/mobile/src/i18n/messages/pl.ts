@@ -10,7 +10,6 @@ export const pl: Messages = {
   'welcome.demo': 'To demo Tao: bez prawdziwych kont, nic nie jest zapisywane. Zaloguj się tak, jak na własne konto.',
   'welcome.invalid': 'Coś jest nie tak.',
   'login.continueWith': 'Kontynuuj przez {provider}',
-  'login.email': 'Zaloguj się e-mailem i hasłem',
   'login.signIn': 'Zaloguj się',
   'language.label': 'Język',
 
@@ -269,7 +268,6 @@ export const pl: Messages = {
   'settings.console': 'Logowanie i logowanie społecznościowe (Google, Microsoft)',
   'settings.yourAccount': 'Twoje konto',
   'settings.logout': 'Wyloguj się',
-  'settings.socialHint': 'Do Tao możesz się też logować przez Google lub Microsoft, jeśli administrator je włączył: powiąż tożsamość na stronie „Logowanie i logowanie społecznościowe”, w sekcji powiązanych kont.',
   'settings.demoKicker': 'DEMO',
   'settings.demoText': 'Bez konta: tutaj wypróbujesz wygląd, język, głos i notatki. Nic nie jest zapisywane.',
   'settings.languageKicker': 'JĘZYK',

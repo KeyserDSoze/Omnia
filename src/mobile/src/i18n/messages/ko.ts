@@ -10,7 +10,6 @@ export const ko: Messages = {
   'welcome.demo': '이것은 Tao 데모입니다. 실제 계정은 없고 아무것도 저장되지 않습니다. 본인 계정처럼 로그인해 보세요.',
   'welcome.invalid': '문제가 생겼습니다.',
   'login.continueWith': '{provider}(으)로 계속하기',
-  'login.email': '이메일과 비밀번호로 로그인',
   'login.signIn': '로그인',
   'language.label': '언어',
 
@@ -249,7 +248,6 @@ export const ko: Messages = {
   'settings.console': '로그인 및 소셜 로그인(Google, Microsoft)',
   'settings.yourAccount': '내 계정',
   'settings.logout': '로그아웃',
-  'settings.socialHint': '관리자가 활성화했다면 Google 또는 Microsoft로도 Tao에 로그인할 수 있습니다. “로그인 및 소셜 로그인” 페이지의 연결된 계정 섹션에서 ID를 연결하세요.',
   'settings.demoKicker': '데모',
   'settings.demoText': '계정 없음: 여기서는 모양, 언어, 음성, 메모를 체험할 수 있습니다. 아무것도 저장되지 않습니다.',
   'settings.languageKicker': '언어',

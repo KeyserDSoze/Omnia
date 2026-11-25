@@ -1,44 +1,36 @@
 #!/usr/bin/env bash
 # Idempotent Keycloak settings applied at every start (the realm import runs only once).
-# Optional social login with Google and Microsoft (TAO_SOCIAL_LOGIN=google,microsoft).
-#   TAO_SOCIAL_SIGNUP=open (default): the first social sign-in creates the Tao user, identified by
-#     the e-mail. Keycloak's built-in first-login flow links a second provider to an existing
-#     e-mail only after proof of the first one (re-authentication, or e-mail when SMTP is set).
-#   TAO_SOCIAL_SIGNUP=invite: only users that already exist can sign in, after confirming the
-#     link once with their Tao password.
-# Registration with a password stays closed in both modes.
+# Social login with Google and Microsoft (TAO_SOCIAL_LOGIN=google,microsoft), and nothing else.
+#   The first social sign-in creates the Tao user, identified by the e-mail. Keycloak's built-in
+#   first-login flow links a second provider to an existing e-mail only after proof of the first.
+#   With a provider enabled the realm browser flow only redirects to the provider: there is no
+#   Tao password form. Without any provider the stock flow stays, so a fresh install is not locked out.
 set -euo pipefail
 
 realm=tao
 server=${KEYCLOAK_SERVER:-http://keycloak:8080/auth}
-signup=${TAO_SOCIAL_SIGNUP:-open}
-invite_flow=tao-invite-only-first-login
+flow="first broker login"
+social_flow=tao-social-only-browser
 kc() { /opt/keycloak/bin/kcadm.sh "$@" --config /tmp/kcadm.config; }
 enabled() { [[ ",${TAO_SOCIAL_LOGIN:-}," == *",$1,"* ]]; }
 json() { local s=${1//\\/\\\\}; printf '%s' "${s//\"/\\\"}"; }
 
-case "$signup" in
-  open) flow="first broker login" ;;
-  invite) flow=$invite_flow ;;
-  *) echo "TAO_SOCIAL_SIGNUP accepts open or invite" >&2; exit 1 ;;
-esac
-
 kc config credentials --server "$server" --realm master \
   --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD" >/dev/null
 
-if [[ $signup == invite ]] && { enabled google || enabled microsoft; }; then
-  if ! kc get authentication/flows -r "$realm" --fields alias --format csv --noquotes | grep -qx "$flow"; then
-    kc create authentication/flows -r "$realm" -s alias="$flow" -s providerId=basic-flow \
-      -s topLevel=true -s builtIn=false \
-      -s description="Social login only for existing users, confirmed once with their password"
-    for provider in idp-detect-existing-broker-user idp-confirm-link idp-username-password-form; do
-      kc create "authentication/flows/$flow/executions/execution" -r "$realm" -s provider="$provider"
-    done
+if enabled google || enabled microsoft; then
+  if ! kc get authentication/flows -r "$realm" --fields alias --format csv --noquotes | grep -qx "$social_flow"; then
+    kc create authentication/flows -r "$realm" -s alias="$social_flow" -s providerId=basic-flow \
+      -s topLevel=true -s builtIn=false -s description="Redirect to the social provider chosen by the app"
+    kc create "authentication/flows/$social_flow/executions/execution" -r "$realm" \
+      -s provider=identity-provider-redirector
   fi
-  # Unknown e-mail: refused. Known e-mail: confirm the link and re-enter the Tao password once.
-  for id in $(kc get "authentication/flows/$flow/executions" -r "$realm" --fields id --format csv --noquotes); do
-    kc update "authentication/flows/$flow/executions" -r "$realm" -b "{\"id\":\"$id\",\"requirement\":\"REQUIRED\"}"
+  for id in $(kc get "authentication/flows/$social_flow/executions" -r "$realm" --fields id --format csv --noquotes); do
+    kc update "authentication/flows/$social_flow/executions" -r "$realm" -b "{\"id\":\"$id\",\"requirement\":\"REQUIRED\"}"
   done
+  kc update "realms/$realm" -s browserFlow="$social_flow"
+else
+  kc update "realms/$realm" -s browserFlow=browser
 fi
 
 configure_idp() {
@@ -63,8 +55,8 @@ configure_idp() {
   fi
 }
 
-google_extra=""
-[[ -n "${GOOGLE_HOSTED_DOMAIN:-}" ]] && google_extra=",\"hostedDomain\":\"$(json "$GOOGLE_HOSTED_DOMAIN")\""
+google_extra=",\"validateSignature\":\"true\""
+[[ -n "${GOOGLE_HOSTED_DOMAIN:-}" ]] && google_extra+=",\"hostedDomain\":\"$(json "$GOOGLE_HOSTED_DOMAIN")\""
 configure_idp google "${GOOGLE_CLIENT_ID:-}" "${GOOGLE_CLIENT_SECRET:-}" "$google_extra"
 configure_idp microsoft "${MICROSOFT_CLIENT_ID:-}" "${MICROSOFT_CLIENT_SECRET:-}" \
   ",\"tenantId\":\"$(json "${MICROSOFT_TENANT:-organizations}")\""

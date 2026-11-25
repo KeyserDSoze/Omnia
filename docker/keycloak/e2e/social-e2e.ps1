@@ -51,7 +51,7 @@ try {
   # The production script, unchanged, with synthetic client ids: it must produce the sign-up settings.
   docker cp "$root/docker/keycloak/configure.sh" "${kcName}:/tmp/configure.sh"
   docker exec -e KEYCLOAK_SERVER=http://localhost:8080 -e KEYCLOAK_ADMIN=ci-admin -e "KEYCLOAK_ADMIN_PASSWORD=$kc" `
-    -e TAO_SOCIAL_LOGIN=google,microsoft -e TAO_SOCIAL_SIGNUP=open `
+    -e TAO_SOCIAL_LOGIN=google,microsoft `
     -e GOOGLE_CLIENT_ID=synthetic -e GOOGLE_CLIENT_SECRET=synthetic `
     -e MICROSOFT_CLIENT_ID=synthetic -e MICROSOFT_CLIENT_SECRET=synthetic `
     $kcName bash /tmp/configure.sh
@@ -61,6 +61,10 @@ try {
     -Body @{ grant_type = 'password'; client_id = 'admin-cli'; username = 'ci-admin'; password = $kc }).access_token
   $auth = @{ Authorization = "Bearer $token" }
   $base = 'http://localhost:8081/admin/realms/tao/identity-provider/instances'
+  $realm = Invoke-RestMethod http://localhost:8081/admin/realms/tao -Headers $auth
+  if ($realm.browserFlow -ne 'tao-social-only-browser') { throw 'The realm browser flow is not social only' }
+  $google = Invoke-RestMethod "$base/google" -Headers $auth
+  if ($google.config.validateSignature -ne 'true') { throw 'Google id tokens are not signature validated' }
   foreach ($alias in 'google', 'microsoft') {
     $idp = Invoke-RestMethod "$base/$alias" -Headers $auth
     if ($idp.firstBrokerLoginFlowAlias -ne 'first broker login') { throw "$alias does not use the built-in first-login flow" }

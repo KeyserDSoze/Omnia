@@ -10,7 +10,6 @@ export const vi: Messages = {
   'welcome.demo': 'Đây là bản demo của Tao: không có tài khoản thật, không lưu gì cả. Hãy đăng nhập như với tài khoản của chính bạn.',
   'welcome.invalid': 'Có gì đó không ổn.',
   'login.continueWith': 'Tiếp tục với {provider}',
-  'login.email': 'Đăng nhập bằng email và mật khẩu',
   'login.signIn': 'Đăng nhập',
   'language.label': 'Ngôn ngữ',
 
@@ -249,7 +248,6 @@ export const vi: Messages = {
   'settings.console': 'Đăng nhập và đăng nhập mạng xã hội (Google, Microsoft)',
   'settings.yourAccount': 'Tài khoản của bạn',
   'settings.logout': 'Đăng xuất',
-  'settings.socialHint': 'Bạn cũng có thể đăng nhập Tao bằng Google hoặc Microsoft nếu quản trị viên đã bật: hãy liên kết danh tính từ trang “Đăng nhập và đăng nhập mạng xã hội”, trong mục tài khoản liên kết.',
   'settings.demoKicker': 'DEMO',
   'settings.demoText': 'Không có tài khoản: ở đây bạn thử giao diện, ngôn ngữ, giọng nói và ghi chú. Không có gì được lưu.',
   'settings.languageKicker': 'NGÔN NGỮ',

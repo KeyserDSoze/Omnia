@@ -10,7 +10,6 @@ export const zh: Messages = {
   'welcome.demo': '这是 Tao 的演示：没有真实账户，也不会保存任何内容。请像使用自己的账户一样登录。',
   'welcome.invalid': '出了点问题。',
   'login.continueWith': '使用 {provider} 继续',
-  'login.email': '使用邮箱和密码登录',
   'login.signIn': '登录',
   'language.label': '语言',
 
@@ -249,7 +248,6 @@ export const zh: Messages = {
   'settings.console': '登录与社交登录（Google、Microsoft）',
   'settings.yourAccount': '你的账户',
   'settings.logout': '退出登录',
-  'settings.socialHint': '如果管理员已启用，你也可以用 Google 或 Microsoft 登录 Tao：请在“登录与社交登录”页面的关联账户部分绑定身份。',
   'settings.demoKicker': '演示',
   'settings.demoText': '没有账户：在这里你可以试用外观、语言、语音和笔记。不会保存任何内容。',
   'settings.languageKicker': '语言',

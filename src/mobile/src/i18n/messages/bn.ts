@@ -10,7 +10,6 @@ export const bn: Messages = {
   'welcome.demo': 'এটি Tao-এর ডেমো: কোনো আসল অ্যাকাউন্ট নেই, কিছুই সংরক্ষিত হয় না। নিজের অ্যাকাউন্টের মতোই সাইন ইন করুন।',
   'welcome.invalid': 'কিছু একটা ঠিক নেই।',
   'login.continueWith': '{provider} দিয়ে চালিয়ে যান',
-  'login.email': 'ইমেল ও পাসওয়ার্ড দিয়ে সাইন ইন করুন',
   'login.signIn': 'সাইন ইন করুন',
   'language.label': 'ভাষা',
 
@@ -255,7 +254,6 @@ export const bn: Messages = {
   'settings.console': 'সাইন-ইন ও সোশ্যাল লগইন (Google, Microsoft)',
   'settings.yourAccount': 'আপনার অ্যাকাউন্ট',
   'settings.logout': 'সাইন আউট করুন',
-  'settings.socialHint': 'প্রশাসক চালু করলে আপনি Google বা Microsoft দিয়েও Tao-তে সাইন ইন করতে পারেন: “সাইন-ইন ও সোশ্যাল লগইন” পেজের সংযুক্ত অ্যাকাউন্ট অংশ থেকে পরিচয় যুক্ত করুন।',
   'settings.demoKicker': 'ডেমো',
   'settings.demoText': 'কোনো অ্যাকাউন্ট নেই: এখানে চেহারা, ভাষা, কণ্ঠস্বর ও নোট পরখ করতে পারেন। কিছুই সংরক্ষিত হয় না।',
   'settings.languageKicker': 'ভাষা',

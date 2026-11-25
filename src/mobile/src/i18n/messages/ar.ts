@@ -10,7 +10,6 @@ export const ar: Messages = {
   'welcome.demo': 'هذا عرض Tao التجريبي: لا حسابات حقيقية ولا يُحفظ أي شيء. سجّل الدخول كما تفعل بحسابك.',
   'welcome.invalid': 'هناك خطب ما.',
   'login.continueWith': 'المتابعة عبر {provider}',
-  'login.email': 'تسجيل الدخول بالبريد وكلمة المرور',
   'login.signIn': 'تسجيل الدخول',
   'language.label': 'اللغة',
 
@@ -277,7 +276,6 @@ export const ar: Messages = {
   'settings.console': 'تسجيل الدخول والدخول الاجتماعي (Google وMicrosoft)',
   'settings.yourAccount': 'حسابك',
   'settings.logout': 'تسجيل الخروج',
-  'settings.socialHint': 'يمكنك أيضًا تسجيل الدخول إلى Tao عبر Google أو Microsoft إذا فعّلهما المسؤول: اربط الهوية من صفحة «تسجيل الدخول والدخول الاجتماعي» في قسم الحسابات المرتبطة.',
   'settings.demoKicker': 'تجريبي',
   'settings.demoText': 'بلا حساب: هنا تجرّب المظهر واللغة والصوت والملاحظات. لا يُحفظ أي شيء.',
   'settings.languageKicker': 'اللغة',

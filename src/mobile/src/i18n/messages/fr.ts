@@ -10,7 +10,6 @@ export const fr: Messages = {
   'welcome.demo': 'Voici la démo de Tao : pas de vrais comptes, rien n’est enregistré. Connecte-toi comme avec ton propre compte.',
   'welcome.invalid': 'Quelque chose ne va pas.',
   'login.continueWith': 'Continuer avec {provider}',
-  'login.email': 'Se connecter avec e-mail et mot de passe',
   'login.signIn': 'Se connecter',
   'language.label': 'Langue',
 
@@ -255,7 +254,6 @@ export const fr: Messages = {
   'settings.console': 'Connexion et login social (Google, Microsoft)',
   'settings.yourAccount': 'Ton compte',
   'settings.logout': 'Se déconnecter',
-  'settings.socialHint': 'Tu peux aussi te connecter à Tao avec Google ou Microsoft si l’administrateur les a activés : associe l’identité depuis la page « Connexion et login social », dans la section des comptes liés.',
   'settings.demoKicker': 'DÉMO',
   'settings.demoText': 'Aucun compte : ici tu essaies l’apparence, la langue, la voix et les notes. Rien n’est enregistré.',
   'settings.languageKicker': 'LANGUE',

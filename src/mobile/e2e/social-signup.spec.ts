@@ -75,6 +75,18 @@ test('Microsoft with an e-mail that already has a Tao user joins it only after p
   expect(users[0].providers).toEqual(['google', 'microsoft']);
 });
 
+test('the Tao realm has no password form of its own', async ({ page }) => {
+  const redirect = encodeURIComponent(`http://127.0.0.1:19006${appPath}`);
+  await page.goto(`${kc}/realms/tao/protocol/openid-connect/auth?client_id=tao-web&response_type=code&scope=openid&redirect_uri=${redirect}`);
+  await expect(page.locator('input[type="password"]')).toHaveCount(0);
+  await expect(page.locator('input[name="username"]')).toHaveCount(0);
+  const grant = await fetch(`${kc}/realms/tao/protocol/openid-connect/token`, {
+    method: 'POST',
+    body: new URLSearchParams({ grant_type: 'password', client_id: 'tao-web', username: 'ada@example.test', password: upstreamPassword })
+  });
+  expect(grant.ok).toBe(false);
+});
+
 test('a new e-mail through Microsoft creates its own, separate Tao user', async ({ page }) => {
   await signInWith(page, 'microsoft', 'grace@example.test');
   await signedIn(page);

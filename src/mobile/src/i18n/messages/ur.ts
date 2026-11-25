@@ -10,7 +10,6 @@ export const ur: Messages = {
   'welcome.demo': 'یہ Tao کا ڈیمو ہے: کوئی حقیقی اکاؤنٹ نہیں اور کچھ بھی محفوظ نہیں ہوتا۔ اپنے اکاؤنٹ کی طرح ہی سائن اِن کریں۔',
   'welcome.invalid': 'کچھ گڑبڑ ہے۔',
   'login.continueWith': '{provider} کے ساتھ جاری رکھیں',
-  'login.email': 'ای میل اور پاس ورڈ سے سائن اِن کریں',
   'login.signIn': 'سائن اِن کریں',
   'language.label': 'زبان',
 
@@ -255,7 +254,6 @@ export const ur: Messages = {
   'settings.console': 'سائن اِن اور سوشل لاگ اِن (Google، Microsoft)',
   'settings.yourAccount': 'آپ کا اکاؤنٹ',
   'settings.logout': 'سائن آؤٹ کریں',
-  'settings.socialHint': 'اگر منتظم نے فعال کیا ہو تو آپ Google یا Microsoft سے بھی Tao میں سائن اِن کر سکتے ہیں: “سائن اِن اور سوشل لاگ اِن” صفحے کے منسلک اکاؤنٹس والے حصے سے شناخت جوڑیں۔',
   'settings.demoKicker': 'ڈیمو',
   'settings.demoText': 'کوئی اکاؤنٹ نہیں: یہاں آپ ظاہری شکل، زبان، آواز اور نوٹس آزما سکتے ہیں۔ کچھ بھی محفوظ نہیں ہوتا۔',
   'settings.languageKicker': 'زبان',

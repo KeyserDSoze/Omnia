@@ -343,7 +343,10 @@ export default function Home() {
 
   async function login(idpHint?: ConnectorProviderId) {
     if (busy) return;
-    try { await authRef.current?.login(idpHint); }
+    // The realm has no password form: without a provider choice, pick the only one or show the buttons.
+    if (!idpHint && socialProviders.length > 1) { setView('chat'); return; }
+    const provider = idpHint ?? socialProviders[0];
+    try { await authRef.current?.login(provider); }
     catch { setNotice(t('notice.loginFailed')); }
   }
 
@@ -582,7 +585,7 @@ export default function Home() {
         <ScrollView style={styles.fill} contentContainerStyle={[styles.sheet, { paddingHorizontal: compact ? 14 : 22 }]}>
           <SettingsPanel api={signedIn ? apiRef.current : null} theme={p}
             profile={signedIn ? profile ?? { name: null, email: null } : null}
-            accountConsoleUrl={webMode.kind === 'cloud' ? webMode.config.issuer + '/account' : null}
+            accountConsoleUrl={webMode.kind === 'cloud' && socialProviders.length === 0 ? webMode.config.issuer + '/account' : null}
             onLogout={signedIn ? () => { setView('chat'); void logout(); } : null}
             onOpenMemory={() => setView('memory')}
             onRunSetup={() => { setView('chat'); setSetupRequest(n => n + 1); }}

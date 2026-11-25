@@ -10,7 +10,6 @@ export const hi: Messages = {
   'welcome.demo': 'यह Tao का डेमो है: कोई असली खाता नहीं, कुछ भी सहेजा नहीं जाता। अपने खाते की तरह ही साइन इन करें।',
   'welcome.invalid': 'कुछ गड़बड़ है।',
   'login.continueWith': '{provider} के साथ जारी रखें',
-  'login.email': 'ईमेल और पासवर्ड से साइन इन करें',
   'login.signIn': 'साइन इन करें',
   'language.label': 'भाषा',
 
@@ -255,7 +254,6 @@ export const hi: Messages = {
   'settings.console': 'साइन-इन और सोशल लॉगिन (Google, Microsoft)',
   'settings.yourAccount': 'आपका खाता',
   'settings.logout': 'साइन आउट करें',
-  'settings.socialHint': 'अगर प्रशासक ने चालू किया है तो आप Google या Microsoft से भी Tao में साइन इन कर सकते हैं: “साइन-इन और सोशल लॉगिन” पेज के जुड़े खातों वाले हिस्से से पहचान जोड़ें।',
   'settings.demoKicker': 'डेमो',
   'settings.demoText': 'कोई खाता नहीं: यहाँ आप रूप, भाषा, आवाज़ और नोट आज़मा सकते हैं। कुछ भी सहेजा नहीं जाता।',
   'settings.languageKicker': 'भाषा',

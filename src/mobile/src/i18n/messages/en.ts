@@ -10,7 +10,6 @@ export const en: Messages = {
   'welcome.demo': 'This is the Tao demo: no real accounts, nothing saved. Sign in as you would with your own account.',
   'welcome.invalid': 'Something is wrong.',
   'login.continueWith': 'Continue with {provider}',
-  'login.email': 'Sign in with email and password',
   'login.signIn': 'Sign in',
   'language.label': 'Language',
 
@@ -255,7 +254,6 @@ export const en: Messages = {
   'settings.console': 'Sign-in and social login (Google, Microsoft)',
   'settings.yourAccount': 'Your account',
   'settings.logout': 'Sign out',
-  'settings.socialHint': 'You can also sign in to Tao with Google or Microsoft if the administrator turned them on: link the identity from the “Sign-in and social login” page, in the linked accounts section.',
   'settings.demoKicker': 'DEMO',
   'settings.demoText': 'No account: here you can try appearance, language, voice and notes. Nothing is saved.',
   'settings.languageKicker': 'LANGUAGE',

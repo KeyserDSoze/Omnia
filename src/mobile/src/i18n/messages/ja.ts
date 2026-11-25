@@ -10,7 +10,6 @@ export const ja: Messages = {
   'welcome.demo': 'これは Tao のデモです。本物のアカウントはなく、何も保存されません。ご自身のアカウントと同じようにログインしてください。',
   'welcome.invalid': '何か問題が起きました。',
   'login.continueWith': '{provider} で続ける',
-  'login.email': 'メールとパスワードでログイン',
   'login.signIn': 'ログイン',
   'language.label': '言語',
 
@@ -249,7 +248,6 @@ export const ja: Messages = {
   'settings.console': 'ログインとソーシャルログイン（Google、Microsoft）',
   'settings.yourAccount': 'あなたのアカウント',
   'settings.logout': 'ログアウト',
-  'settings.socialHint': '管理者が有効にしている場合は、Google または Microsoft でも Tao にログインできます。「ログインとソーシャルログイン」ページの連携アカウントの項目で ID をひも付けてください。',
   'settings.demoKicker': 'デモ',
   'settings.demoText': 'アカウントなし：ここでは外観、言語、音声、メモを試せます。何も保存されません。',
   'settings.languageKicker': '言語',

@@ -10,7 +10,6 @@ export const nl: Messages = {
   'welcome.demo': 'Dit is de Tao-demo: geen echte accounts, er wordt niets opgeslagen. Log in zoals je met je eigen account zou doen.',
   'welcome.invalid': 'Er klopt iets niet.',
   'login.continueWith': 'Doorgaan met {provider}',
-  'login.email': 'Inloggen met e-mail en wachtwoord',
   'login.signIn': 'Inloggen',
   'language.label': 'Taal',
 
@@ -255,7 +254,6 @@ export const nl: Messages = {
   'settings.console': 'Inloggen en social login (Google, Microsoft)',
   'settings.yourAccount': 'Je account',
   'settings.logout': 'Uitloggen',
-  'settings.socialHint': 'Je kunt ook met Google of Microsoft bij Tao inloggen als de beheerder dat heeft ingeschakeld: koppel de identiteit via de pagina “Inloggen en social login”, in het gedeelte gekoppelde accounts.',
   'settings.demoKicker': 'DEMO',
   'settings.demoText': 'Geen account: hier probeer je uiterlijk, taal, stem en notities uit. Er wordt niets opgeslagen.',
   'settings.languageKicker': 'TAAL',

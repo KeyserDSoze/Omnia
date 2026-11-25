@@ -10,7 +10,6 @@ export const id: Messages = {
   'welcome.demo': 'Ini demo Tao: tanpa akun sungguhan, tidak ada yang disimpan. Masuklah seperti dengan akunmu sendiri.',
   'welcome.invalid': 'Ada yang tidak beres.',
   'login.continueWith': 'Lanjutkan dengan {provider}',
-  'login.email': 'Masuk dengan email dan kata sandi',
   'login.signIn': 'Masuk',
   'language.label': 'Bahasa',
 
@@ -249,7 +248,6 @@ export const id: Messages = {
   'settings.console': 'Akses dan login sosial (Google, Microsoft)',
   'settings.yourAccount': 'Akunmu',
   'settings.logout': 'Keluar',
-  'settings.socialHint': 'Kamu juga bisa masuk ke Tao dengan Google atau Microsoft jika administrator mengaktifkannya: tautkan identitas dari halaman “Akses dan login sosial”, di bagian akun tertaut.',
   'settings.demoKicker': 'DEMO',
   'settings.demoText': 'Tanpa akun: di sini kamu mencoba tampilan, bahasa, suara, dan catatan. Tidak ada yang disimpan.',
   'settings.languageKicker': 'BAHASA',

@@ -166,7 +166,6 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
             )}
             {onLogout && <Button testID="settings-logout" label={t('settings.logout')} p={p} onPress={onLogout} />}
           </View>
-          <Text style={[styles.hint, { color: p.subtle }]}>{t('settings.socialHint')}</Text>
         </View>
       ) : (
         <View style={card}>

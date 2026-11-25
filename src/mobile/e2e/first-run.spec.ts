@@ -16,6 +16,8 @@ test('la home è solo una chat: il simbolo dice ciao e chiede di entrare con Mic
   await expect(page.getByTestId('chat-tao').nth(1)).toContainText('demo di Tao');
   await expect(page.getByTestId('chat-login-microsoft')).toContainText('Continua con Microsoft');
   await expect(page.getByTestId('chat-login-google')).toContainText('Continua con Google');
+  // Social only: no email and password entry next to the providers.
+  await expect(page.getByTestId('chat-login')).toHaveCount(0);
   // Nothing else before signing in: no composer, no hints.
   await expect(page.getByTestId('chat-input')).toHaveCount(0);
   await page.getByTestId('chat-login-microsoft').click();
@@ -158,7 +160,7 @@ test('demo: il deck di oggi si smista con fatto, dopo, scarta e completamento es
   // Only the static demo build shows synthetic cards; the on-prem build needs a signed session.
   test.skip(!!process.env.TAO_E2E_BASE_URL, 'Demo deck exists only in the static export.');
   await page.goto(appPath);
-  await page.getByTestId('chat-login').click();
+  await page.getByTestId('chat-login-microsoft').click();
   await page.getByTestId('chat-hint-today').click();
   const title = page.getByTestId('today-card-title');
   await expect(title).toHaveText('Rinnovare il dominio aziendale');

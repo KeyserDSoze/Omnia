@@ -74,7 +74,7 @@ services:
       db-bootstrap: { condition: service_completed_successfully }
     restart: unless-stopped
 
-  # Applied at every start: social login (TAO_SOCIAL_LOGIN) and its sign-up mode (TAO_SOCIAL_SIGNUP).
+  # Applied at every start: social login (TAO_SOCIAL_LOGIN), the only sign-in once a provider is set.
   keycloak-config:
     image: quay.io/keycloak/keycloak:26.4
     entrypoint: ["bash", "/opt/tao/configure.sh"]
@@ -82,7 +82,6 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       TAO_SOCIAL_LOGIN: ${TAO_SOCIAL_LOGIN:-}
-      TAO_SOCIAL_SIGNUP: ${TAO_SOCIAL_SIGNUP:-open}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_HOSTED_DOMAIN: ${GOOGLE_HOSTED_DOMAIN:-}

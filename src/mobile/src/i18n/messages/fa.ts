@@ -10,7 +10,6 @@ export const fa: Messages = {
   'welcome.demo': 'این نسخهٔ آزمایشی Tao است: حساب واقعی وجود ندارد و چیزی ذخیره نمی‌شود. همان‌طور که با حساب خودتان وارد می‌شوید، وارد شوید.',
   'welcome.invalid': 'مشکلی پیش آمده است.',
   'login.continueWith': 'ادامه با {provider}',
-  'login.email': 'ورود با ایمیل و گذرواژه',
   'login.signIn': 'ورود',
   'language.label': 'زبان',
 
@@ -255,7 +254,6 @@ export const fa: Messages = {
   'settings.console': 'ورود و ورود اجتماعی (Google، Microsoft)',
   'settings.yourAccount': 'حساب شما',
   'settings.logout': 'خروج',
-  'settings.socialHint': 'اگر مدیر فعال کرده باشد، می‌توانید با Google یا Microsoft هم وارد Tao شوید: هویت را از صفحهٔ «ورود و ورود اجتماعی»، در بخش حساب‌های پیوندشده، متصل کنید.',
   'settings.demoKicker': 'آزمایشی',
   'settings.demoText': 'بدون حساب: اینجا ظاهر، زبان، صدا و یادداشت‌ها را امتحان می‌کنید. چیزی ذخیره نمی‌شود.',
   'settings.languageKicker': 'زبان',

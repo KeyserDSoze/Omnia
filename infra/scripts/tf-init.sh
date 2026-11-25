@@ -6,7 +6,7 @@ set -euo pipefail
 : "${ARM_SUBSCRIPTION_ID:?ARM_SUBSCRIPTION_ID is required}"
 cd "$(dirname "$0")/.."
 
-location=${TAO_LOCATION:-northeurope}
+location=${TAO_LOCATION:-westeurope}
 suffix=$(printf '%s' "$ARM_SUBSCRIPTION_ID" | sha1sum | cut -c1-5)
 group=rg-tao-tfstate
 account=sttaotf$suffix

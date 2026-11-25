@@ -27,7 +27,7 @@ public sealed record CompleteConnectorCommand(string? State, string? Code);
 
 public sealed record TriageDecisionCommand(string? Key, string? Decision, int? SnoozeMinutes, bool ApplyToSource);
 
-public sealed record BriefingCommand(DateTimeOffset? From, DateTimeOffset? To, string? TimeZone);
+public sealed record BriefingCommand(DateTimeOffset? From, DateTimeOffset? To, string? TimeZone, string? Language);
 
 public sealed record SaveSettingsCommand(string? DisplayName, string? WorkStart, string? WorkEnd, WorkTools? Tools,
     IReadOnlyList<DeclaredAccount>? Accounts, AgentMode? AgentMode, bool CompleteOnboarding);
@@ -155,9 +155,11 @@ public static class ConnectorEndpoints
         {
             if (!TryTimeZone(input.TimeZone, out var zone))
                 return Results.BadRequest(new { error = "invalid_time_zone" });
+            if (AssistantLanguages.Find(input.Language) is not { } language)
+                return Results.BadRequest(new { error = "invalid_language" });
             var start = input.From ?? time.GetUtcNow().AddHours(-12);
             return Results.Ok(await service.GenerateAsync(tenant, subject, start, input.To ?? start.AddHours(36),
-                zone, ct));
+                zone, language, ct));
         }));
         today.MapGet("/recap", (TodayService service, ClaimsPrincipal user, int? days, string? timeZone,
             CancellationToken ct) => Run(user, async (tenant, subject) =>

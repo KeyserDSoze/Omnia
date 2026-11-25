@@ -32,6 +32,19 @@ public sealed record BriefingCommand(DateTimeOffset? From, DateTimeOffset? To, s
 public sealed record SaveSettingsCommand(string? DisplayName, string? WorkStart, string? WorkEnd, WorkTools? Tools,
     IReadOnlyList<DeclaredAccount>? Accounts, AgentMode? AgentMode, bool CompleteOnboarding);
 
+/// <summary>Social identity providers enabled in Keycloak (TAO_SOCIAL_LOGIN), shown on the sign-in screen.</summary>
+public sealed record SocialLoginOptions(IReadOnlyList<string> Providers)
+{
+    public static SocialLoginOptions Parse(string? value)
+    {
+        var providers = (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.Ordinal).ToArray();
+        if (providers.Any(p => !ConnectorProviders.IsKnown(p)))
+            throw new InvalidOperationException("Auth:SocialProviders accepts only google and microsoft.");
+        return new SocialLoginOptions(providers);
+    }
+}
+
 /// <summary>
 /// Work connectors (Microsoft 365, Google Workspace) and the daily deck. OAuth runs as a
 /// confidential client on the API: the browser only relays the one-time code and the state,
@@ -57,6 +70,7 @@ public static class ConnectorEndpoints
         IConfiguration configuration, IHostEnvironment environment)
     {
         services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton(SocialLoginOptions.Parse(configuration["Auth:SocialProviders"]));
         services.AddSingleton(new ConnectorSettings(
             RedirectUri(configuration["Tao:PublicBaseUrl"], environment.IsDevelopment())));
         services.AddSingleton(configuration.GetSection("Connectors:Microsoft").Get<MicrosoftConnectorOptions>()
@@ -95,6 +109,9 @@ public static class ConnectorEndpoints
 
     public static void MapTaoConnectors(this IEndpointRouteBuilder app)
     {
+        // Public: needed before sign-in; contains no user data.
+        app.MapGet("/api/login-options", (SocialLoginOptions options) => Results.Ok(new { providers = options.Providers }));
+
         var connectors = app.MapGroup("/api/v1/connectors").RequireAuthorization();
         connectors.MapGet("", async (ConnectorService service, ClaimsPrincipal user, CancellationToken ct) =>
         {

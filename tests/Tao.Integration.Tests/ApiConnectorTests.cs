@@ -37,6 +37,12 @@ public sealed class ApiConnectorTests
 
         using (var anonymous = await http.GetAsync("/api/v1/connectors"))
             Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        using (var options = await http.GetAsync("/api/login-options"))
+        {
+            Assert.Equal(HttpStatusCode.OK, options.StatusCode);
+            using var json = await Json(options);
+            Assert.Equal(["google"], json.RootElement.GetProperty("providers").EnumerateArray().Select(p => p.GetString()));
+        }
 
         using (var list = await Send(http, HttpMethod.Get, "/api/v1/connectors", tenant))
         {
@@ -356,6 +362,9 @@ public sealed class ApiConnectorTests
     [Fact]
     public void PublicBaseUrlMustBeHttpsOrLoopback()
     {
+        Assert.Equal(["google", "microsoft"], Tao.Api.SocialLoginOptions.Parse(" google, microsoft,google ").Providers);
+        Assert.Empty(Tao.Api.SocialLoginOptions.Parse(null).Providers);
+        Assert.Throws<InvalidOperationException>(() => Tao.Api.SocialLoginOptions.Parse("google,facebook"));
         Assert.Null(Tao.Api.ConnectorEndpoints.RedirectUri(null, development: false));
         Assert.Equal(new Uri("https://tao.example.test/connections/callback"),
             Tao.Api.ConnectorEndpoints.RedirectUri("https://tao.example.test/", development: false));
@@ -396,6 +405,7 @@ public sealed class ApiConnectorTests
         {
             ["Database:ConnectionString"] = runtime,
             ["Database:MigrationConnectionString"] = migration,
+            ["Auth:SocialProviders"] = "google",
             ["Database:RetentionConnectionString"] = retention,
             ["Crypto:KeyRingPath"] = keyRing,
             ["Auth:Issuer"] = "http://localhost:8081/realms/tao",

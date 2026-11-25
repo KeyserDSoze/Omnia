@@ -74,6 +74,25 @@ services:
       db-bootstrap: { condition: service_completed_successfully }
     restart: unless-stopped
 
+  # Applied at every start: social login (TAO_SOCIAL_LOGIN) limited to existing users.
+  keycloak-config:
+    image: quay.io/keycloak/keycloak:26.4
+    entrypoint: ["bash", "/opt/tao/configure.sh"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      TAO_SOCIAL_LOGIN: ${TAO_SOCIAL_LOGIN:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      MICROSOFT_TENANT: ${MICROSOFT_TENANT:-organizations}
+    volumes:
+      - ./keycloak/configure.sh:/opt/tao/configure.sh:ro
+    depends_on:
+      keycloak: { condition: service_healthy }
+    restart: "no"
+
   api:
     build:
       context: ..
@@ -88,6 +107,7 @@ services:
       Auth__Issuer: ${TAO_PUBLIC_URL}/auth/realms/tao
       Auth__MetadataAddress: http://keycloak:8080/auth/realms/tao/.well-known/openid-configuration
       Auth__Audience: tao-api
+      Auth__SocialProviders: ${TAO_SOCIAL_LOGIN:-}
       Tao__PublicBaseUrl: ${TAO_PUBLIC_URL}
       Connectors__Microsoft__ClientId: ${MICROSOFT_CLIENT_ID:-}
       Connectors__Microsoft__ClientSecret: ${MICROSOFT_CLIENT_SECRET:-}

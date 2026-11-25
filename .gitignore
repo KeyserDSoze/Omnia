@@ -32,3 +32,10 @@ coverage/
 docker/secrets/
 docker/backups/
 **/.secrets/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example

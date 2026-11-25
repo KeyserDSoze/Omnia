@@ -1,0 +1,13 @@
+output "resource_group" { value = module.resource_group.name }
+output "acr_name" { value = module.registry.name }
+output "acr_login_server" { value = module.registry.login_server }
+output "api_app_name" { value = module.api.name }
+output "api_url" { value = module.api.url }
+output "keycloak_app_name" { value = module.keycloak.name }
+output "keycloak_url" { value = module.keycloak.url }
+output "keycloak_issuer" { value = local.issuer }
+output "key_vault_name" { value = module.key_vault.name }
+output "postgres_name" { value = module.postgres.name }
+output "postgres_fqdn" { value = module.postgres.fqdn }
+output "app_url" { value = local.app_url }
+output "social_providers" { value = join(",", local.social) }

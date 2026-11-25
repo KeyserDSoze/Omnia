@@ -1,0 +1,108 @@
+name: Tao Azure deploy
+# Terraform (modules in infra/terraform) provisions the PaaS stack; then the images are built and pushed,
+# the database roles and Keycloak are configured and the result is smoke-tested from outside.
+# Credentials: repository secrets AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+# (a service principal that is Owner of the subscription: nothing else should use it).
+# Optional settings: variables TAO_ALERT_EMAIL, TAO_MICROSOFT_CLIENT_ID, TAO_MICROSOFT_TENANT,
+# TAO_GOOGLE_CLIENT_ID, TAO_LLM_ENDPOINT, TAO_LLM_MODEL and secrets TAO_MICROSOFT_CLIENT_SECRET,
+# TAO_GOOGLE_CLIENT_SECRET, TAO_LLM_API_KEY.
+on:
+  push:
+    branches: [main]
+    paths:
+      - infra/**
+      - src/backend/**
+      - docker/Dockerfile.api
+      - docker/keycloak/**
+      - Directory.Build.props
+      - Directory.Packages.props
+      - global.json
+      - .github/workflows/azure.yml
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply the plan (false only plans)
+        type: boolean
+        default: true
+concurrency:
+  group: tao-azure
+  cancel-in-progress: false
+permissions:
+  contents: read
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_alert_email: ${{ vars.TAO_ALERT_EMAIL }}
+  TF_VAR_microsoft_client_id: ${{ vars.TAO_MICROSOFT_CLIENT_ID }}
+  TF_VAR_microsoft_client_secret: ${{ secrets.TAO_MICROSOFT_CLIENT_SECRET }}
+  TF_VAR_google_client_id: ${{ vars.TAO_GOOGLE_CLIENT_ID }}
+  TF_VAR_google_client_secret: ${{ secrets.TAO_GOOGLE_CLIENT_SECRET }}
+  TF_VAR_llm_endpoint: ${{ vars.TAO_LLM_ENDPOINT }}
+  TF_VAR_llm_model: ${{ vars.TAO_LLM_MODEL }}
+  TF_VAR_llm_api_key: ${{ secrets.TAO_LLM_API_KEY }}
+  TF_IN_AUTOMATION: '1'
+  TF_DIR: infra/terraform/environments/demo
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+          terraform_wrapper: false
+      - name: Sign in to Azure
+        run: |
+          az login --service-principal -u "$ARM_CLIENT_ID" -p "$ARM_CLIENT_SECRET" --tenant "$ARM_TENANT_ID" --output none
+          az account set --subscription "$ARM_SUBSCRIPTION_ID"
+      - name: Terraform init (state in a storage account)
+        run: bash infra/scripts/tf-init.sh
+      - name: Terraform format and validate
+        run: |
+          terraform -chdir=infra/terraform fmt -check -recursive
+          terraform -chdir="$TF_DIR" validate
+      - name: Terraform plan
+        run: terraform -chdir="$TF_DIR" plan -input=false -out=tfplan
+      - name: Terraform apply
+        if: github.event_name == 'push' || inputs.apply
+        run: terraform -chdir="$TF_DIR" apply -input=false tfplan
+      - name: Read the deployment outputs
+        if: github.event_name == 'push' || inputs.apply
+        id: out
+        run: |
+          out() { terraform -chdir="$TF_DIR" output -raw "$1"; }
+          {
+            echo "group=$(out resource_group)"
+            echo "acr=$(out acr_name)"
+            echo "api_app=$(out api_app_name)"
+            echo "api_url=$(out api_url)"
+            echo "kc_app=$(out keycloak_app_name)"
+            echo "kc_url=$(out keycloak_url)"
+            echo "vault=$(out key_vault_name)"
+            echo "postgres=$(out postgres_name)"
+            echo "social=$(out social_providers)"
+            echo "app_url=$(out app_url)"
+          } >> "$GITHUB_OUTPUT"
+      - name: Database roles
+        if: steps.out.outcome == 'success'
+        run: bash infra/scripts/bootstrap-db.sh "${{ steps.out.outputs.group }}" "${{ steps.out.outputs.postgres }}" "${{ steps.out.outputs.vault }}"
+      - name: Build and push the images
+        if: steps.out.outcome == 'success'
+        run: bash infra/scripts/build-push.sh "${{ steps.out.outputs.acr }}"
+      - name: Restart the apps and wait for them
+        if: steps.out.outcome == 'success'
+        run: bash infra/scripts/restart-and-wait.sh "${{ steps.out.outputs.group }}" "${{ steps.out.outputs.api_app }}" "${{ steps.out.outputs.kc_app }}"
+      - name: Configure Keycloak (sign-in providers, hardening)
+        if: steps.out.outcome == 'success'
+        env:
+          MICROSOFT_CLIENT_ID: ${{ vars.TAO_MICROSOFT_CLIENT_ID }}
+          MICROSOFT_TENANT: ${{ vars.TAO_MICROSOFT_TENANT }}
+          GOOGLE_CLIENT_ID: ${{ vars.TAO_GOOGLE_CLIENT_ID }}
+        run: bash infra/scripts/configure-keycloak.sh "${{ steps.out.outputs.vault }}" "${{ steps.out.outputs.kc_url }}" "${{ steps.out.outputs.social }}"
+      - name: Smoke test from outside
+        if: steps.out.outcome == 'success'
+        run: bash infra/scripts/smoke.sh "${{ steps.out.outputs.api_url }}" "${{ steps.out.outputs.kc_url }}" "https://${{ github.repository_owner }}.github.io"

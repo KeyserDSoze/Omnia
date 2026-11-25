@@ -22,11 +22,15 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: src/mobile/package-lock.json
-      # Public demo: no OIDC/API configuration, so the bundle runs in local demo mode.
+      # With the repository variables TAO_CLOUD_ISSUER and TAO_CLOUD_API_URL (set from the Azure deployment)
+      # the bundle talks to the real back end; without them it runs in the local demo mode.
       - name: Build Expo web for https://<owner>.github.io/Tao/
         working-directory: src/mobile
         env:
           TAO_WEB_BASE_PATH: /Tao
+          EXPO_PUBLIC_TAO_OIDC_ISSUER: ${{ vars.TAO_CLOUD_ISSUER }}
+          EXPO_PUBLIC_TAO_OIDC_CLIENT_ID: ${{ vars.TAO_CLOUD_ISSUER != '' && 'tao-web' || '' }}
+          EXPO_PUBLIC_TAO_API_URL: ${{ vars.TAO_CLOUD_API_URL }}
         run: npm ci --no-audit --no-fund && npm run typecheck && npm run build:web
       - name: Pages enabled?
         id: pages

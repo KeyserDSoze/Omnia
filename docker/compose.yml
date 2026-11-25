@@ -1,7 +1,15 @@
 name: tao
 # On-prem stack: a single public port (TAO_HTTP_PORT, default 59800) served by the nginx
 # gateway -> web app on /, .NET API on /api/, Keycloak on /auth/.
-# Put TLS in front (e.g. Cloudflare Tunnel to http://127.0.0.1:59800).
+# Put TLS in front (e.g. Cloudflare Tunnel to http://127.0.0.1:59800, or the `tunnel` profile below).
+
+# Bounded container logs: without a limit Docker keeps them until the disk is full.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   db:
     image: pgvector/pgvector:pg17
@@ -16,6 +24,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    logging: *logging
     restart: unless-stopped
 
   db-bootstrap:
@@ -72,6 +81,7 @@ services:
       start_period: 30s
     depends_on:
       db-bootstrap: { condition: service_completed_successfully }
+    logging: *logging
     restart: unless-stopped
 
   # Applied at every start: social login (TAO_SOCIAL_LOGIN), the only sign-in once a provider is set.
@@ -133,6 +143,14 @@ services:
       db: { condition: service_healthy }
       db-bootstrap: { condition: service_completed_successfully }
       keycloak: { condition: service_healthy }
+    # The runtime image has bash but no curl: a plain TCP request to the liveness endpoint.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *logging
     restart: unless-stopped
 
   web:
@@ -145,6 +163,12 @@ services:
     depends_on:
       api: { condition: service_started }
       keycloak: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *logging
     restart: unless-stopped
 
   # Optional local models: docker compose --profile ollama up -d
@@ -153,6 +177,41 @@ services:
     profiles: ["ollama"]
     volumes:
       - ollama:/root/.ollama
+    restart: unless-stopped
+
+  # Public access: docker compose --profile tunnel up -d
+  # A Cloudflare named tunnel (token from the Zero Trust dashboard) with the public hostname pointing at
+  # http://web:8080. TAO_PUBLIC_URL must be that same https hostname.
+  cloudflared:
+    image: cloudflare/cloudflared:2025.11.1
+    profiles: ["tunnel"]
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      web: { condition: service_healthy }
+    logging: *logging
+    restart: unless-stopped
+
+  # Scheduled backups: docker compose --profile scheduled-backup up -d
+  # One backup now and then every TAO_BACKUP_INTERVAL_HOURS (default 24), keeping TAO_BACKUP_KEEP.
+  backup-scheduled:
+    image: pgvector/pgvector:pg17
+    profiles: ["scheduled-backup"]
+    environment:
+      PGHOST: db
+      PGUSER: tao
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env}
+      TAO_BACKUP_KEEP: ${TAO_BACKUP_KEEP:-14}
+      TAO_BACKUP_INTERVAL_HOURS: ${TAO_BACKUP_INTERVAL_HOURS:-24}
+    volumes:
+      - ./db/backup.sh:/opt/tao/backup.sh:ro
+      - ./db/backup-loop.sh:/opt/tao/backup-loop.sh:ro
+      - ${TAO_BACKUP_DIR:-./backups}:/backups
+    entrypoint: ["bash", "/opt/tao/backup-loop.sh"]
+    depends_on:
+      db: { condition: service_healthy }
+    logging: *logging
     restart: unless-stopped
 
   # On demand: docker compose --profile backup run --rm backup

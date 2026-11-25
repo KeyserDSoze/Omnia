@@ -115,6 +115,32 @@ docker compose up -d
 - Aggiornamento: fai un backup, poi `git pull` e `docker compose up -d --build`. Le migrazioni del
   database si applicano da sole all'avvio dell'API e non vengono mai riscritte.
 
+### Messa online su un server
+
+Un server Linux con Docker (Compose v2) basta. L'ordine:
+
+1. `docker/setup.sh https://tao.example.com`: l'indirizzo pubblico va scelto **prima del primo avvio**.
+2. In `docker/.env`: `TAO_SOCIAL_LOGIN` con le credenziali Google/Microsoft (redirect URI
+   `https://tao.example.com/auth/realms/tao/broker/<provider>/endpoint`), `TAO_BACKUP_DIR` su un disco
+   cifrato fuori dal repository, `TUNNEL_TOKEN` se usi il tunnel gestito da Tao.
+3. `docker/preflight.sh`: controlla indirizzo, segreti, permessi, key ring, backup, disco e configurazione;
+   non cambia nulla e ferma con un errore ciò che impedirebbe di andare online.
+4. `docker compose --env-file docker/.env -f docker/compose.yml up -d --build`.
+5. Tunnel: in Cloudflare Zero Trust crea un tunnel con nome, hostname pubblico verso `http://web:8080`,
+   metti il token in `TUNNEL_TOKEN` e avvia `docker compose ... --profile tunnel up -d`. In alternativa
+   `cloudflared` sul server verso `http://127.0.0.1:59800`.
+6. `docker/smoke.sh https://tao.example.com "docker compose --env-file docker/.env -f docker/compose.yml"`:
+   verifica instradamento, issuer OIDC, console Keycloak nascosta, intestazioni, HSTS e che nei log non
+   finiscano codici OAuth o query string.
+7. Backup periodico: `docker compose ... --profile scheduled-backup up -d` (ogni 24 ore, `TAO_BACKUP_INTERVAL_HOURS`).
+   Prova il ripristino una volta e tieni una seconda copia del key ring **fuori** dal server.
+
+Resta fuori dal repository: firewall del server (la porta 59800 ascolta solo su `127.0.0.1` finché non
+cambi `TAO_HTTP_BIND`), aggiornamenti del sistema operativo e un controllo esterno che avvisi se
+`https://tao.example.com/api/health` smette di rispondere. I log dei container sono limitati a 5 file da 10 MB
+e l'accesso web registra solo il percorso, mai la query. I log di errore di nginx possono comunque citare
+la richiesta intera: non condividerli senza averli letti.
+
 ### Connettori, accesso social e assistente
 
 - Registrazione app Microsoft Entra e Google Cloud, permessi e redirect URI:

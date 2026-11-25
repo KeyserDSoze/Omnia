@@ -120,18 +120,8 @@ jobs:
             sleep 3
           done
           exit 1
-      - name: Smoke test routing, OIDC discovery and security headers
-        run: |
-          set -euo pipefail
-          base=http://localhost:59800
-          curl -fsS "$base/healthz"
-          curl -fsS "$base/api/health" | jq -e '.status == "ok"'
-          curl -fsS "$base/auth/realms/tao/.well-known/openid-configuration" | jq -e \
-            '.issuer == "http://localhost:59800/auth/realms/tao" and (.token_endpoint | startswith("http://localhost:59800/auth/"))'
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/v1/memories")" = 401
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/auth/admin/")" = 404
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/auth/realms/master/")" = 404
-          curl -fsSI "$base/" | grep -qi '^content-security-policy:'
+      - name: Smoke test routing, OIDC issuer, hidden admin paths, headers and log privacy
+        run: bash docker/smoke.sh http://localhost:59800 "docker compose --env-file docker/.env -f docker/compose.yml"
       - name: Create a disposable Keycloak user
         run: |
           set -euo pipefail

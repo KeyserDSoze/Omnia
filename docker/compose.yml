@@ -152,6 +152,40 @@ services:
       - ollama:/root/.ollama
     restart: unless-stopped
 
+  # On demand: docker compose --profile backup run --rm backup
+  # Dumps of the tao and keycloak databases into TAO_BACKUP_DIR (the key ring is not included).
+  backup:
+    image: pgvector/pgvector:pg17
+    profiles: ["backup"]
+    environment:
+      PGHOST: db
+      PGUSER: tao
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env}
+      TAO_BACKUP_KEEP: ${TAO_BACKUP_KEEP:-14}
+    volumes:
+      - ./db/backup.sh:/opt/tao/backup.sh:ro
+      - ${TAO_BACKUP_DIR:-./backups}:/backups
+    entrypoint: ["bash", "/opt/tao/backup.sh"]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  # docker compose stop web api keycloak; docker compose --profile backup run --rm restore tao-<timestamp> --yes
+  restore:
+    image: pgvector/pgvector:pg17
+    profiles: ["backup"]
+    environment:
+      PGHOST: db
+      PGUSER: tao
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env}
+    volumes:
+      - ./db/restore.sh:/opt/tao/restore.sh:ro
+      - ${TAO_BACKUP_DIR:-./backups}:/backups:ro
+    entrypoint: ["bash", "/opt/tao/restore.sh"]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
 volumes:
   pgdata:
   ollama:

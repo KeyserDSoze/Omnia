@@ -30,4 +30,5 @@ coverage/
 *.keyring.json
 *.keys.json
 docker/secrets/
+docker/backups/
 **/.secrets/

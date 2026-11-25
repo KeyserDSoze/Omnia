@@ -91,6 +91,30 @@ cloudflared tunnel run --url http://127.0.0.1:59800 tao
 nginx accetta l'header `X-Forwarded-Proto: https` dal tunnel e abilita HSTS solo in quel caso.
 Valuta Cloudflare Access davanti a Tao come secondo fattore.
 
+### Backup, ripristino e aggiornamento
+
+Dal folder `docker/`:
+
+```sh
+# Backup: dump dei database tao e keycloak in TAO_BACKUP_DIR (default docker/backups), ultimi 14
+docker compose --profile backup run --rm backup
+# Ripristino: sostituisce i dati correnti con quelli del backup scelto
+docker compose up -d db db-bootstrap
+docker compose stop web api keycloak
+docker compose --profile backup run --rm restore tao-20261125T214500Z --yes
+docker compose up -d
+```
+
+- Il key ring (`docker/secrets/envelope.keyring.json`) **non** è nel backup, di proposito: senza di
+  lui note e credenziali nei dump non si decifrano. Conservalo a parte, con un'altra copia.
+- I dump contengono e-mail e nomi degli utenti Keycloak in chiaro: metti `TAO_BACKUP_DIR` su un
+  disco cifrato, fuori dal repository.
+- Il ripristino controlla i checksum prima di toccare i dati, rifiuta di girare con servizi
+  connessi e non parte senza `--yes`. La prova automatica è `docker/db/test-backup-restore.ps1`.
+- Per un backup periodico pianifica il primo comando con cron o con l'Utilità di pianificazione.
+- Aggiornamento: fai un backup, poi `git pull` e `docker compose up -d --build`. Le migrazioni del
+  database si applicano da sole all'avvio dell'API e non vengono mai riscritte.
+
 ### Connettori, accesso social e assistente
 
 - Registrazione app Microsoft Entra e Google Cloud, permessi e redirect URI:

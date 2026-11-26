@@ -408,6 +408,7 @@ privacy.MapPost("/erase", async (EraseMyDataCommand input,
     });
 });
 app.MapTaoConnectors();
+app.MapTaoIntegrations();
 
 using (var scope = app.Services.CreateScope())
 {

@@ -196,6 +196,33 @@ public sealed class ApiConnectorTests
     }
 
     [Fact]
+    public async Task TheIntegrationCatalogIsServedToSignedInUsersOnly()
+    {
+        using var environment = new TemporaryEnvironment(Settings().ToDictionary(
+            x => x.Key.Replace(":", "__"), x => x.Value));
+        using var host = Host(new ScriptedProvider());
+        using var http = host.CreateClient();
+        var tenant = "api-catalog-" + Guid.NewGuid().ToString("N");
+
+        using (var anonymous = await http.GetAsync("/api/v1/integrations/catalog"))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        using var response = await Send(http, HttpMethod.Get, "/api/v1/integrations/catalog", tenant);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        using var json = await Json(response);
+        var entries = json.RootElement.GetProperty("entries").EnumerateArray().ToArray();
+        Assert.Equal(IntegrationCatalog.Entries.Select(e => e.Id), entries.Select(e => e.GetProperty("id").GetString()));
+        var microsoft = entries.Single(e => e.GetProperty("id").GetString() == "microsoft-365");
+        Assert.Equal(("built_in", "source", "oauth", "available"), (
+            microsoft.GetProperty("kind").GetString(), microsoft.GetProperty("direction").GetString(),
+            microsoft.GetProperty("auth").GetString(), microsoft.GetProperty("status").GetString()));
+        var linked = entries.Single(e => e.GetProperty("id").GetString() == "whatsapp-linked-device");
+        Assert.True(linked.GetProperty("onPremOnly").GetBoolean());
+        Assert.Equal("qr", linked.GetProperty("auth").GetString());
+    }
+
+    [Fact]
     public async Task BriefingRequiresItsOwnConsentAndAConfiguredModel()
     {
         var provider = new ScriptedProvider();

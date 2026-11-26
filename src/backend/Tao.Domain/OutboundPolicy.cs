@@ -38,7 +38,9 @@ public static class OutboundPolicy
     public static Uri RequireHttpsUrl(string? text)
     {
         if (string.IsNullOrWhiteSpace(text) || text.Length > MaxUrlLength ||
-            !Uri.TryCreate(text.Trim(), UriKind.Absolute, out var uri))
+            !Uri.TryCreate(text.Trim(), UriKind.Absolute, out var uri) ||
+            // On Unix a bare path such as "/etc/passwd" parses as an absolute file URI.
+            (uri.IsFile && !text.TrimStart().StartsWith("file:", StringComparison.OrdinalIgnoreCase)))
             throw new OutboundBlockedException("url_invalid");
         if (uri.Scheme != Uri.UriSchemeHttps) throw new OutboundBlockedException("https_required");
         if (uri.UserInfo.Length > 0 || uri.Host.Length == 0) throw new OutboundBlockedException("url_invalid");

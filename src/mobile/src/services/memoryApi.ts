@@ -120,6 +120,8 @@ export const ASSISTANT_SOURCE = 'assistant';
 export const ASSISTANT_PURPOSE = 'assistant.briefing';
 export const SPEECH_SOURCE = 'voice';
 export const SPEECH_PURPOSE = 'speech.browser';
+export const MCP_SOURCE = 'mcp';
+export const MCP_PURPOSE = 'mcp.access';
 
 /** Settings composed by the guided setup plus what can be connected. */
 export type SettingsResponseDto = {
@@ -377,6 +379,21 @@ export class MemoryApi {
       expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
       accepted: true
     });
+  }
+  /** Lets other AI apps read the user's day through Tao's MCP server (read-only). */
+  grantMcpAccess(): Promise<ConsentDto> {
+    return this.request('POST', '/api/v1/consents', {
+      source: MCP_SOURCE,
+      purpose: MCP_PURPOSE,
+      policyVersion: 'mcp-v1',
+      expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+      accepted: true
+    });
+  }
+  /** Where an MCP client connects (Streamable HTTP). */
+  mcpUrl(): string {
+    const base = this.config.apiBaseUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+    return base.replace(/\/+$/, '') + '/api/v1/mcp';
   }
   recap(days: number, timeZone: string): Promise<{ days: DayRecapDto[] }> {
     return this.request('GET', '/api/v1/today/recap?days=' + encodeURIComponent(String(days)) +

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
-  CloudApiError, SPEECH_PURPOSE, SPEECH_SOURCE, type ConnectorAccountDto, type ConsentDto, type MemoryApi,
+  CloudApiError, MCP_PURPOSE, MCP_SOURCE, SPEECH_PURPOSE, SPEECH_SOURCE, type ConnectorAccountDto, type ConsentDto,
+  type MemoryApi,
   type SettingsResponseDto
 } from '../services/memoryApi';
 import { newId, summary, toSaveBody, type DraftAccount, type SettingsDto } from '../services/setupFlow';
@@ -37,6 +38,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
   const engineName = (engine: AiEngine) => t(`engine.${engine}`);
   const [state, setState] = useState<SettingsResponseDto | null>(null);
   const [speech, setSpeech] = useState<ConsentDto | null>(null);
+  const [mcp, setMcp] = useState<ConsentDto | null>(null);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const live = useRef(true);
@@ -48,6 +50,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
       if (!live.current) return;
       setState(result);
       setSpeech(grants.find(g => g.source === SPEECH_SOURCE && g.purpose === SPEECH_PURPOSE && g.active) ?? null);
+      setMcp(grants.find(g => g.source === MCP_SOURCE && g.purpose === MCP_PURPOSE && g.active) ?? null);
     } catch (e) {
       if (live.current) setMessage(e instanceof CloudApiError ? e.message : t('settings.loadFailed'));
     }
@@ -103,6 +106,25 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
       setMessage(t('settings.speechRevoked'));
     } catch (e) {
       if (live.current) setMessage(e instanceof CloudApiError ? e.message : t('settings.revokeFailed'));
+    } finally {
+      if (live.current) setSaving(false);
+    }
+  }
+
+  async function toggleMcp() {
+    if (!api) return;
+    setSaving(true);
+    setMessage('');
+    try {
+      if (mcp) {
+        await api.revokeConsent(mcp.id);
+        if (live.current) setMcp(null);
+      } else {
+        const grant = await api.grantMcpAccess();
+        if (live.current) setMcp(grant);
+      }
+    } catch (e) {
+      if (live.current) setMessage(e instanceof CloudApiError ? e.message : t('settings.saveFailed'));
     } finally {
       if (live.current) setSaving(false);
     }
@@ -206,6 +228,22 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
             briefing: engineName(routes.briefing) })}
         </Text>
       </View>
+
+      {api && (
+        <View style={card}>
+          <Text style={[styles.kicker, { color: p.subtle }]}>{t('settings.mcpKicker')}</Text>
+          <Text testID="settings-mcp" style={[styles.hint, heading]}>
+            {mcp ? t('settings.mcpActive', { date: new Date(mcp.expiresAt).toLocaleDateString(intlTag()) }) : t('settings.mcpOff')}
+          </Text>
+          {!!mcp && <Text testID="settings-mcp-url" selectable style={[styles.hint, { color: p.subtle }]}>
+            {t('settings.mcpUrl', { url: api.mcpUrl() })}
+          </Text>}
+          <View style={styles.row}>
+            <Button testID="settings-mcp-toggle" p={p} primary={!mcp} disabled={saving}
+              label={t(mcp ? 'settings.mcpRevoke' : 'settings.mcpGrant')} onPress={() => { void toggleMcp(); }} />
+          </View>
+        </View>
+      )}
 
       {api && (
         <View style={card}>

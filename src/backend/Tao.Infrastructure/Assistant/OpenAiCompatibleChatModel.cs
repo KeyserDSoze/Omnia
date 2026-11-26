@@ -18,6 +18,8 @@ public sealed class LlmOptions
     public string TokenParameter { get; set; } = "max_tokens";
     /// <summary>Reasoning models accept only their default temperature.</summary>
     public bool OmitTemperature { get; set; }
+    /// <summary>Optional reasoning_effort ("none", "low"...) for reasoning models; empty sends nothing.</summary>
+    public string? ReasoningEffort { get; set; }
 
     /// <summary>HTTPS, or HTTP only for loopback and single-label hosts on the private network.</summary>
     public static Uri? ValidatedEndpoint(string? endpoint)
@@ -53,6 +55,7 @@ public sealed class OpenAiCompatibleChatModel(HttpClient http, LlmOptions option
             ["response_format"] = new { type = "json_object" }
         };
         if (!options.OmitTemperature) payload["temperature"] = 0.2;
+        if (!string.IsNullOrWhiteSpace(options.ReasoningEffort)) payload["reasoning_effort"] = options.ReasoningEffort;
         var body = JsonSerializer.Serialize(payload);
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_endpoint!, "chat/completions"))
         {

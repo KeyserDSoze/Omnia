@@ -44,6 +44,10 @@ env:
   TF_VAR_llm_endpoint: ${{ vars.TAO_LLM_ENDPOINT }}
   TF_VAR_llm_model: ${{ vars.TAO_LLM_MODEL }}
   TF_VAR_llm_api_key: ${{ secrets.TAO_LLM_API_KEY }}
+  TF_VAR_llm_auth_header: ${{ vars.TAO_LLM_AUTH_HEADER || 'bearer' }}
+  TF_VAR_llm_token_parameter: ${{ vars.TAO_LLM_TOKEN_PARAMETER || 'max_tokens' }}
+  TF_VAR_llm_omit_temperature: ${{ vars.TAO_LLM_OMIT_TEMPERATURE || 'false' }}
+  TF_VAR_llm_reasoning_effort: ${{ vars.TAO_LLM_REASONING_EFFORT }}
   TF_IN_AUTOMATION: '1'
   TF_DIR: infra/terraform/environments/demo
 jobs:

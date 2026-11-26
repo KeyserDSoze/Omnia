@@ -256,6 +256,15 @@ public sealed partial class AssistantTests
         Assert.Equal(400, body.RootElement.GetProperty("max_completion_tokens").GetInt32());
         Assert.False(body.RootElement.TryGetProperty("max_tokens", out _));
         Assert.False(body.RootElement.TryGetProperty("temperature", out _));
+        Assert.False(body.RootElement.TryGetProperty("reasoning_effort", out _));
+
+        model = new OpenAiCompatibleChatModel(new HttpClient(http), new LlmOptions
+        {
+            Endpoint = "https://llm.example.test/openai/v1", Model = "gpt-test", ReasoningEffort = "none"
+        });
+        await model.CompleteJsonAsync([new("user", "ciao")], 400, default);
+        using var effort = JsonDocument.Parse(http.Body!);
+        Assert.Equal("none", effort.RootElement.GetProperty("reasoning_effort").GetString());
     }
 
     [Theory]

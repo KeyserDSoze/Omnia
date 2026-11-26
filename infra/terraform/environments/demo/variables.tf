@@ -85,7 +85,7 @@ variable "google_client_secret" {
 }
 
 variable "llm_endpoint" {
-  description = "OpenAI-compatible base URL of an external model; empty uses the Foundry model created here."
+  description = "OpenAI-compatible base URL, e.g. https://<account>.openai.azure.com/openai/v1; empty disables the assistant."
   type        = string
   default     = ""
 }
@@ -101,31 +101,27 @@ variable "llm_api_key" {
   sensitive = true
 }
 
-variable "deploy_ai" {
-  description = "Create an Azure AI Foundry account with one pay-as-you-go model for the assistant."
-  type        = bool
-  default     = true
+variable "llm_auth_header" {
+  description = "bearer, or api-key for Azure OpenAI key authentication."
+  type        = string
+  default     = "bearer"
 }
 
-variable "ai_location" {
-  type    = string
-  default = "swedencentral"
+variable "llm_token_parameter" {
+  description = "max_tokens, or max_completion_tokens for GPT-5 and later."
+  type        = string
+  default     = "max_tokens"
 }
 
-variable "ai_model" {
-  type    = string
-  default = "gpt-6-luna"
+variable "llm_omit_temperature" {
+  type    = bool
+  default = false
 }
 
-variable "ai_model_version" {
-  type    = string
-  default = "2026-09-22"
-}
-
-variable "ai_capacity" {
-  description = "Thousands of tokens per minute."
-  type        = number
-  default     = 50
+variable "llm_reasoning_effort" {
+  description = "Optional reasoning_effort (none, low...) for reasoning models."
+  type        = string
+  default     = ""
 }
 
 variable "api_hostname" {

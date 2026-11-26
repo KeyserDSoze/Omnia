@@ -138,7 +138,7 @@ var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string
 builder.Services.AddCors(options => options.AddPolicy("browser", policy =>
 {
     if (allowedOrigins.Length > 0)
-        policy.WithOrigins(allowedOrigins).AllowAnyHeader().WithMethods("GET", "POST", "DELETE");
+        policy.WithOrigins(allowedOrigins).AllowAnyHeader().WithMethods("GET", "POST", "PUT", "DELETE");
 }));
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connection));
 builder.Services.AddKeyedSingleton<NpgsqlDataSource>("migrations",

@@ -196,6 +196,42 @@ public sealed class ApiConnectorTests
     }
 
     [Fact]
+    public async Task TheBrowserMayUseEveryMethodTheWebAppSendsOnlyFromItsOwnOrigin()
+    {
+        var variables = Settings().ToDictionary(x => x.Key.Replace(":", "__"), x => x.Value);
+        variables["Cors__Origins__0"] = "https://app.example.test";
+        using var environment = new TemporaryEnvironment(variables);
+        using var host = Host(new ScriptedProvider());
+        using var http = host.CreateClient();
+
+        // The web app saves settings with PUT; a missing method makes the browser drop the call after the preflight.
+        foreach (var method in new[] { "GET", "POST", "PUT", "DELETE" })
+        {
+            using var preflight = new HttpRequestMessage(HttpMethod.Options, "/api/v1/settings");
+            preflight.Headers.Add("Origin", "https://app.example.test");
+            preflight.Headers.Add("Access-Control-Request-Method", method);
+            preflight.Headers.Add("Access-Control-Request-Headers", "authorization,content-type,accept");
+            using var response = await http.SendAsync(preflight);
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            Assert.Equal("https://app.example.test", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+            Assert.Contains(method, response.Headers.GetValues("Access-Control-Allow-Methods").Single().Split(',', StringSplitOptions.TrimEntries));
+        }
+
+        using var foreign = new HttpRequestMessage(HttpMethod.Options, "/api/v1/settings");
+        foreign.Headers.Add("Origin", "https://evil.example.test");
+        foreign.Headers.Add("Access-Control-Request-Method", "PUT");
+        using (var response = await http.SendAsync(foreign))
+            Assert.False(response.Headers.Contains("Access-Control-Allow-Origin"));
+
+        using var patch = new HttpRequestMessage(HttpMethod.Options, "/api/v1/settings");
+        patch.Headers.Add("Origin", "https://app.example.test");
+        patch.Headers.Add("Access-Control-Request-Method", "PATCH");
+        using (var response = await http.SendAsync(patch))
+            Assert.DoesNotContain("PATCH", response.Headers.TryGetValues("Access-Control-Allow-Methods", out var allowed)
+                ? allowed.Single().Split(',', StringSplitOptions.TrimEntries) : []);
+    }
+
+    [Fact]
     public async Task TheIntegrationCatalogIsServedToSignedInUsersOnly()
     {
         using var environment = new TemporaryEnvironment(Settings().ToDictionary(

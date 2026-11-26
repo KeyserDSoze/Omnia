@@ -27,6 +27,11 @@ variable "app_settings" {
   sensitive = true
 }
 variable "log_analytics_workspace_id" { type = string }
+variable "custom_hostname" {
+  description = "Optional public hostname (CNAME to the default one plus an asuid TXT record) served with a free managed certificate."
+  type        = string
+  default     = ""
+}
 variable "tags" {
   type    = map(string)
   default = {}
@@ -91,7 +96,31 @@ resource "azurerm_monitor_diagnostic_setting" "logs" {
   enabled_log { category = "AppServicePlatformLogs" }
 }
 
+resource "azurerm_app_service_custom_hostname_binding" "this" {
+  count               = var.custom_hostname == "" ? 0 : 1
+  hostname            = var.custom_hostname
+  app_service_name    = azurerm_linux_web_app.this.name
+  resource_group_name = var.resource_group_name
+
+  # The certificate binding below owns these.
+  lifecycle { ignore_changes = [ssl_state, thumbprint] }
+}
+
+resource "azurerm_app_service_managed_certificate" "this" {
+  count                      = var.custom_hostname == "" ? 0 : 1
+  custom_hostname_binding_id = azurerm_app_service_custom_hostname_binding.this[0].id
+  tags                       = var.tags
+}
+
+resource "azurerm_app_service_certificate_binding" "this" {
+  count               = var.custom_hostname == "" ? 0 : 1
+  hostname_binding_id = azurerm_app_service_custom_hostname_binding.this[0].id
+  certificate_id      = azurerm_app_service_managed_certificate.this[0].id
+  ssl_state           = "SniEnabled"
+}
+
 output "id" { value = azurerm_linux_web_app.this.id }
 output "name" { value = azurerm_linux_web_app.this.name }
 output "default_hostname" { value = azurerm_linux_web_app.this.default_hostname }
-output "url" { value = "https://${azurerm_linux_web_app.this.default_hostname}" }
+output "default_url" { value = "https://${azurerm_linux_web_app.this.default_hostname}" }
+output "url" { value = "https://${var.custom_hostname == "" ? azurerm_linux_web_app.this.default_hostname : var.custom_hostname}" }

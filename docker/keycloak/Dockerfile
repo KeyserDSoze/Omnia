@@ -7,5 +7,6 @@ RUN /opt/keycloak/bin/kc.sh build
 
 # The Tao realm (client, hardcoded tenant claim, API audience) is imported on the first start only.
 COPY tao-realm.json /opt/keycloak/data/import/tao-realm.json
+COPY themes/tao /opt/keycloak/themes/tao
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
 CMD ["start", "--optimized", "--import-realm", "--http-enabled=true", "--proxy-headers=xforwarded"]

@@ -1,14 +1,15 @@
 data "azurerm_client_config" "current" {}
 
 locals {
-  suffix       = substr(sha1(var.subscription_id), 0, 5)
-  prefix       = "tao-${var.environment}"
-  api_app_name = "${local.prefix}-${local.suffix}-api"
-  kc_app_name  = "${local.prefix}-${local.suffix}-kc"
-  kc_url       = "https://${local.kc_app_name}.azurewebsites.net"
-  issuer       = "${local.kc_url}/auth/realms/tao"
-  app_url      = "${var.pages_origin}${var.pages_base_path}"
-  social       = compact([var.microsoft_client_id != "" ? "microsoft" : "", var.google_client_id != "" ? "google" : ""])
+  suffix         = substr(sha1(var.subscription_id), 0, 5)
+  prefix         = "tao-${var.environment}"
+  api_app_name   = "${local.prefix}-${local.suffix}-api"
+  kc_app_name    = "${local.prefix}-${local.suffix}-kc"
+  kc_default_url = "https://${local.kc_app_name}.azurewebsites.net"
+  kc_url         = var.keycloak_hostname == "" ? local.kc_default_url : "https://${var.keycloak_hostname}"
+  issuer         = "${local.kc_url}/auth/realms/tao"
+  app_url        = "${var.pages_origin}${var.pages_base_path}"
+  social         = compact([var.microsoft_client_id != "" ? "microsoft" : "", var.google_client_id != "" ? "google" : ""])
   tags = {
     app         = "tao"
     environment = var.environment
@@ -157,6 +158,7 @@ module "keycloak" {
   image                      = "tao-keycloak:latest"
   health_check_path          = "/auth/realms/tao"
   start_time_limit_seconds   = 900
+  custom_hostname            = var.keycloak_hostname
   log_analytics_workspace_id = module.monitoring.log_analytics_workspace_id
   tags                       = local.tags
 
@@ -247,7 +249,7 @@ module "budget" {
 # assigns a different default host name.
 check "default_host_names" {
   assert {
-    condition     = module.keycloak.url == local.kc_url
+    condition     = module.keycloak.default_url == local.kc_default_url
     error_message = "The Keycloak host name differs from the one baked into its settings."
   }
 }

@@ -24,6 +24,12 @@ variable "pages_base_path" {
   default = ""
 }
 
+variable "keycloak_hostname" {
+  description = "Public sign-in hostname (CNAME to the Keycloak app + asuid TXT record); empty uses the azurewebsites.net name."
+  type        = string
+  default     = "auth.taoai.me"
+}
+
 variable "app_service_sku" {
   type    = string
   default = "B2"

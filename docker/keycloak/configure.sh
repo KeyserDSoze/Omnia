@@ -21,6 +21,10 @@ kc config credentials --server "$server" --realm master \
 # Keycloak's own administration is a login too: lock out guessing, whether or not it is public.
 kc update realms/master -s bruteForceProtected=true -s failureFactor=5
 
+# Sign-in pages look like the app and follow its language (ui_locales); the realm import runs only once.
+kc update "realms/$realm" -s loginTheme=tao -s internationalizationEnabled=true -s defaultLocale=en \
+  -s 'supportedLocales=["ar","de","en","es","fa","fr","it","ja","ko","nl","pl","pt-BR","ru","th","tr","zh-CN"]'
+
 # The realm import runs once: keep the web client's address in step with the app's current origin.
 if [[ -n "${TAO_APP_URL:-}" ]]; then
   web_client=$(kc get clients -r "$realm" -q clientId=tao-web --fields id --format csv --noquotes)

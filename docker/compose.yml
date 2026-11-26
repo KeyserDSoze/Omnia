@@ -71,6 +71,7 @@ services:
       TAO_TENANT_ID: ${TAO_TENANT_ID:-default}
     volumes:
       - ./keycloak/tao-realm.json:/opt/keycloak/data/import/tao-realm.json:ro
+      - ./keycloak/themes/tao:/opt/keycloak/themes/tao:ro
     ports:
       - "127.0.0.1:${TAO_KEYCLOAK_ADMIN_PORT:-59801}:8080"
     healthcheck:

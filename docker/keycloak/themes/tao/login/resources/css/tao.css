@@ -1,0 +1,230 @@
+/* Same palette, serif face, aura and pill buttons as the Tao app (src/mobile/src/components/theme.ts). */
+:root {
+  --tao-bg: #F6F2E9;
+  --tao-text: #15171D;
+  --tao-subtle: #686D7A;
+  --tao-border: rgba(21, 23, 29, 0.12);
+  --tao-surface: rgba(255, 255, 255, 0.62);
+  --tao-field: rgba(21, 23, 29, 0.06);
+  --tao-accent: #1F7A67;
+  --tao-accent-hover: #2F6FA8;
+  --tao-accent-text: #FFFFFF;
+  --tao-glow: rgba(31, 122, 103, 0.26);
+  --tao-glow2: rgba(214, 160, 80, 0.24);
+  --tao-danger: #B3261E;
+  --tao-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --keycloak-logo-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-110 -110 220 220'%3E%3Cg transform='rotate(180)'%3E%3Ccircle r='100' fill='%23FBF8F1'/%3E%3Cpath d='M0,-100A100,100 0 0 0 0,100Z' fill='%2315171D'/%3E%3Ccircle cy='-50' r='50' fill='%23FBF8F1'/%3E%3Ccircle cy='50' r='50' fill='%2315171D'/%3E%3Ccircle cy='-50' r='13' fill='%2315171D'/%3E%3Ccircle cy='50' r='13' fill='%23FBF8F1'/%3E%3Ccircle r='99.5' fill='none' stroke='%2315171D' stroke-opacity='.22'/%3E%3C/g%3E%3C/svg%3E");
+  --keycloak-logo-height: 84px;
+  --keycloak-logo-width: 84px;
+}
+
+.pf-v5-theme-dark {
+  --tao-bg: #06070B;
+  --tao-text: #EDEFF5;
+  --tao-subtle: #8F96AB;
+  --tao-border: rgba(255, 255, 255, 0.12);
+  --tao-surface: rgba(255, 255, 255, 0.05);
+  --tao-field: rgba(255, 255, 255, 0.09);
+  --tao-accent: #8FE3CF;
+  --tao-accent-hover: #6CC5F0;
+  --tao-accent-text: #04140F;
+  --tao-glow: rgba(72, 214, 183, 0.40);
+  --tao-glow2: rgba(124, 110, 255, 0.30);
+  --tao-danger: #FF9A94;
+  --keycloak-logo-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-110 -110 220 220'%3E%3Cg transform='rotate(180)'%3E%3Ccircle r='100' fill='%23F4F1E8'/%3E%3Cpath d='M0,-100A100,100 0 0 0 0,100Z' fill='%230B0D14'/%3E%3Ccircle cy='-50' r='50' fill='%23F4F1E8'/%3E%3Ccircle cy='50' r='50' fill='%230B0D14'/%3E%3Ccircle cy='-50' r='13' fill='%230B0D14'/%3E%3Ccircle cy='50' r='13' fill='%23F4F1E8'/%3E%3Ccircle r='99.5' fill='none' stroke='%23FFFFFF' stroke-opacity='.22'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.login-pf body {
+  min-height: 100vh;
+  color: var(--tao-text);
+  background:
+    radial-gradient(60% 50% at 30% 0%, var(--tao-glow), transparent 70%),
+    radial-gradient(55% 45% at 90% 100%, var(--tao-glow2), transparent 70%),
+    var(--tao-bg);
+  background-attachment: fixed;
+}
+
+.pf-v5-c-login {
+  background: transparent;
+}
+
+.pf-v5-c-login__container {
+  grid-template-columns: min(30rem, 100vw - 2rem);
+}
+
+/* The symbol replaces the Keycloak wordmark, with the soft glow it has in the app. */
+.pf-v5-c-login__header {
+  padding-block-end: 1.5rem;
+}
+
+div.kc-logo-text,
+#kc-header-wrapper {
+  width: var(--keycloak-logo-width);
+  height: var(--keycloak-logo-height);
+  margin: 0 auto;
+  /* The realm name stays in the page for screen readers, only the symbol is drawn. */
+  font-size: 0;
+  color: transparent;
+  background: var(--keycloak-logo-url) center / contain no-repeat;
+  filter: drop-shadow(0 0 22px var(--tao-glow));
+}
+
+.pf-v5-c-login__main {
+  border: 1px solid var(--tao-border);
+  border-radius: 25px;
+  background: var(--tao-surface);
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  overflow: hidden;
+}
+
+.pf-v5-c-login__main-header {
+  border-top: 0;
+  padding-block-start: 2rem;
+}
+
+.pf-v5-c-login__main-header .pf-v5-c-title,
+#kc-page-title {
+  font-family: var(--tao-serif);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--tao-text);
+}
+
+.pf-v5-c-login__main-body,
+.pf-v5-c-login__main-footer,
+.pf-v5-c-login__main-header-desc,
+.pf-v5-c-form__helper-text,
+.pf-v5-c-helper-text__item-text {
+  color: var(--tao-subtle);
+}
+
+.pf-v5-c-form__label-text {
+  color: var(--tao-subtle);
+  font-size: 0.85rem;
+}
+
+.pf-v5-c-form-control {
+  --pf-v5-c-form-control--BackgroundColor: var(--tao-field);
+  --pf-v5-c-form-control--BorderColor: var(--tao-border);
+  --pf-v5-c-form-control--hover--BorderColor: var(--tao-accent);
+  --pf-v5-c-form-control--focus--BorderColor: var(--tao-accent);
+  --pf-v5-c-form-control--Color: var(--tao-text);
+  border-radius: 14px;
+  color: var(--tao-text);
+  background-color: var(--tao-field);
+}
+
+.pf-v5-c-form-control input,
+.pf-v5-c-form-control > input {
+  color: var(--tao-text);
+  background: transparent;
+}
+
+/* PatternFly draws a square border plus a blue underline; Tao uses one soft outline. */
+.pf-v5-c-form-control::before {
+  border: 1px solid var(--tao-border);
+  border-radius: 14px;
+}
+
+.pf-v5-c-form-control::after {
+  border: 0;
+}
+
+.pf-v5-c-form-control:focus-within::before {
+  border-color: var(--tao-accent);
+  box-shadow: 0 0 0 2px var(--tao-accent);
+}
+
+.pf-v5-c-input-group {
+  gap: 0.5rem;
+}
+
+.pf-v5-c-input-group .pf-v5-c-button {
+  border-radius: 14px;
+}
+
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control {
+  width: auto;
+  border-radius: 999px;
+}
+
+.pf-v5-c-login__main-header-utilities select {
+  color: var(--tao-text);
+  background: transparent;
+  padding-inline: 1rem 2.25rem;
+}
+
+.pf-v5-c-login__main-header-utilities select option {
+  color: #15171D;
+  background: #FFFFFF;
+}
+
+.pf-v5-c-button {
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.pf-v5-c-button.pf-m-primary {
+  --pf-v5-c-button--m-primary--BackgroundColor: var(--tao-accent);
+  --pf-v5-c-button--m-primary--Color: var(--tao-accent-text);
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: var(--tao-accent-hover);
+  --pf-v5-c-button--m-primary--hover--Color: var(--tao-accent-text);
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: var(--tao-accent-hover);
+  --pf-v5-c-button--m-primary--focus--Color: var(--tao-accent-text);
+  background-color: var(--tao-accent);
+  color: var(--tao-accent-text);
+  padding-block: 0.9rem;
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+.pf-v5-c-button.pf-m-primary:focus {
+  background-color: var(--tao-accent-hover);
+  color: var(--tao-accent-text);
+}
+
+/* Social sign-in buttons (Microsoft, Google) and other secondary actions. */
+.pf-v5-c-button.pf-m-control,
+.pf-v5-c-button.pf-m-secondary {
+  border: 1px solid var(--tao-border);
+  background: var(--tao-field);
+  color: var(--tao-text);
+  box-shadow: none;
+}
+
+.pf-v5-c-button.pf-m-control::after,
+.pf-v5-c-button.pf-m-secondary::after {
+  border: 0;
+}
+
+a,
+.pf-v5-c-button.pf-m-link {
+  color: var(--tao-accent);
+}
+
+.pf-v5-c-alert {
+  border-radius: 14px;
+  background: var(--tao-field);
+  color: var(--tao-text);
+}
+
+.pf-v5-c-alert__title,
+.kc-feedback-text {
+  color: var(--tao-text);
+}
+
+.pf-m-error,
+.pf-v5-c-helper-text__item-text.pf-m-error {
+  color: var(--tao-danger);
+}
+
+.pf-v5-c-login__main-footer-band {
+  background: transparent;
+  border-top: 1px solid var(--tao-border);
+}
+
+.pf-v5-c-select__toggle,
+.pf-v5-c-menu-toggle {
+  border-radius: 999px;
+}

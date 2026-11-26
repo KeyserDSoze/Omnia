@@ -240,6 +240,24 @@ public sealed partial class AssistantTests
         Assert.DoesNotContain("secret upstream detail", error.ToString());
     }
 
+    [Fact]
+    public async Task ReasoningModelsGetMaxCompletionTokensAndNoTemperature()
+    {
+        var http = new RecordingHandler(HttpStatusCode.OK,
+            """{"choices":[{"message":{"role":"assistant","content":"{}"}}]}""");
+        var model = new OpenAiCompatibleChatModel(new HttpClient(http), new LlmOptions
+        {
+            Endpoint = "https://llm.example.test/openai/v1", Model = "gpt-test", TokenParameter = "max_completion_tokens",
+            OmitTemperature = true
+        });
+
+        await model.CompleteJsonAsync([new("user", "ciao")], 400, default);
+        using var body = JsonDocument.Parse(http.Body!);
+        Assert.Equal(400, body.RootElement.GetProperty("max_completion_tokens").GetInt32());
+        Assert.False(body.RootElement.TryGetProperty("max_tokens", out _));
+        Assert.False(body.RootElement.TryGetProperty("temperature", out _));
+    }
+
     [Theory]
     [InlineData("http://llm.example.test/v1")]
     [InlineData("https://user:pass@llm.example.test/v1")]

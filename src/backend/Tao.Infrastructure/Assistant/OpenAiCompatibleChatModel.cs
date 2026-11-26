@@ -14,6 +14,10 @@ public sealed class LlmOptions
     public string? Model { get; set; }
     /// <summary>"bearer" (OpenAI, Ollama) or "api-key" (Azure OpenAI key authentication).</summary>
     public string AuthHeader { get; set; } = "bearer";
+    /// <summary>"max_tokens" (OpenAI-compatible servers) or "max_completion_tokens" (GPT-5 and later, o-series).</summary>
+    public string TokenParameter { get; set; } = "max_tokens";
+    /// <summary>Reasoning models accept only their default temperature.</summary>
+    public bool OmitTemperature { get; set; }
 
     /// <summary>HTTPS, or HTTP only for loopback and single-label hosts on the private network.</summary>
     public static Uri? ValidatedEndpoint(string? endpoint)
@@ -41,14 +45,15 @@ public sealed class OpenAiCompatibleChatModel(HttpClient http, LlmOptions option
         CancellationToken ct)
     {
         if (!IsConfigured) throw new AssistantNotConfiguredException();
-        var body = JsonSerializer.Serialize(new
+        var payload = new Dictionary<string, object?>
         {
-            model = options.Model,
-            messages = messages.Select(m => new { role = m.Role, content = m.Content }),
-            temperature = 0.2,
-            max_tokens = maxOutputTokens,
-            response_format = new { type = "json_object" }
-        });
+            ["model"] = options.Model,
+            ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
+            [options.TokenParameter is "max_completion_tokens" ? "max_completion_tokens" : "max_tokens"] = maxOutputTokens,
+            ["response_format"] = new { type = "json_object" }
+        };
+        if (!options.OmitTemperature) payload["temperature"] = 0.2;
+        var body = JsonSerializer.Serialize(payload);
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_endpoint!, "chat/completions"))
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json")

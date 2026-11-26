@@ -76,6 +76,25 @@ module "postgres" {
   tags                = local.tags
 }
 
+module "ai" {
+  count               = var.deploy_ai && var.llm_endpoint == "" ? 1 : 0
+  source              = "../../modules/ai"
+  name                = "${local.prefix}-${local.suffix}-ai"
+  resource_group_name = module.resource_group.name
+  location            = var.ai_location
+  model_name          = var.ai_model
+  model_version       = var.ai_model_version
+  capacity            = var.ai_capacity
+  tags                = local.tags
+}
+
+locals {
+  own_model    = length(module.ai) > 0
+  llm_endpoint = local.own_model ? module.ai[0].endpoint : var.llm_endpoint
+  llm_model    = local.own_model ? module.ai[0].model : var.llm_model
+  llm_api_key  = local.own_model ? module.ai[0].primary_key : local.or_unset.llm_api_key
+}
+
 # Credentials generated here, stored only in the state and in Key Vault.
 resource "random_password" "app_db" {
   length  = 32
@@ -118,7 +137,7 @@ locals {
     "key-ring-json"           = jsonencode({ activeKeyId = "k1", keys = { k1 = random_id.key_ring.b64_std } })
     "microsoft-client-secret" = local.or_unset.microsoft_client_secret
     "google-client-secret"    = local.or_unset.google_client_secret
-    "llm-api-key"             = local.or_unset.llm_api_key
+    "llm-api-key"             = local.llm_api_key
   }
 }
 
@@ -216,8 +235,11 @@ module "api" {
     Connectors__Microsoft__Tenant         = var.microsoft_tenant
     Connectors__Google__ClientId          = var.google_client_id
     Connectors__Google__ClientSecret      = module.key_vault.secret_references["google-client-secret"]
-    Llm__Endpoint                         = var.llm_endpoint
-    Llm__Model                            = var.llm_model
+    Llm__Endpoint                         = local.llm_endpoint
+    Llm__Model                            = local.llm_model
+    Llm__AuthHeader                       = local.own_model ? "api-key" : "bearer"
+    Llm__TokenParameter                   = local.own_model ? "max_completion_tokens" : "max_tokens"
+    Llm__OmitTemperature                  = local.own_model ? "true" : "false"
     Llm__ApiKey                           = module.key_vault.secret_references["llm-api-key"]
     Embeddings__Provider                  = "none"
   }

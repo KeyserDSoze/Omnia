@@ -131,6 +131,9 @@ jobs:
           export Auth__Audience=tao-api
           export Embeddings__Provider=none
           export Cors__Origins__0=http://127.0.0.1:19006
+          # The chat loads several resources per sign-in; the shared test user would exhaust 120/min.
+          export RateLimit__RequestsPerMinute=500
+          export RateLimit__TenantRequestsPerMinute=1000
           export ASPNETCORE_ENVIRONMENT=Development
           export ASPNETCORE_URLS=http://127.0.0.1:8080
           nohup dotnet run --project src/backend/Tao.Api/Tao.Api.csproj \

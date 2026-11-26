@@ -193,6 +193,7 @@ module "api" {
   image                      = "tao-api:latest"
   health_check_path          = "/health"
   log_analytics_workspace_id = module.monitoring.log_analytics_workspace_id
+  custom_hostname            = var.api_hostname
   tags                       = local.tags
 
   app_settings = {

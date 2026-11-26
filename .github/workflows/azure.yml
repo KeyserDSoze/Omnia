@@ -36,6 +36,7 @@ env:
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   TF_VAR_alert_email: ${{ vars.TAO_ALERT_EMAIL }}
+  TF_VAR_api_hostname: ${{ vars.TAO_API_HOSTNAME }}
   TF_VAR_microsoft_client_id: ${{ vars.TAO_MICROSOFT_CLIENT_ID }}
   TF_VAR_microsoft_client_secret: ${{ secrets.TAO_MICROSOFT_CLIENT_SECRET }}
   TF_VAR_google_client_id: ${{ vars.TAO_GOOGLE_CLIENT_ID }}

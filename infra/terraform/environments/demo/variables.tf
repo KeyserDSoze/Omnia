@@ -99,3 +99,9 @@ variable "llm_api_key" {
   default   = ""
   sensitive = true
 }
+
+variable "api_hostname" {
+  description = "Public API hostname (CNAME to the API app + asuid TXT record). Set it only after the DNS records exist: the certificate request waits for them."
+  type        = string
+  default     = ""
+}

@@ -1,7 +1,7 @@
 import type { WebCloudConfig } from './config';
 import type { ReturnTypeMemo } from '../domain/tags';
 import type { SettingsDto } from './setupFlow';
-import type { DayRecapDto } from './chatScript';
+import type { DayRecapDto, IntegrationEntryDto } from './chatScript';
 import { t } from '../i18n';
 
 export type ConsentDto = {
@@ -324,6 +324,9 @@ export class MemoryApi {
 
   connectors(): Promise<ConnectorsDto> {
     return this.request('GET', '/api/v1/connectors');
+  }
+  integrationCatalog(): Promise<{ entries: IntegrationEntryDto[] }> {
+    return this.request('GET', '/api/v1/integrations/catalog');
   }
   authorizeConnector(provider: ConnectorProviderId): Promise<{ authorizationUrl: string }> {
     if (provider !== 'microsoft' && provider !== 'google') throw new Error(t('error.unsupportedProvider'));

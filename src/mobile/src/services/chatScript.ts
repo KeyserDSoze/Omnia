@@ -2,11 +2,12 @@ import type { SettingsDto } from './setupFlow';
 import { getLocale, localeInfo, t, translate, type Locale, type MessageKey } from '../i18n';
 
 /** Deterministic chat: keywords map to actions; nothing here is "AI". */
-export type ChatAction = 'today' | 'briefing' | 'setup' | 'note' | 'memory' | 'settings' | 'unknown';
+export type ChatAction = 'today' | 'briefing' | 'setup' | 'integrations' | 'note' | 'memory' | 'settings' | 'unknown';
 
 const INTENTS: [Exclude<ChatAction, 'note' | 'unknown'>, MessageKey][] = [
-  ['setup', 'intent.setup'], ['briefing', 'intent.briefing'], ['today', 'intent.today'],
-  ['settings', 'intent.settings'], ['memory', 'intent.memory']
+  // Before the setup: «what can I connect?» is a question, «connect my account» starts the setup.
+  ['integrations', 'intent.integrations'], ['setup', 'intent.setup'], ['briefing', 'intent.briefing'],
+  ['today', 'intent.today'], ['settings', 'intent.settings'], ['memory', 'intent.memory']
 ];
 
 /** Lowercase, no Latin accents, punctuation as spaces: comparable in every script. */
@@ -73,6 +74,51 @@ export function noteText(text: string, locale: Locale = getLocale()): string {
 
 export type DayRecapDto = { day: string; done: number; notDone: number; later: number; dismissed: number };
 export type Hint = { id: ChatAction; label: string };
+
+/** One line of GET /api/v1/integrations/catalog (ADR 0111). */
+export type IntegrationEntryDto = {
+  id: string;
+  kind: 'built_in' | 'mcp' | 'api';
+  direction: 'source' | 'tool' | 'channel';
+  auth: 'none' | 'api_key' | 'oauth' | 'pairing' | 'qr';
+  status: 'available' | 'planned';
+  capabilities: string[];
+  onPremOnly: boolean;
+};
+
+const entry = (id: string, direction: IntegrationEntryDto['direction'], auth: IntegrationEntryDto['auth'],
+  status: IntegrationEntryDto['status'], onPremOnly = false): IntegrationEntryDto =>
+  ({ id, kind: 'built_in', direction, auth, status, capabilities: [], onPremOnly });
+
+/** What the chat lists without a server (demo, signed out); mirrors the built-in part of the server catalog. */
+export const defaultIntegrations: IntegrationEntryDto[] = [
+  entry('microsoft-365', 'source', 'oauth', 'available'),
+  entry('google-workspace', 'source', 'oauth', 'available'),
+  entry('whatsapp-business', 'channel', 'pairing', 'planned'),
+  entry('whatsapp-linked-device', 'source', 'qr', 'planned', true),
+  entry('telegram', 'channel', 'pairing', 'planned')
+];
+
+/** Product names are not translated. */
+const integrationNames: Record<string, string> = {
+  'microsoft-365': 'Microsoft 365 (Outlook, Calendar, To Do, Teams)',
+  'google-workspace': 'Google Workspace (Gmail, Calendar, Tasks)',
+  'whatsapp-business': 'WhatsApp Business',
+  'whatsapp-linked-device': 'WhatsApp (linked device, on-prem)',
+  telegram: 'Telegram'
+};
+
+/** The answer to «what can I connect?»: the platform's own integrations, then MCP servers, then direct APIs. */
+export function integrationLines(entries: readonly IntegrationEntryDto[], locale: Locale = getLocale()): string[] {
+  const rows = entries.filter(e => e.kind === 'built_in').map(e =>
+    `• ${integrationNames[e.id] ?? e.id} — ${translate(locale, e.status === 'available' ? 'integrations.available' : 'integrations.planned')}`);
+  return [
+    translate(locale, 'chat.integrationsIntro'),
+    `${translate(locale, 'integrations.builtIn')}:\n${rows.join('\n')}`,
+    translate(locale, 'integrations.mcp'),
+    translate(locale, 'integrations.api')
+  ];
+}
 
 /** Before sign-in Tao only says hello and asks to sign in. */
 export function welcomeLines(mode: 'signed-out' | 'demo'): [string, string] {

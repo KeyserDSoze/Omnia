@@ -11,8 +11,8 @@ import {
   answer, currentStep, startSetup, toSaveBody, type DraftAccount, type SettingsDto, type SetupState
 } from '../services/setupFlow';
 import {
-  greeting, hints, intentOf, matchChoice, matchChoices, noteText, openingLines, typingMs,
-  welcomeLines, type ChatAction, type DayRecapDto
+  defaultIntegrations, greeting, hints, integrationLines, intentOf, matchChoice, matchChoices, noteText, openingLines,
+  typingMs, welcomeLines, type ChatAction, type DayRecapDto, type IntegrationEntryDto
 } from '../services/chatScript';
 import { connectInPopup, openConnectPopup } from '../services/connectFlow';
 import { defaultRoutes, routesFrom, type AiRouter, type AiRoutesDto, type Listening } from '../services/aiRouter';
@@ -315,6 +315,13 @@ export function ChatHome({ theme: t, mode, invalidReason, api, demo, profileName
       case 'note': onOpenMemory(''); break;
       case 'memory': onOpenMemory(); break;
       case 'settings': onOpenSettings(); break;
+      case 'integrations': {
+        const sayAll = (entries: readonly IntegrationEntryDto[]) => integrationLines(entries).forEach(line => say(line));
+        // The server catalog when signed in; the built-in list otherwise (demo, offline, older server).
+        if (api) void api.integrationCatalog().then(r => sayAll(r.entries), () => sayAll(defaultIntegrations));
+        else sayAll(defaultIntegrations);
+        break;
+      }
       case 'unknown':
         say(tr('chat.unknown'));
         break;

@@ -210,6 +210,7 @@ module "api" {
     Auth__SocialProviders                 = join(",", local.social)
     Tao__PublicBaseUrl                    = local.app_url
     Cors__Origins__0                      = var.pages_origin
+    Mcp__PublicUrl                        = var.api_hostname == "" ? "" : "https://${var.api_hostname}/api/v1/mcp"
     Connectors__Microsoft__ClientId       = var.microsoft_client_id
     Connectors__Microsoft__ClientSecret   = module.key_vault.secret_references["microsoft-client-secret"]
     Connectors__Microsoft__Tenant         = var.microsoft_tenant

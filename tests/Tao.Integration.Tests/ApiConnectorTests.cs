@@ -258,6 +258,163 @@ public sealed class ApiConnectorTests
         Assert.Equal("qr", linked.GetProperty("auth").GetString());
     }
 
+    private static object Rpc(string method, object? parameters = null, int id = 1) =>
+        parameters is null ? new { jsonrpc = "2.0", id, method } : new { jsonrpc = "2.0", id, method, @params = parameters };
+
+    [Fact]
+    public async Task TheMcpServerReadsOnlyTheCallersDayAndOnlyWithTheirConsent()
+    {
+        var provider = new ScriptedProvider();
+        using var environment = new TemporaryEnvironment(Settings().ToDictionary(
+            x => x.Key.Replace(":", "__"), x => x.Value));
+        using var host = Host(provider);
+        using var http = host.CreateClient();
+        var tenant = "api-mcp-" + Guid.NewGuid().ToString("N");
+
+        using (var anonymous = await http.PostAsJsonAsync("/api/v1/mcp", Rpc("ping")))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        string state;
+        using (var start = await Send(http, HttpMethod.Post, "/api/v1/connectors/microsoft/authorize", tenant, new { }))
+        using (var json = await Json(start))
+            state = HttpUtility.ParseQueryString(
+                new Uri(json.RootElement.GetProperty("authorizationUrl").GetString()!).Query)["state"]!;
+        using (await Send(http, HttpMethod.Post, "/api/v1/connectors/complete", tenant, new { state, code = "c" })) { }
+
+        using (var init = await Send(http, HttpMethod.Post, "/api/v1/mcp", tenant,
+            Rpc("initialize", new { protocolVersion = "2025-06-18", capabilities = new { }, clientInfo = new { name = "t", version = "1" } })))
+        {
+            Assert.Equal(HttpStatusCode.OK, init.StatusCode);
+            Assert.Equal("no-store", init.Headers.CacheControl?.ToString());
+            using var json = await Json(init);
+            Assert.Equal("tao", json.RootElement.GetProperty("result").GetProperty("serverInfo").GetProperty("name").GetString());
+        }
+        using (var list = await Send(http, HttpMethod.Post, "/api/v1/mcp", tenant, Rpc("tools/list")))
+        using (var json = await Json(list))
+        {
+            var tools = json.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray().ToArray();
+            Assert.Equal(["get_recap", "get_today", "list_connections", "list_integrations"],
+                tools.Select(t => t.GetProperty("name").GetString()).Order());
+            Assert.All(tools, t => Assert.True(t.GetProperty("annotations").GetProperty("readOnlyHint").GetBoolean()));
+        }
+
+        var call = Rpc("tools/call", new { name = "get_today", arguments = new { } });
+        using (var denied = await Send(http, HttpMethod.Post, "/api/v1/mcp", tenant, call))
+        using (var json = await Json(denied))
+        {
+            var result = json.RootElement.GetProperty("result");
+            Assert.True(result.GetProperty("isError").GetBoolean());
+            Assert.Contains("consent_required", result.GetProperty("content")[0].GetProperty("text").GetString());
+        }
+        using (var grant = await Send(http, HttpMethod.Post, "/api/v1/consents", tenant, new
+        {
+            source = "mcp", purpose = "mcp.access", policyVersion = "mcp-v1",
+            expiresAt = DateTimeOffset.UtcNow.AddDays(30), accepted = true
+        }))
+            Assert.Equal(HttpStatusCode.Created, grant.StatusCode);
+
+        using (var ok = await Send(http, HttpMethod.Post, "/api/v1/mcp", tenant, call))
+        using (var json = await Json(ok))
+        {
+            var result = json.RootElement.GetProperty("result");
+            Assert.False(result.GetProperty("isError").GetBoolean());
+            Assert.Contains("Preventivo", result.GetProperty("content")[0].GetProperty("text").GetString());
+            var structured = result.GetProperty("structuredContent");
+            Assert.Equal(2, structured.GetProperty("total").GetInt32());
+            Assert.Equal(2, structured.GetProperty("items").GetArrayLength());
+        }
+        using (var badWindow = await Send(http, HttpMethod.Post, "/api/v1/mcp", tenant,
+            Rpc("tools/call", new { name = "get_today", arguments = new { from = "domani forse" } })))
+        using (var json = await Json(badWindow))
+            Assert.Contains("invalid_from", json.RootElement.GetProperty("result").GetProperty("content")[0]
+                .GetProperty("text").GetString());
+        using (var connections = await Send(http, HttpMethod.Post, "/api/v1/mcp", tenant,
+            Rpc("tools/call", new { name = "list_connections", arguments = new { } })))
+        {
+            var text = await connections.Content.ReadAsStringAsync();
+            Assert.Contains("Alice Work", text);
+            Assert.DoesNotContain("access-", text);
+            Assert.DoesNotContain("refresh", text);
+        }
+
+        // Another user of the same tenant neither inherits the consent nor sees this user's cards.
+        using (var other = await Send(http, HttpMethod.Post, "/api/v1/mcp", tenant, call, subject: "bob"))
+        using (var json = await Json(other))
+            Assert.True(json.RootElement.GetProperty("result").GetProperty("isError").GetBoolean());
+        using (await Send(http, HttpMethod.Post, "/api/v1/consents", tenant, new
+        {
+            source = "mcp", purpose = "mcp.access", policyVersion = "mcp-v1",
+            expiresAt = DateTimeOffset.UtcNow.AddDays(30), accepted = true
+        }, subject: "bob")) { }
+        using (var bob = await Send(http, HttpMethod.Post, "/api/v1/mcp", tenant, call, subject: "bob"))
+        using (var json = await Json(bob))
+            Assert.Equal(0, json.RootElement.GetProperty("result").GetProperty("structuredContent").GetProperty("total").GetInt32());
+
+        using (var notification = await Send(http, HttpMethod.Post, "/api/v1/mcp", tenant,
+            new { jsonrpc = "2.0", method = "notifications/initialized" }))
+            Assert.Equal(HttpStatusCode.Accepted, notification.StatusCode);
+        using (var stream = await Send(http, HttpMethod.Get, "/api/v1/mcp", tenant))
+        {
+            Assert.Equal(HttpStatusCode.MethodNotAllowed, stream.StatusCode);
+            Assert.Equal("POST", stream.Content.Headers.Allow.SingleOrDefault() ?? string.Join(",", stream.Headers.GetValues("Allow")));
+        }
+        using (var batch = await Send(http, HttpMethod.Post, "/api/v1/mcp", tenant, new[] { Rpc("ping") }))
+            Assert.Equal(HttpStatusCode.BadRequest, batch.StatusCode);
+        using (var broken = new HttpRequestMessage(HttpMethod.Post, "/api/v1/mcp")
+        {
+            Content = new StringContent("{not json", System.Text.Encoding.UTF8, "application/json")
+        })
+        {
+            broken.Headers.Add("X-Test-Tenant", tenant);
+            broken.Headers.Add("X-Test-Subject", "alice");
+            using var response = await http.SendAsync(broken);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            using var json = await Json(response);
+            Assert.Equal(-32700, json.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+        }
+
+        // A web page on another origin cannot talk to the local server (DNS rebinding guard).
+        foreach (var (origin, expected) in new[]
+        {
+            ("https://evil.example", HttpStatusCode.Forbidden), ("http://localhost", HttpStatusCode.OK)
+        })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/mcp") { Content = JsonContent.Create(Rpc("ping")) };
+            request.Headers.Add("X-Test-Tenant", tenant);
+            request.Headers.Add("X-Test-Subject", "alice");
+            request.Headers.Add("Origin", origin);
+            using var response = await http.SendAsync(request);
+            Assert.Equal(expected, response.StatusCode);
+        }
+
+        using (var metadata = await http.GetAsync("/.well-known/oauth-protected-resource/api/v1/mcp"))
+        {
+            Assert.Equal(HttpStatusCode.OK, metadata.StatusCode);
+            using var json = await Json(metadata);
+            Assert.EndsWith("/api/v1/mcp", json.RootElement.GetProperty("resource").GetString());
+            Assert.Equal("http://localhost:8081/realms/tao",
+                Assert.Single(json.RootElement.GetProperty("authorization_servers").EnumerateArray()).GetString());
+        }
+    }
+
+    [Fact]
+    public async Task AnUnauthenticatedMcpClientIsPointedAtTheAuthorizationServer()
+    {
+        using var environment = new TemporaryEnvironment(Settings().ToDictionary(
+            x => x.Key.Replace(":", "__"), x => x.Value));
+        using var host = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Development"));
+        using var http = host.CreateClient();
+
+        using var response = await http.PostAsJsonAsync("/api/v1/mcp", Rpc("ping"));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+        Assert.Equal("Bearer", challenge.Scheme);
+        Assert.Contains("resource_metadata=\"http://localhost/.well-known/oauth-protected-resource/api/v1/mcp\"", challenge.Parameter);
+        using var other = await http.GetAsync("/api/v1/consents");
+        Assert.Equal(HttpStatusCode.Unauthorized, other.StatusCode);
+        Assert.DoesNotContain("resource_metadata", string.Join(" ", other.Headers.WwwAuthenticate));
+    }
+
     [Fact]
     public async Task BriefingRequiresItsOwnConsentAndAConfiguredModel()
     {

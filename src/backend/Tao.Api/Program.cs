@@ -75,6 +75,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             RequireSignedTokens = true, RequireExpirationTime = true,
             ClockSkew = TimeSpan.FromMinutes(1)
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = context => McpEndpoints.Challenge(context, builder.Configuration)
+        };
     });
 builder.Services.AddAuthorization();
 // The previous unbounded ASP.NET per-actor policy is replaced with a
@@ -175,6 +179,7 @@ builder.Services.AddScoped<IConsentService, ConsentService>();
 builder.Services.AddScoped<IMemoryCatalog, MemoryCatalog>();
 builder.Services.AddScoped<IPersonalDataService, PostgresPersonalDataService>();
 builder.Services.AddTaoConnectors(builder.Configuration, builder.Environment);
+builder.Services.AddTaoMcp();
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(
     new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower)));
 builder.Services.AddSingleton(sp => new PostgresMigrator(
@@ -409,6 +414,7 @@ privacy.MapPost("/erase", async (EraseMyDataCommand input,
 });
 app.MapTaoConnectors();
 app.MapTaoIntegrations();
+app.MapTaoMcp(builder.Configuration);
 
 using (var scope = app.Services.CreateScope())
 {

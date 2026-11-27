@@ -341,6 +341,8 @@ export const ur: Messages = {
   'error.notification_consent_required': 'پہلے اطلاعات کی اجازت دیں۔',
   'error.too_many_reminders': 'آپ 50 یاد دہانیوں کی حد تک پہنچ گئے ہیں۔',
   'error.invalid_subscription': 'یہ براؤزر Tao کی اطلاعات وصول نہیں کر سکتا۔',
+  'notify.inviteTitle': 'کیا آپ یاد دہانیاں اطلاعات کی صورت میں چاہتے ہیں؟',
+  'notify.inviteText': 'ایپ بند ہونے پر بھی Tao اس آلے پر آپ کو اطلاع دے سکتا ہے۔ کیا یاد دلانا ہے یہ آپ طے کرتے ہیں اور کسی بھی وقت بند کر سکتے ہیں۔',
   'settings.revokeFailed': 'واپسی کی تصدیق نہیں ہوئی۔ دوبارہ کوشش کریں۔',
   'settings.configKicker': 'ترتیب',
   'settings.noSetup': 'آپ نے ابھی رہنمائی والی ترتیب نہیں کی۔',

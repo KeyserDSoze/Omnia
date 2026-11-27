@@ -335,6 +335,8 @@ export const zh: Messages = {
   'error.notification_consent_required': '请先允许通知。',
   'error.too_many_reminders': '你已达到 50 条提醒的上限。',
   'error.invalid_subscription': '此浏览器无法接收 Tao 的通知。',
+  'notify.inviteTitle': '要以通知形式接收提醒吗？',
+  'notify.inviteText': '即使应用已关闭，Tao 也能在此设备上通知你。提醒什么由你决定，随时可以关闭。',
   'settings.revokeFailed': '撤销未得到确认。请重试。',
   'settings.configKicker': '设置',
   'settings.noSetup': '你还没有完成引导式设置。',

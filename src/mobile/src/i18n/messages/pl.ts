@@ -355,6 +355,8 @@ export const pl: Messages = {
   'error.notification_consent_required': 'Najpierw zezwól na powiadomienia.',
   'error.too_many_reminders': 'Osiągnięto limit 50 przypomnień.',
   'error.invalid_subscription': 'Ta przeglądarka nie może odbierać powiadomień od Tao.',
+  'notify.inviteTitle': 'Chcesz przypomnienia jako powiadomienia?',
+  'notify.inviteText': 'Tao może powiadamiać Cię na tym urządzeniu, nawet gdy aplikacja jest zamknięta. Ty decydujesz, o czym Ci przypominać, i możesz to wyłączyć w każdej chwili.',
   'settings.revokeFailed': 'Cofnięcie niepotwierdzone. Spróbuj jeszcze raz.',
   'settings.configKicker': 'KONFIGURACJA',
   'settings.noSetup': 'Nie przeszedłeś jeszcze konfiguracji krok po kroku.',

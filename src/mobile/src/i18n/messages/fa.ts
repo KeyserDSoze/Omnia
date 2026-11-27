@@ -341,6 +341,8 @@ export const fa: Messages = {
   'error.notification_consent_required': 'ابتدا اعلان‌ها را مجاز کنید.',
   'error.too_many_reminders': 'به حد ۵۰ یادآور رسیده‌اید.',
   'error.invalid_subscription': 'این مرورگر نمی‌تواند اعلان‌های Tao را دریافت کند.',
+  'notify.inviteTitle': 'یادآورها را به صورت اعلان می‌خواهید؟',
+  'notify.inviteText': 'Tao می‌تواند حتی وقتی برنامه بسته است در این دستگاه به شما اعلان بدهد. شما تصمیم می‌گیرید چه چیزی یادآوری شود و هر زمان می‌توانید خاموشش کنید.',
   'settings.revokeFailed': 'پس‌گیری تأیید نشد. دوباره تلاش کنید.',
   'settings.configKicker': 'راه‌اندازی',
   'settings.noSetup': 'هنوز راه‌اندازی هدایت‌شده را انجام نداده‌اید.',

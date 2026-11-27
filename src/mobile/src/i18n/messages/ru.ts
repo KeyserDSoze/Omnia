@@ -355,6 +355,8 @@ export const ru: Messages = {
   'error.notification_consent_required': 'Сначала разреши уведомления.',
   'error.too_many_reminders': 'Достигнут предел в 50 напоминаний.',
   'error.invalid_subscription': 'Этот браузер не может получать уведомления от Tao.',
+  'notify.inviteTitle': 'Нужны напоминания в виде уведомлений?',
+  'notify.inviteText': 'Tao может уведомлять тебя на этом устройстве, даже когда приложение закрыто. Ты сам решаешь, о чём напоминать, и можешь отключить это в любой момент.',
   'settings.revokeFailed': 'Отзыв не подтверждён. Попробуй ещё раз.',
   'settings.configKicker': 'НАСТРОЙКА',
   'settings.noSetup': 'Ты ещё не проходил(а) пошаговую настройку.',

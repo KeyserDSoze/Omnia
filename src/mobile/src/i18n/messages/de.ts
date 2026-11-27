@@ -341,6 +341,8 @@ export const de: Messages = {
   'error.notification_consent_required': 'Erlaube zuerst Benachrichtigungen.',
   'error.too_many_reminders': 'Du hast das Limit von 50 Erinnerungen erreicht.',
   'error.invalid_subscription': 'Dieser Browser kann keine Benachrichtigungen von Tao empfangen.',
+  'notify.inviteTitle': 'Erinnerungen als Benachrichtigungen?',
+  'notify.inviteText': 'Tao kann dich auf diesem Gerät benachrichtigen, auch wenn die App geschlossen ist. Du entscheidest, woran du erinnert wirst, und kannst es jederzeit ausschalten.',
   'settings.revokeFailed': 'Widerruf nicht bestätigt. Versuche es noch einmal.',
   'settings.configKicker': 'EINRICHTUNG',
   'settings.noSetup': 'Du hast die geführte Einrichtung noch nicht gemacht.',

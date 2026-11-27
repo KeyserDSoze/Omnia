@@ -341,6 +341,8 @@ export const en: Messages = {
   'error.notification_consent_required': 'Allow notifications first.',
   'error.too_many_reminders': 'You have reached the limit of 50 reminders.',
   'error.invalid_subscription': 'This browser cannot receive notifications from Tao.',
+  'notify.inviteTitle': 'Want reminders as notifications?',
+  'notify.inviteText': 'Tao can notify you on this device, even when the app is closed. You decide what to be reminded of and can turn it off at any time.',
   'settings.revokeFailed': 'Revocation not confirmed. Please try again.',
   'settings.configKicker': 'SETUP',
   'settings.noSetup': 'You haven’t done the guided setup yet.',

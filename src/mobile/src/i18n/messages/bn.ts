@@ -341,6 +341,8 @@ export const bn: Messages = {
   'error.notification_consent_required': 'আগে বিজ্ঞপ্তির অনুমতি দিন।',
   'error.too_many_reminders': 'আপনি ৫০টি রিমাইন্ডারের সীমায় পৌঁছেছেন।',
   'error.invalid_subscription': 'এই ব্রাউজার Tao-র বিজ্ঞপ্তি পেতে পারে না।',
+  'notify.inviteTitle': 'রিমাইন্ডার বিজ্ঞপ্তি হিসেবে চান?',
+  'notify.inviteText': 'অ্যাপ বন্ধ থাকলেও Tao এই ডিভাইসে আপনাকে বিজ্ঞপ্তি দিতে পারে। কী মনে করানো হবে তা আপনি ঠিক করেন এবং যেকোনো সময় বন্ধ করতে পারেন।',
   'settings.revokeFailed': 'প্রত্যাহার নিশ্চিত হয়নি। আবার চেষ্টা করুন।',
   'settings.configKicker': 'সেটআপ',
   'settings.noSetup': 'আপনি এখনও নির্দেশিত সেটআপ করেননি।',

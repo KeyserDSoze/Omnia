@@ -335,6 +335,8 @@ export const vi: Messages = {
   'error.notification_consent_required': 'Hãy cho phép thông báo trước.',
   'error.too_many_reminders': 'Bạn đã đạt giới hạn 50 lời nhắc.',
   'error.invalid_subscription': 'Trình duyệt này không thể nhận thông báo từ Tao.',
+  'notify.inviteTitle': 'Bạn muốn nhận lời nhắc dưới dạng thông báo?',
+  'notify.inviteText': 'Tao có thể thông báo cho bạn trên thiết bị này, kể cả khi ứng dụng đã đóng. Bạn quyết định nhắc điều gì và có thể tắt bất cứ lúc nào.',
   'settings.revokeFailed': 'Chưa xác nhận được việc thu hồi. Hãy thử lại.',
   'settings.configKicker': 'THIẾT LẬP',
   'settings.noSetup': 'Bạn chưa làm phần thiết lập có hướng dẫn.',

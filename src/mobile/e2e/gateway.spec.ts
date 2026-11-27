@@ -6,6 +6,10 @@ test.skip(process.env.TAO_GATEWAY_E2E !== '1', 'Run via the gateway CI job.');
 const username = process.env.TAO_E2E_USER1 ?? '';
 const password = process.env.TAO_E2E_PASSWORD ?? '';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem('tao.push.invite', 'never'));
+});
+
 test('single port: chat-first setup saved in PostgreSQL, settings, voice consent, deck and a note through /api', async ({ page }) => {
   test.setTimeout(120_000);
   if (!username || !password) throw new Error('Missing disposable gateway account');

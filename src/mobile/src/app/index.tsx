@@ -17,6 +17,8 @@ import { filterLoadedByText } from '../services/timelineTextFilter';
 import { ChatHome } from '../components/ChatHome';
 import { SettingsPanel } from '../components/SettingsPanel';
 import { UpdateBanner } from '../components/UpdateBanner';
+import { NotificationInvite } from '../components/NotificationInvite';
+import { usePushNotifications } from '../services/usePushNotifications';
 import { useAppUpdates } from '../services/useAppUpdates';
 import { Backdrop } from '../components/Backdrop';
 import { themes } from '../components/theme';
@@ -543,6 +545,7 @@ export default function Home() {
   const heading = { color: p.text };
   const signedIn = webMode.kind === 'cloud' && authState === 'signed-in' && apiRef.current !== null;
   const canSettings = signedIn || webMode.kind === 'demo';
+  const push = usePushNotifications(signedIn ? apiRef.current : null);
   const activeView = view === 'settings' && !canSettings ? 'chat' : view;
   const chatMode = webMode.kind === 'demo' ? 'demo' : webMode.kind === 'invalid' ? 'invalid' :
     authState === 'signed-in' ? 'signed-in' : authState === 'checking' ? 'checking' : 'signed-out';
@@ -592,7 +595,7 @@ export default function Home() {
             onLogout={signedIn ? () => { setView('chat'); void logout(); } : null}
             onOpenMemory={() => setView('memory')}
             onRunSetup={() => { setView('chat'); setSetupRequest(n => n + 1); }}
-            onToggleTheme={() => setOverride(mode === 'dark' ? 'light' : 'dark')} voice={voice} updates={updates} />
+            onToggleTheme={() => setOverride(mode === 'dark' ? 'light' : 'dark')} voice={voice} updates={updates} push={push} />
         </ScrollView>
       )}
       {activeView === 'memory' && <ScrollView style={styles.fill} contentContainerStyle={[styles.page, { paddingHorizontal: compact ? 14 : 22 }]}>
@@ -967,6 +970,7 @@ export default function Home() {
       </View>
       </ScrollView>}
       <UpdateBanner updates={updates} theme={p} />
+      <NotificationInvite push={push} signedIn={signedIn} otherPromptOpen={updates.decision === 'prompt'} theme={p} />
     </View>
   );
 }

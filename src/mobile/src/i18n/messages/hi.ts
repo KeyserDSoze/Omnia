@@ -341,6 +341,8 @@ export const hi: Messages = {
   'error.notification_consent_required': 'पहले सूचनाओं की अनुमति दें।',
   'error.too_many_reminders': 'आप 50 रिमाइंडर की सीमा तक पहुँच गए हैं।',
   'error.invalid_subscription': 'यह ब्राउज़र Tao की सूचनाएँ प्राप्त नहीं कर सकता।',
+  'notify.inviteTitle': 'रिमाइंडर सूचना के रूप में चाहिए?',
+  'notify.inviteText': 'ऐप बंद होने पर भी Tao इस डिवाइस पर आपको सूचना भेज सकता है। क्या याद दिलाना है, यह आप तय करते हैं और कभी भी बंद कर सकते हैं।',
   'settings.revokeFailed': 'वापसी की पुष्टि नहीं हुई। कृपया फिर कोशिश करें।',
   'settings.configKicker': 'सेटअप',
   'settings.noSetup': 'आपने अभी निर्देशित सेटअप नहीं किया है।',

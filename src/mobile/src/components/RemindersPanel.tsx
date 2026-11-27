@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { CloudApiError, PUSH_PURPOSE, PUSH_SOURCE, type MemoryApi, type ReminderDto, type ReminderRepeat } from '../services/memoryApi';
-import {
-  pushSupport, storeSubscriptionId, storedSubscriptionId, subscribeThisDevice, thisDeviceSubscription,
-  unsubscribeThisDevice
-} from '../services/pushClient';
+import { CloudApiError, type MemoryApi, type ReminderDto, type ReminderRepeat } from '../services/memoryApi';
+import type { PushNotifications } from '../services/usePushNotifications';
 import { checkReminder, deviceTimeZone, reminderLine } from '../services/reminders';
 import { useT, type MessageKey } from '../i18n';
 import { Button } from './Button';
@@ -15,32 +12,23 @@ const repeatKey: Record<ReminderRepeat, MessageKey> = {
 };
 
 /** Reminders that arrive as notifications on this device, even when the app is closed (ADR 0113). */
-export function RemindersPanel({ api, theme: p }: { api: MemoryApi; theme: Theme }) {
+export function RemindersPanel({ api, push, theme: p }: { api: MemoryApi; push: PushNotifications; theme: Theme }) {
   const t = useT();
   const [reminders, setReminders] = useState<ReminderDto[]>([]);
-  const [pushOn, setPushOn] = useState(false);
-  const [support, setSupport] = useState<'unsupported' | 'denied' | 'ready'>('unsupported');
   const [text, setText] = useState('');
   const [time, setTime] = useState('09:00');
   const [date, setDate] = useState('');
   const [repeat, setRepeat] = useState<ReminderRepeat>('daily');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const publicKey = useRef<string | null>(null);
   const live = useRef(true);
 
   const fail = (e: unknown) => { if (live.current) setMessage(e instanceof CloudApiError ? e.message : t('settings.saveFailed')); };
 
   const load = useCallback(async () => {
     try {
-      const [list, grants, device, config] = await Promise.all([
-        api.reminders(), api.listConsents(), thisDeviceSubscription(), api.pushConfig().catch(() => null)
-      ]);
-      if (!live.current) return;
-      setReminders(list);
-      publicKey.current = config?.publicKey ?? null;
-      setSupport(pushSupport());
-      setPushOn(device !== null && grants.some(g => g.source === PUSH_SOURCE && g.purpose === PUSH_PURPOSE && g.active));
+      const list = await api.reminders();
+      if (live.current) setReminders(list);
     } catch (e) { fail(e); }
   }, [api]);
 
@@ -49,49 +37,6 @@ export function RemindersPanel({ api, theme: p }: { api: MemoryApi; theme: Theme
     void load();
     return () => { live.current = false; };
   }, [load]);
-
-  async function enable() {
-    if (!publicKey.current) return;
-    setBusy(true);
-    setMessage('');
-    try {
-      // The permission prompt comes first, straight from the tap; the key was fetched when the panel opened.
-      const subscription = await subscribeThisDevice(publicKey.current);
-      if (!subscription?.endpoint || !subscription.keys?.p256dh || !subscription.keys.auth) {
-        if (live.current) setSupport(pushSupport());
-        return;
-      }
-      await api.grantPushNotifications();
-      const created = await api.subscribePush({
-        endpoint: subscription.endpoint, keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth }
-      });
-      storeSubscriptionId(created.id);
-      if (live.current) setPushOn(true);
-    } catch (e) { fail(e); } finally { if (live.current) setBusy(false); }
-  }
-
-  async function disable() {
-    setBusy(true);
-    setMessage('');
-    try {
-      const id = storedSubscriptionId();
-      await unsubscribeThisDevice();
-      if (id) await api.unsubscribePush(id).catch(() => undefined);
-      storeSubscriptionId(null);
-      const grant = (await api.listConsents()).find(g => g.source === PUSH_SOURCE && g.purpose === PUSH_PURPOSE && g.active);
-      if (grant) await api.revokeConsent(grant.id);
-      if (live.current) setPushOn(false);
-    } catch (e) { fail(e); } finally { if (live.current) setBusy(false); }
-  }
-
-  async function sendTest() {
-    setBusy(true);
-    setMessage('');
-    try {
-      const { delivered } = await api.sendTestPush();
-      if (live.current) setMessage(t(delivered > 0 ? 'reminders.testSent' : 'reminders.testNone'));
-    } catch (e) { fail(e); } finally { if (live.current) setBusy(false); }
-  }
 
   async function add() {
     if (!checkReminder({ text, time, repeat, date })) { setMessage(t('reminders.invalid')); return; }
@@ -124,23 +69,24 @@ export function RemindersPanel({ api, theme: p }: { api: MemoryApi; theme: Theme
   const card = [styles.card, { backgroundColor: p.surface, borderColor: p.border },
     web({ backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' })];
   const input = [styles.input, { color: p.text, borderColor: p.border }];
-  const status = support === 'unsupported' ? t('reminders.pushUnsupported') : support === 'denied' ? t('reminders.pushDenied')
-    : pushOn ? t('reminders.pushOn') : t('reminders.pushOff');
+  const status = push.support === 'unsupported' ? t('reminders.pushUnsupported') : push.support === 'denied' ? t('reminders.pushDenied')
+    : push.on ? t('reminders.pushOn') : t('reminders.pushOff');
 
   return (
     <View testID="reminders-panel" style={card}>
       <Text style={[styles.kicker, { color: p.subtle }]}>{t('reminders.kicker')}</Text>
       <Text style={[styles.hint, { color: p.text }]}>{t('reminders.intro')}</Text>
       <Text testID="push-status" style={[styles.hint, { color: p.subtle }]}>{status}</Text>
-      {support === 'ready' && (
+      {push.support === 'ready' && (
         <View style={styles.row}>
-          {pushOn ? <>
-            <Button testID="push-toggle" p={p} disabled={busy} label={t('reminders.disable')} onPress={() => { void disable(); }} />
-            <Button testID="push-test" p={p} disabled={busy} label={t('reminders.test')} onPress={() => { void sendTest(); }} />
-          </> : <Button testID="push-toggle" p={p} primary disabled={busy || !publicKey.current} label={t('reminders.enable')}
-            onPress={() => { void enable(); }} />}
+          {push.on ? <>
+            <Button testID="push-toggle" p={p} disabled={push.busy} label={t('reminders.disable')} onPress={() => { void push.disable(); }} />
+            <Button testID="push-test" p={p} disabled={push.busy} label={t('reminders.test')} onPress={() => { void push.test(); }} />
+          </> : <Button testID="push-toggle" p={p} primary disabled={push.busy || !push.loaded} label={t('reminders.enable')}
+            onPress={() => { void push.enable(); }} />}
         </View>
       )}
+      {!!push.message && <Text testID="push-message" accessibilityRole="alert" style={[styles.hint, { color: p.text }]}>{push.message}</Text>}
 
       {reminders.length === 0 ? <Text style={[styles.hint, { color: p.subtle }]}>{t('reminders.none')}</Text>
         : reminders.map(r => (

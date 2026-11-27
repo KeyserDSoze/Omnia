@@ -335,6 +335,8 @@ export const ko: Messages = {
   'error.notification_consent_required': '먼저 알림을 허용하세요.',
   'error.too_many_reminders': '리마인더 50개 한도에 도달했습니다.',
   'error.invalid_subscription': '이 브라우저는 Tao의 알림을 받을 수 없습니다.',
+  'notify.inviteTitle': '리마인더를 알림으로 받으시겠어요?',
+  'notify.inviteText': '앱을 닫아도 Tao가 이 기기로 알려 드립니다. 무엇을 알려 드릴지는 직접 정하고, 언제든 끌 수 있습니다.',
   'settings.revokeFailed': '철회가 확인되지 않았습니다. 다시 시도해 주세요.',
   'settings.configKicker': '설정',
   'settings.noSetup': '아직 안내형 설정을 하지 않았습니다.',

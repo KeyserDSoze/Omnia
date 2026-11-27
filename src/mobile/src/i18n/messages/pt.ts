@@ -341,6 +341,8 @@ export const pt: Messages = {
   'error.notification_consent_required': 'Permita primeiro as notificações.',
   'error.too_many_reminders': 'Você atingiu o limite de 50 lembretes.',
   'error.invalid_subscription': 'Este navegador não pode receber notificações do Tao.',
+  'notify.inviteTitle': 'Quer lembretes como notificações?',
+  'notify.inviteText': 'O Tao pode avisar você neste dispositivo, mesmo com o app fechado. Você decide do que ser lembrado e pode desativar quando quiser.',
   'settings.revokeFailed': 'Revogação não confirmada. Tente de novo.',
   'settings.configKicker': 'CONFIGURAÇÃO',
   'settings.noSetup': 'Você ainda não fez a configuração guiada.',

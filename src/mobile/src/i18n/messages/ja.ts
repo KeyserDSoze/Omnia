@@ -335,6 +335,8 @@ export const ja: Messages = {
   'error.notification_consent_required': '先に通知を許可してください。',
   'error.too_many_reminders': 'リマインダーの上限50件に達しました。',
   'error.invalid_subscription': 'このブラウザはTaoからの通知を受け取れません。',
+  'notify.inviteTitle': 'リマインダーを通知で受け取りますか？',
+  'notify.inviteText': 'アプリを閉じていても、Taoはこのデバイスに通知できます。何をリマインドするかはあなたが決め、いつでもオフにできます。',
   'settings.revokeFailed': '取り消しを確認できませんでした。もう一度お試しください。',
   'settings.configKicker': '設定',
   'settings.noSetup': 'ガイド付き設定はまだ行っていません。',

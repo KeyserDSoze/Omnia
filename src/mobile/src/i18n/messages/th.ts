@@ -335,6 +335,8 @@ export const th: Messages = {
   'error.notification_consent_required': 'อนุญาตการแจ้งเตือนก่อน',
   'error.too_many_reminders': 'คุณถึงขีดจำกัด 50 การเตือนแล้ว',
   'error.invalid_subscription': 'เบราว์เซอร์นี้รับการแจ้งเตือนจาก Tao ไม่ได้',
+  'notify.inviteTitle': 'ต้องการให้เตือนเป็นการแจ้งเตือนไหม',
+  'notify.inviteText': 'Tao แจ้งเตือนคุณบนอุปกรณ์นี้ได้ แม้ปิดแอปอยู่ คุณเลือกได้ว่าจะให้เตือนเรื่องอะไร และปิดได้ทุกเมื่อ',
   'settings.revokeFailed': 'ยังไม่ยืนยันการเพิกถอน โปรดลองอีกครั้ง',
   'settings.configKicker': 'การตั้งค่า',
   'settings.noSetup': 'คุณยังไม่ได้ทำการตั้งค่าแบบมีขั้นตอน',

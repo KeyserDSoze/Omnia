@@ -9,6 +9,11 @@ const user2 = process.env.TAO_E2E_USER2 ?? '';
 const user3 = process.env.TAO_E2E_USER3 ?? '';
 const password = process.env.TAO_E2E_PASSWORD ?? '';
 
+// The offer of notifications is a bottom card: the specs that are about something else decline it up front.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem('tao.push.invite', 'never'));
+});
+
 // The home is a chat that asks to sign in first; notes, consents and privacy live in the
 // "Note e privacy" view, which keeps its own sign-in button after a logout.
 async function browserLogin(page: import('@playwright/test').Page, username: string) {
@@ -60,6 +65,22 @@ async function browserLogin(page: import('@playwright/test').Page, username: str
   expect(keys.session.join(' ')).not.toContain('oidc.user');
 }
 
+test('a signed-in user is offered notifications once and can decline for good', async ({ page }) => {
+  test.setTimeout(90_000);
+  if (!user3 || !password) throw new Error('Missing ephemeral OIDC test accounts');
+  await page.addInitScript(() => window.localStorage.removeItem('tao.push.invite'));
+  // Headless Chromium reports notifications as blocked; the offer is for a browser that has not been asked yet.
+  await page.addInitScript(() => Object.defineProperty(Notification, 'permission', { get: () => 'default' }));
+  await page.goto('/Tao/');
+  await expect(page.getByTestId('notification-invite')).toHaveCount(0);
+  await browserLogin(page, user3);
+  const invite = page.getByTestId('notification-invite');
+  await expect(invite).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('invite-enable')).toBeVisible();
+  await page.getByTestId('invite-never').click();
+  await expect(invite).toBeHidden();
+  expect(await page.evaluate(() => window.localStorage.getItem('tao.push.invite'))).toBe('never');
+});
 test('Keycloak PKCE -> JWT API -> PostgreSQL: consent, isolated sync, revoke', async ({
   page, browser, request
 }) => {

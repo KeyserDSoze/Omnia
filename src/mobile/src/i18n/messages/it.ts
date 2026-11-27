@@ -341,6 +341,8 @@ export const it = {
   'error.notification_consent_required': 'Consenti prima le notifiche.',
   'error.too_many_reminders': 'Hai raggiunto il limite di 50 promemoria.',
   'error.invalid_subscription': 'Questo browser non può ricevere notifiche da Tao.',
+  'notify.inviteTitle': 'Vuoi i promemoria come notifiche?',
+  'notify.inviteText': 'Tao può avvisarti su questo dispositivo, anche ad app chiusa. Sei tu a decidere cosa ricordare e puoi disattivarle quando vuoi.',
   'settings.revokeFailed': 'Revoca non confermata. Riprova.',
   'settings.configKicker': 'CONFIGURAZIONE',
   'settings.noSetup': 'Non hai ancora fatto la configurazione guidata.',

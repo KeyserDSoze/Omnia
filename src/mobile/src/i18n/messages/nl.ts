@@ -341,6 +341,8 @@ export const nl: Messages = {
   'error.notification_consent_required': 'Sta eerst meldingen toe.',
   'error.too_many_reminders': 'Je hebt de limiet van 50 herinneringen bereikt.',
   'error.invalid_subscription': 'Deze browser kan geen meldingen van Tao ontvangen.',
+  'notify.inviteTitle': 'Herinneringen als melding?',
+  'notify.inviteText': 'Tao kan je op dit apparaat een melding sturen, ook als de app gesloten is. Jij bepaalt waaraan je herinnerd wordt en je kunt het altijd uitzetten.',
   'settings.revokeFailed': 'Intrekken niet bevestigd. Probeer het opnieuw.',
   'settings.configKicker': 'INSTELLING',
   'settings.noSetup': 'Je hebt de begeleide installatie nog niet gedaan.',

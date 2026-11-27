@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.3.1",
+    "date": "2026-11-27",
+    "notes": {
+      "en": [
+        "Tao now offers to turn on notifications once you are signed in: one tap, and you can say later or never."
+      ],
+      "it": [
+        "Tao ora propone di attivare le notifiche dopo l'accesso: un tocco, e puoi dire dopo o mai."
+      ]
+    }
+  },
+  {
     "version": "0.3.0",
     "date": "2026-11-27",
     "notes": {

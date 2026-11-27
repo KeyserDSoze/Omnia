@@ -5,6 +5,10 @@ import { test, expect, type Page } from '@playwright/test';
 test.skip(process.env.TAO_SOCIAL_E2E !== '1', 'Run via docker/keycloak/e2e/social-e2e.ps1.');
 test.describe.configure({ mode: 'serial' });
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem('tao.push.invite', 'never'));
+});
+
 const kc = process.env.TAO_E2E_KC_URL ?? 'http://localhost:8081';
 const adminPassword = process.env.TAO_E2E_KC_PASSWORD ?? '';
 const upstreamPassword = process.env.TAO_E2E_PASSWORD ?? '';

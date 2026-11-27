@@ -335,6 +335,8 @@ export const id: Messages = {
   'error.notification_consent_required': 'Izinkan notifikasi dulu.',
   'error.too_many_reminders': 'Kamu mencapai batas 50 pengingat.',
   'error.invalid_subscription': 'Peramban ini tidak dapat menerima notifikasi dari Tao.',
+  'notify.inviteTitle': 'Mau pengingat sebagai notifikasi?',
+  'notify.inviteText': 'Tao dapat memberimu notifikasi di perangkat ini, bahkan saat aplikasi ditutup. Kamu yang menentukan apa yang diingatkan dan bisa mematikannya kapan saja.',
   'settings.revokeFailed': 'Pencabutan tidak terkonfirmasi. Coba lagi.',
   'settings.configKicker': 'PENGATURAN',
   'settings.noSetup': 'Kamu belum melakukan pengaturan terpandu.',

@@ -363,6 +363,8 @@ export const ar: Messages = {
   'error.notification_consent_required': 'اسمح بالإشعارات أولًا.',
   'error.too_many_reminders': 'وصلت إلى حد 50 تذكيرًا.',
   'error.invalid_subscription': 'لا يستطيع هذا المتصفح استقبال إشعارات Tao.',
+  'notify.inviteTitle': 'هل تريد التذكيرات كإشعارات؟',
+  'notify.inviteText': 'يستطيع Tao إشعارك على هذا الجهاز حتى والتطبيق مغلق. أنت تقرر بماذا يُذكَّر ويمكنك إيقافها في أي وقت.',
   'settings.revokeFailed': 'لم يتأكد السحب. حاول مرة أخرى.',
   'settings.configKicker': 'الإعداد',
   'settings.noSetup': 'لم تُجرِ الإعداد الموجَّه بعد.',

@@ -341,6 +341,8 @@ export const tr: Messages = {
   'error.notification_consent_required': 'Önce bildirimlere izin ver.',
   'error.too_many_reminders': '50 hatırlatma sınırına ulaştın.',
   'error.invalid_subscription': 'Bu tarayıcı Tao\'dan bildirim alamıyor.',
+  'notify.inviteTitle': 'Hatırlatmalar bildirim olarak gelsin mi?',
+  'notify.inviteText': 'Tao, uygulama kapalıyken bile bu cihazda sana bildirim gönderebilir. Neyi hatırlatacağına sen karar verirsin ve istediğin zaman kapatabilirsin.',
   'settings.revokeFailed': 'Geri alma doğrulanmadı. Lütfen yeniden dene.',
   'settings.configKicker': 'KURULUM',
   'settings.noSetup': 'Adım adım kurulumu henüz yapmadın.',

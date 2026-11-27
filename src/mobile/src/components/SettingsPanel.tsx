@@ -13,6 +13,7 @@ import { AppPanel } from './AppPanel';
 import { RemindersPanel } from './RemindersPanel';
 import { Button } from './Button';
 import type { AppUpdates } from '../services/useAppUpdates';
+import type { PushNotifications } from '../services/usePushNotifications';
 import { LanguagePicker } from './LanguagePicker';
 import type { VoiceControl } from './ChatHome';
 import { web, type Theme } from './theme';
@@ -25,7 +26,7 @@ const capabilityKeys = new Set<string>(['calendar.read', 'mail.read', 'tasks.rea
  * account (demo) only appearance, voice and notes are available.
  */
 export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLogout, onOpenMemory, onRunSetup,
-  onToggleTheme, voice, updates }: {
+  onToggleTheme, voice, updates, push }: {
   api: MemoryApi | null;
   theme: Theme;
   profile: { name: string | null; email: string | null } | null;
@@ -36,6 +37,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
   onToggleTheme: () => void;
   voice: VoiceControl;
   updates: AppUpdates;
+  push: PushNotifications;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -306,7 +308,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
 
       {api && <ConnectionsPanel api={api} p={p} onChanged={() => { void load(); }} onConnected={linkConnected} />}
 
-      {api && <RemindersPanel api={api} theme={p} />}
+      {api && <RemindersPanel api={api} push={push} theme={p} />}
 
       <View style={card}>
         <Text style={[styles.kicker, { color: p.subtle }]}>{t('settings.notesKicker')}</Text>

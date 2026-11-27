@@ -4,8 +4,9 @@ name: Tao Azure deploy
 # Credentials: repository secrets AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
 # (a service principal that is Owner of the subscription: nothing else should use it).
 # Optional settings: variables TAO_ALERT_EMAIL, TAO_MICROSOFT_CLIENT_ID, TAO_MICROSOFT_TENANT,
-# TAO_GOOGLE_CLIENT_ID, TAO_LLM_ENDPOINT, TAO_LLM_MODEL and secrets TAO_MICROSOFT_CLIENT_SECRET,
-# TAO_GOOGLE_CLIENT_SECRET, TAO_LLM_API_KEY.
+# TAO_GOOGLE_CLIENT_ID, TAO_LLM_AUTH_HEADER, TAO_LLM_TOKEN_PARAMETER, TAO_LLM_OMIT_TEMPERATURE,
+# TAO_LLM_REASONING_EFFORT and secrets TAO_MICROSOFT_CLIENT_SECRET,
+# TAO_GOOGLE_CLIENT_SECRET, TAO_LLM_ENDPOINT, TAO_LLM_MODEL, TAO_LLM_API_KEY.
 on:
   push:
     branches: [main]
@@ -41,8 +42,8 @@ env:
   TF_VAR_microsoft_client_secret: ${{ secrets.TAO_MICROSOFT_CLIENT_SECRET }}
   TF_VAR_google_client_id: ${{ vars.TAO_GOOGLE_CLIENT_ID }}
   TF_VAR_google_client_secret: ${{ secrets.TAO_GOOGLE_CLIENT_SECRET }}
-  TF_VAR_llm_endpoint: ${{ vars.TAO_LLM_ENDPOINT }}
-  TF_VAR_llm_model: ${{ vars.TAO_LLM_MODEL }}
+  TF_VAR_llm_endpoint: ${{ secrets.TAO_LLM_ENDPOINT }}
+  TF_VAR_llm_model: ${{ secrets.TAO_LLM_MODEL }}
   TF_VAR_llm_api_key: ${{ secrets.TAO_LLM_API_KEY }}
   TF_VAR_llm_auth_header: ${{ vars.TAO_LLM_AUTH_HEADER || 'bearer' }}
   TF_VAR_llm_token_parameter: ${{ vars.TAO_LLM_TOKEN_PARAMETER || 'max_tokens' }}

@@ -45,6 +45,9 @@
 ```sh
 cd src/mobile && npm ci && npm run typecheck && npm test && npm run build:web && npm run test:e2e
 dotnet test tests/Tao.Domain.Tests/Tao.Domain.Tests.csproj
+# Modello reale (solo in locale, mai in CI): TAO_EVAL_LLM_ENDPOINT/MODEL/API_KEY/REASONING_EFFORT
+# (+ _AUTH_HEADER, _TOKEN_PARAMETER, _OMIT_TEMPERATURE) abilitano TheConfiguredModelMeetsTheQualityBar...
+# La chiave sta fuori dal repository, in %LOCALAPPDATA%\Tao\llm-env.ps1.
 # PostgreSQL reale: TAO_TEST_DB, TAO_TEST_APP_DB, TAO_TEST_RETENTION_DB, TAO_TEST_KEYRING_FILE
 dotnet test tests/Tao.Integration.Tests/Tao.Integration.Tests.csproj
 docker compose --env-file docker/.env -f docker/compose.yml up -d --build

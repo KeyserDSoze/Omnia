@@ -168,7 +168,10 @@ public sealed partial class AssistantTests
             Endpoint = Environment.GetEnvironmentVariable("TAO_EVAL_LLM_ENDPOINT"),
             Model = Environment.GetEnvironmentVariable("TAO_EVAL_LLM_MODEL"),
             ApiKey = Environment.GetEnvironmentVariable("TAO_EVAL_LLM_API_KEY"),
-            AuthHeader = Environment.GetEnvironmentVariable("TAO_EVAL_LLM_AUTH_HEADER") ?? "bearer"
+            AuthHeader = Environment.GetEnvironmentVariable("TAO_EVAL_LLM_AUTH_HEADER") ?? "bearer",
+            TokenParameter = Environment.GetEnvironmentVariable("TAO_EVAL_LLM_TOKEN_PARAMETER") ?? "max_tokens",
+            OmitTemperature = Environment.GetEnvironmentVariable("TAO_EVAL_LLM_OMIT_TEMPERATURE") == "true",
+            ReasoningEffort = Environment.GetEnvironmentVariable("TAO_EVAL_LLM_REASONING_EFFORT")
         };
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         var real = new OpenAiCompatibleChatModel(http, options);

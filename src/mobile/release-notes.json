@@ -1,0 +1,32 @@
+[
+  {
+    "version": "0.2.0",
+    "date": "2026-11-27",
+    "notes": {
+      "en": [
+        "Tao can now be installed as an app on your phone or computer.",
+        "It opens even without a connection.",
+        "New versions are announced with what changed, and can be installed quietly in the background."
+      ],
+      "it": [
+        "Ora puoi installare Tao come app sul telefono o sul computer.",
+        "Si apre anche senza connessione.",
+        "Le nuove versioni arrivano con le novità e si possono installare in silenzio, in background."
+      ]
+    }
+  },
+  {
+    "version": "0.1.0",
+    "date": "2026-11-01",
+    "notes": {
+      "en": [
+        "First release: the daily deck, the chat, Microsoft 365 and Google Workspace connections.",
+        "The optional AI day plan, with its own consent."
+      ],
+      "it": [
+        "Prima versione: il mazzo del giorno, la chat, le connessioni Microsoft 365 e Google Workspace.",
+        "Il piano del giorno con l'AI, facoltativo e con un consenso dedicato."
+      ]
+    }
+  }
+]

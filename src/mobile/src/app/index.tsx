@@ -16,6 +16,8 @@ import { dayOptions, filterLoadedByLocalDay } from '../services/timelineDayFilte
 import { filterLoadedByText } from '../services/timelineTextFilter';
 import { ChatHome } from '../components/ChatHome';
 import { SettingsPanel } from '../components/SettingsPanel';
+import { UpdateBanner } from '../components/UpdateBanner';
+import { useAppUpdates } from '../services/useAppUpdates';
 import { Backdrop } from '../components/Backdrop';
 import { themes } from '../components/theme';
 import { loginOptions, type ConnectorProviderId } from '../services/memoryApi';
@@ -39,6 +41,7 @@ const timelineMemo = (item: RemoteMemory): LocalMemo => ({
 export default function Home() {
   const t = useT();
   const locale = useLocale();
+  const updates = useAppUpdates();
   const rtl = localeInfo(locale).rtl === true;
   // The document follows the language: screen readers, hyphenation, form controls and RTL text.
   useEffect(() => {
@@ -589,7 +592,7 @@ export default function Home() {
             onLogout={signedIn ? () => { setView('chat'); void logout(); } : null}
             onOpenMemory={() => setView('memory')}
             onRunSetup={() => { setView('chat'); setSetupRequest(n => n + 1); }}
-            onToggleTheme={() => setOverride(mode === 'dark' ? 'light' : 'dark')} voice={voice} />
+            onToggleTheme={() => setOverride(mode === 'dark' ? 'light' : 'dark')} voice={voice} updates={updates} />
         </ScrollView>
       )}
       {activeView === 'memory' && <ScrollView style={styles.fill} contentContainerStyle={[styles.page, { paddingHorizontal: compact ? 14 : 22 }]}>
@@ -963,6 +966,7 @@ export default function Home() {
         </View>)}
       </View>
       </ScrollView>}
+      <UpdateBanner updates={updates} theme={p} />
     </View>
   );
 }

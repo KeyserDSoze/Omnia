@@ -9,6 +9,9 @@ import { newId, summary, toSaveBody, type DraftAccount, type SettingsDto } from 
 import type { AiEngine } from '../services/aiRouter';
 import { intlTag, localeInfo, useLocale, useT, type MessageKey } from '../i18n';
 import { ConnectionsPanel } from './ConnectionsPanel';
+import { AppPanel } from './AppPanel';
+import { Button } from './Button';
+import type { AppUpdates } from '../services/useAppUpdates';
 import { LanguagePicker } from './LanguagePicker';
 import type { VoiceControl } from './ChatHome';
 import { web, type Theme } from './theme';
@@ -21,7 +24,7 @@ const capabilityKeys = new Set<string>(['calendar.read', 'mail.read', 'tasks.rea
  * account (demo) only appearance, voice and notes are available.
  */
 export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLogout, onOpenMemory, onRunSetup,
-  onToggleTheme, voice }: {
+  onToggleTheme, voice, updates }: {
   api: MemoryApi | null;
   theme: Theme;
   profile: { name: string | null; email: string | null } | null;
@@ -31,6 +34,7 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
   onRunSetup: () => void;
   onToggleTheme: () => void;
   voice: VoiceControl;
+  updates: AppUpdates;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -309,24 +313,9 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
         </View>
       </View>
       {!!message && <Text accessibilityRole="alert" testID="settings-message" style={[styles.hint, heading]}>{message}</Text>}
+      <AppPanel updates={updates} theme={p} />
       <Text style={[styles.footer, { color: p.subtle }]}>{t('settings.footer')}</Text>
     </View>
-  );
-}
-
-function Button({ label, onPress, p, primary, selected, disabled, testID }: {
-  label: string; onPress: () => void; p: Theme; primary?: boolean; selected?: boolean; disabled?: boolean;
-  testID?: string;
-}) {
-  return (
-    <Pressable testID={testID} accessibilityRole="button" onPress={onPress} disabled={disabled}
-      aria-pressed={selected}
-      style={[styles.button, {
-        backgroundColor: primary ? p.accent : selected ? p.card2 : 'transparent',
-        borderColor: primary || selected ? p.accent : p.border, opacity: disabled ? 0.5 : 1
-      }]}>
-      <Text style={[styles.buttonText, { color: primary ? p.accentText : p.text }]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -341,7 +330,5 @@ const styles = StyleSheet.create({
   hint: { fontSize: 13, lineHeight: 19, marginTop: 8 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   accountBlock: { borderTopWidth: 1, paddingTop: 12, marginTop: 12 },
-  button: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
-  buttonText: { fontSize: 13, fontWeight: '700' },
   footer: { fontSize: 10, letterSpacing: 1.5, textAlign: 'center', marginTop: 12 }
 });

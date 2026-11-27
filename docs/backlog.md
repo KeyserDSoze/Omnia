@@ -16,6 +16,7 @@ Fonte di verità: le issue GitHub. Gli epic della nuova fase Tao sono:
 | [#230](https://github.com/KeyserDSoze/Tao/issues/230) | Client desktop Mac/Windows e dashboard | R3 |
 | [#239](https://github.com/KeyserDSoze/Tao/issues/239) | Integrazioni: catalogo, server MCP, API dirette e WhatsApp ([ADR 0111](../adr/0111-integration-catalog-mcp-api-whatsapp.md), [studio](integrations.md)) | R2 |
 | [#240](https://github.com/KeyserDSoze/Tao/issues/240) | Identity provider proprio (sostituisce Keycloak) e server MCP di Tao per altre AI ([ADR 0112](../adr/0112-own-identity-provider-and-mcp-server.md)) | R2 |
+| [#248](https://github.com/KeyserDSoze/Tao/issues/248) | App installabile, aggiornamenti e promemoria push ([ADR 0113](../adr/0113-installable-app-updates-and-push-reminders.md)) | R2 |
 
 Le issue della fase precedente ancora aperte (#1–#131) descrivono una piattaforma SaaS più ampia:
 restano come riferimento e vanno ricollegate a un epic Tao quando entrano in lavorazione. Quelle del

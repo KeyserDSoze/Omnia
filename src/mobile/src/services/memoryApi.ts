@@ -122,6 +122,15 @@ export const SPEECH_SOURCE = 'voice';
 export const SPEECH_PURPOSE = 'speech.browser';
 export const MCP_SOURCE = 'mcp';
 export const MCP_PURPOSE = 'mcp.access';
+export const PUSH_SOURCE = 'push';
+export const PUSH_PURPOSE = 'notifications.push';
+
+export type ReminderRepeat = 'once' | 'daily' | 'weekdays';
+export type ReminderDto = {
+  id: string; text: string; repeat: ReminderRepeat; time: string; date: string | null; timeZone: string;
+  enabled: boolean; nextRunAt: string | null; lastSentAt: string | null;
+};
+export type NewReminder = { text: string; repeat: ReminderRepeat; time: string; date?: string; timeZone: string };
 
 /** Settings composed by the guided setup plus what can be connected. */
 export type SettingsResponseDto = {
@@ -153,7 +162,7 @@ const knownErrors = new Set([
   'apply_not_supported', 'applied_to_source', 'invalid_item', 'invalid_decision', 'invalid_snooze', 'invalid_window',
   'assistant_not_configured', 'assistant_consent_required', 'model_error', 'model_unreachable', 'model_rate_limited',
   'invalid_model_output', 'invalid_time_zone', 'invalid_language', 'delegation_required', 'invalid_settings',
-  'assistant_budget_exceeded'
+  'assistant_budget_exceeded', 'notification_consent_required', 'too_many_reminders', 'invalid_subscription'
 ] as const);
 type KnownError = typeof knownErrors extends Set<infer C> ? C : never;
 const isKnownError = (code: string): code is KnownError => knownErrors.has(code as KnownError);
@@ -244,7 +253,9 @@ export class MemoryApi {
         this.notifyUnauthorized(epoch);
         throw new CloudApiError(t('notice.sessionInvalid'), 401);
       }
-      const code = await errorCode(response);
+      const raw = await errorCode(response);
+      // The reminder form validates its fields itself: a server-side miss reads as a generic invalid request.
+      const code = raw && /^invalid_(text|repeat|time|time_zone|date)$/.test(raw) ? 'invalid_request' : raw;
       this.assertCurrent(epoch);
       if (code && isKnownError(code))
         throw new CloudApiError(t(`error.${code}`), response.status, code);
@@ -394,6 +405,42 @@ export class MemoryApi {
   mcpUrl(): string {
     const base = this.config.apiBaseUrl || (typeof window !== 'undefined' ? window.location.origin : '');
     return base.replace(/\/+$/, '') + '/api/v1/mcp';
+  }
+  grantPushNotifications(): Promise<ConsentDto> {
+    return this.request('POST', '/api/v1/consents', {
+      source: PUSH_SOURCE,
+      purpose: PUSH_PURPOSE,
+      policyVersion: 'push-v1',
+      expiresAt: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
+      accepted: true
+    });
+  }
+  pushConfig(): Promise<{ publicKey: string }> {
+    return this.request('GET', '/api/v1/push/config');
+  }
+  subscribePush(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<{ id: string }> {
+    return this.request('POST', '/api/v1/push/subscriptions', subscription);
+  }
+  unsubscribePush(id: string): Promise<void> {
+    if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error(t('error.invalidId'));
+    return this.request('DELETE', '/api/v1/push/subscriptions/' + encodeURIComponent(id));
+  }
+  sendTestPush(): Promise<{ delivered: number }> {
+    return this.request('POST', '/api/v1/push/test', {});
+  }
+  reminders(): Promise<ReminderDto[]> {
+    return this.request('GET', '/api/v1/reminders');
+  }
+  createReminder(reminder: NewReminder): Promise<ReminderDto> {
+    return this.request('POST', '/api/v1/reminders', reminder);
+  }
+  setReminderEnabled(id: string, enabled: boolean): Promise<void> {
+    if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error(t('error.invalidId'));
+    return this.request('PUT', '/api/v1/reminders/' + encodeURIComponent(id) + '/enabled', { enabled });
+  }
+  deleteReminder(id: string): Promise<void> {
+    if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error(t('error.invalidId'));
+    return this.request('DELETE', '/api/v1/reminders/' + encodeURIComponent(id));
   }
   recap(days: number, timeZone: string): Promise<{ days: DayRecapDto[] }> {
     return this.request('GET', '/api/v1/today/recap?days=' + encodeURIComponent(String(days)) +

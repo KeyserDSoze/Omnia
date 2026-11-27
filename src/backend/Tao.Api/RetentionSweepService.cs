@@ -54,6 +54,9 @@ public sealed class RetentionSweepService(
                 logger.LogInformation(
                     "Retention sweep removed {Count} expired notes and {WorkState} expired work-state rows.",
                     deleted, workState);
+            var notifications = await new PostgresReminderClaims(retentionDb).PurgeStaleAsync(BatchSize, ct);
+            if (notifications > 0)
+                logger.LogInformation("Retention sweep removed {Count} stale reminders and push subscriptions.", notifications);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception e)

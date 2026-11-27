@@ -76,7 +76,8 @@ public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = 
                     ON TABLE public.memory_entries, public.consent_grants,
                        public.connector_authorizations, public.connector_accounts,
                        public.triage_decisions, public.connector_actions, public.user_settings,
-                       public.assistant_usage TO {quoted};
+                       public.assistant_usage, public.reminders, public.push_subscriptions TO {quoted};
+                GRANT SELECT, INSERT ON TABLE public.push_settings TO {quoted};
                 """, conn, tx);
             await grant.ExecuteNonQueryAsync(ct);
         }
@@ -101,6 +102,10 @@ public sealed class PostgresMigrator(NpgsqlDataSource db, string? runtimeRole = 
                 GRANT EXECUTE ON FUNCTION public.tao_purge_expired_memories(integer)
                     TO {quoted};
                 GRANT EXECUTE ON FUNCTION public.tao_purge_expired_work_state(integer)
+                    TO {quoted};
+                GRANT EXECUTE ON FUNCTION public.tao_claim_due_reminders(integer, integer)
+                    TO {quoted};
+                GRANT EXECUTE ON FUNCTION public.tao_purge_stale_notifications(integer)
                     TO {quoted};
                 """, conn, tx);
             await grant.ExecuteNonQueryAsync(ct);

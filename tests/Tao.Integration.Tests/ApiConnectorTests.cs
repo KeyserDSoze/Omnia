@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Web;
@@ -13,8 +14,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using Tao.Application;
 using Tao.Domain;
+using Tao.Infrastructure;
 using Xunit;
 
 namespace Tao.Integration.Tests;
@@ -23,6 +26,7 @@ namespace Tao.Integration.Tests;
 /// End-to-end API contract of the connectors and the daily deck: real PostgreSQL (restricted
 /// RLS role), real sealing, fixture authentication and a scripted provider (no network).
 /// </summary>
+[Collection("push-settings")]
 public sealed class ApiConnectorTests
 {
     [Fact]
@@ -256,6 +260,233 @@ public sealed class ApiConnectorTests
         var linked = entries.Single(e => e.GetProperty("id").GetString() == "whatsapp-linked-device");
         Assert.True(linked.GetProperty("onPremOnly").GetBoolean());
         Assert.Equal("qr", linked.GetProperty("auth").GetString());
+    }
+
+    private sealed class FakePush : IWebPushSender
+    {
+        public List<(string Endpoint, string Json)> Sent { get; } = [];
+        public Task<PushResult> SendAsync(PushSubscription subscription, ReadOnlyMemory<byte> payload, CancellationToken ct)
+        {
+            lock (Sent) Sent.Add((subscription.Endpoint, Encoding.UTF8.GetString(payload.Span)));
+            return Task.FromResult(PushResult.Sent);
+        }
+    }
+
+    private static string PushKey(int length) =>
+        PushSubscriptionRules.Encode(new byte[length].Select((_, i) => i == 0 ? (byte)4 : (byte)9).ToArray());
+
+    private static object Subscription(string name, string host = "fcm.googleapis.com") => new
+    {
+        endpoint = $"https://{host}/fcm/send/{name}", keys = new { p256dh = PushKey(65), auth = PushKey(16) }
+    };
+
+    private static async Task ClearVapidAsync()
+    {
+        await using var admin = NpgsqlDataSource.Create(Environment.GetEnvironmentVariable("TAO_TEST_DB")!);
+        await using var reset = admin.CreateCommand("DELETE FROM push_settings");
+        await reset.ExecuteNonQueryAsync();
+    }
+
+    private static async Task GrantPushAsync(HttpClient http, string tenant, string subject = "alice")
+    {
+        using var grant = await Send(http, HttpMethod.Post, "/api/v1/consents", tenant, new
+        {
+            source = "push", purpose = "notifications.push", policyVersion = "push-v1",
+            expiresAt = DateTimeOffset.UtcNow.AddDays(30), accepted = true
+        }, subject);
+        Assert.Equal(HttpStatusCode.Created, grant.StatusCode);
+    }
+
+    [Fact]
+    public async Task PushNotificationsNeedConsentAndOnlyAcceptTheBrowsersOwnPushServices()
+    {
+        await ClearVapidAsync();
+        var fake = new FakePush();
+        using var environment = new TemporaryEnvironment(Settings().ToDictionary(
+            x => x.Key.Replace(":", "__"), x => x.Value));
+        using var host = Host(new ScriptedProvider(), push: fake);
+        using var http = host.CreateClient();
+        var tenant = "api-push-" + Guid.NewGuid().ToString("N");
+
+        using (var anonymous = await http.GetAsync("/api/v1/push/config"))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        string publicKey;
+        using (var config = await Send(http, HttpMethod.Get, "/api/v1/push/config", tenant))
+        {
+            Assert.Equal(HttpStatusCode.OK, config.StatusCode);
+            Assert.Equal("no-store", config.Headers.CacheControl?.ToString());
+            using var json = await Json(config);
+            publicKey = json.RootElement.GetProperty("publicKey").GetString()!;
+            Assert.Equal(87, publicKey.Length);
+        }
+        using (var again = await Send(http, HttpMethod.Get, "/api/v1/push/config", tenant, subject: "bob"))
+        using (var json = await Json(again))
+            Assert.Equal(publicKey, json.RootElement.GetProperty("publicKey").GetString());
+
+        using (var noConsent = await Send(http, HttpMethod.Post, "/api/v1/push/subscriptions", tenant, Subscription("phone")))
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, noConsent.StatusCode);
+            using var json = await Json(noConsent);
+            Assert.Equal("notification_consent_required", json.RootElement.GetProperty("error").GetString());
+        }
+        // The consent of another purpose does not authorize notifications.
+        using (await Send(http, HttpMethod.Post, "/api/v1/consents", tenant, new
+        {
+            source = "manual", purpose = "memory.capture", policyVersion = "privacy-v1",
+            expiresAt = DateTimeOffset.UtcNow.AddDays(3), accepted = true
+        })) { }
+        using (var stillNo = await Send(http, HttpMethod.Post, "/api/v1/push/subscriptions", tenant, Subscription("phone")))
+            Assert.Equal(HttpStatusCode.Forbidden, stillNo.StatusCode);
+        await GrantPushAsync(http, tenant);
+
+        // The server posts to these addresses, so anything but a push service of a browser is refused.
+        foreach (var bad in new object[]
+        {
+            Subscription("x", "169.254.169.254"), Subscription("x", "evil.example"), Subscription("x", "localhost"),
+            new { endpoint = "http://fcm.googleapis.com/fcm/send/x", keys = new { p256dh = PushKey(65), auth = PushKey(16) } },
+            new { endpoint = "https://fcm.googleapis.com/fcm/send/x", keys = new { p256dh = PushKey(64), auth = PushKey(16) } },
+            new { endpoint = "https://fcm.googleapis.com/fcm/send/x" }
+        })
+        {
+            using var refused = await Send(http, HttpMethod.Post, "/api/v1/push/subscriptions", tenant, bad);
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            using var json = await Json(refused);
+            Assert.Equal("invalid_subscription", json.RootElement.GetProperty("error").GetString());
+        }
+
+        Guid id;
+        using (var created = await Send(http, HttpMethod.Post, "/api/v1/push/subscriptions", tenant, Subscription("phone")))
+        {
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            using var json = await Json(created);
+            id = json.RootElement.GetProperty("id").GetGuid();
+        }
+        using (var list = await Send(http, HttpMethod.Get, "/api/v1/push/subscriptions", tenant))
+        {
+            var text = await list.Content.ReadAsStringAsync();
+            Assert.Contains("fcm.googleapis.com", text);
+            Assert.DoesNotContain("/fcm/send/phone", text);
+            Assert.DoesNotContain(PushKey(65), text);
+        }
+        using (var bobs = await Send(http, HttpMethod.Get, "/api/v1/push/subscriptions", tenant, subject: "bob"))
+            Assert.Equal("[]", await bobs.Content.ReadAsStringAsync());
+        using (var foreign = await Send(http, HttpMethod.Delete, $"/api/v1/push/subscriptions/{id}", tenant, subject: "bob"))
+            Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+
+        using (var test = await Send(http, HttpMethod.Post, "/api/v1/push/test", tenant, new { }))
+        {
+            using var json = await Json(test);
+            Assert.Equal(1, json.RootElement.GetProperty("delivered").GetInt32());
+        }
+        Assert.Equal("https://fcm.googleapis.com/fcm/send/phone", Assert.Single(fake.Sent).Endpoint);
+        using (var bobTest = await Send(http, HttpMethod.Post, "/api/v1/push/test", tenant, new { }, subject: "bob"))
+            Assert.Equal(HttpStatusCode.Forbidden, bobTest.StatusCode);
+
+        using (var removed = await Send(http, HttpMethod.Delete, $"/api/v1/push/subscriptions/{id}", tenant))
+            Assert.Equal(HttpStatusCode.NoContent, removed.StatusCode);
+        using (var empty = await Send(http, HttpMethod.Get, "/api/v1/push/subscriptions", tenant))
+            Assert.Equal("[]", await empty.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task RemindersAreValidatedScopedAndSentByTheDispatcher()
+    {
+        await ClearVapidAsync();
+        var fake = new FakePush();
+        using var environment = new TemporaryEnvironment(Settings().ToDictionary(
+            x => x.Key.Replace(":", "__"), x => x.Value));
+        using var host = Host(new ScriptedProvider(), push: fake);
+        using var http = host.CreateClient();
+        var tenant = "api-rem-" + Guid.NewGuid().ToString("N");
+        var day = DateTimeOffset.UtcNow.AddDays(2).ToString("yyyy-MM-dd");
+
+        using (var anonymous = await http.GetAsync("/api/v1/reminders"))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        foreach (var (body, code) in new (object, string)[]
+        {
+            (new { text = "", repeat = "daily", time = "09:00", timeZone = "Europe/Rome" }, "invalid_text"),
+            (new { text = "x", repeat = "hourly", time = "09:00", timeZone = "Europe/Rome" }, "invalid_repeat"),
+            (new { text = "x", repeat = "daily", time = "9am", timeZone = "Europe/Rome" }, "invalid_time"),
+            (new { text = "x", repeat = "daily", time = "09:00", timeZone = "../etc" }, "invalid_time_zone"),
+            (new { text = "x", repeat = "once", time = "09:00", date = "2020-01-01", timeZone = "Europe/Rome" }, "invalid_date")
+        })
+        {
+            using var refused = await Send(http, HttpMethod.Post, "/api/v1/reminders", tenant, body);
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            using var json = await Json(refused);
+            Assert.Equal(code, json.RootElement.GetProperty("error").GetString());
+        }
+
+        Guid id;
+        using (var created = await Send(http, HttpMethod.Post, "/api/v1/reminders", tenant,
+            new { text = "  Chiama Marco  ", repeat = "daily", time = "09:00", timeZone = "Europe/Rome" }))
+        {
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            using var json = await Json(created);
+            id = json.RootElement.GetProperty("id").GetGuid();
+            Assert.Equal("Chiama Marco", json.RootElement.GetProperty("text").GetString());
+            Assert.True(json.RootElement.GetProperty("nextRunAt").GetDateTimeOffset() > DateTimeOffset.UtcNow);
+        }
+        using (var once = await Send(http, HttpMethod.Post, "/api/v1/reminders", tenant,
+            new { text = "Dentista", repeat = "once", time = "15:00", date = day, timeZone = "Europe/Rome" }))
+            Assert.Equal(HttpStatusCode.Created, once.StatusCode);
+        using (var list = await Send(http, HttpMethod.Get, "/api/v1/reminders", tenant))
+        {
+            using var json = await Json(list);
+            Assert.Equal(["Chiama Marco", "Dentista"], json.RootElement.EnumerateArray().Select(r => r.GetProperty("text").GetString()));
+        }
+        using (var bobs = await Send(http, HttpMethod.Get, "/api/v1/reminders", tenant, subject: "bob"))
+            Assert.Equal("[]", await bobs.Content.ReadAsStringAsync());
+        using (var foreign = await Send(http, HttpMethod.Delete, $"/api/v1/reminders/{id}", tenant, subject: "bob"))
+            Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+        using (var foreignToggle = await Send(http, HttpMethod.Put, $"/api/v1/reminders/{id}/enabled", tenant, new { enabled = false }, subject: "bob"))
+            Assert.Equal(HttpStatusCode.NotFound, foreignToggle.StatusCode);
+
+        using (var off = await Send(http, HttpMethod.Put, $"/api/v1/reminders/{id}/enabled", tenant, new { enabled = false }))
+            Assert.Equal(HttpStatusCode.NoContent, off.StatusCode);
+        using (var on = await Send(http, HttpMethod.Put, $"/api/v1/reminders/{id}/enabled", tenant, new { enabled = true }))
+            Assert.Equal(HttpStatusCode.NoContent, on.StatusCode);
+
+        // The dispatcher: without consent nothing is sent; with it the reminder reaches the device and moves on.
+        async Task DueNow()
+        {
+            await using var app = NpgsqlDataSource.Create(Environment.GetEnvironmentVariable("TAO_TEST_APP_DB")!);
+            await using var actor = await PostgresActorScope.OpenAsync(app, tenant, "alice", default);
+            await using var past = new NpgsqlCommand(
+                "UPDATE reminders SET next_run_at = now() - interval '1 minute' WHERE id = @id", actor.Connection, actor.Transaction);
+            past.Parameters.AddWithValue("id", id);
+            await past.ExecuteNonQueryAsync();
+            await actor.CommitAsync(default);
+        }
+        async Task Dispatch()
+        {
+            using var scope = host.Services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<ReminderDispatcher>().DispatchDueAsync(default);
+        }
+        await DueNow();
+        await Dispatch();
+        Assert.Empty(fake.Sent);
+
+        await GrantPushAsync(http, tenant);
+        using (var sub = await Send(http, HttpMethod.Post, "/api/v1/push/subscriptions", tenant, Subscription("laptop")))
+            Assert.Equal(HttpStatusCode.Created, sub.StatusCode);
+        await DueNow();
+        await Dispatch();
+        using var payload = JsonDocument.Parse(Assert.Single(fake.Sent).Json);
+        Assert.Equal("Chiama Marco", payload.RootElement.GetProperty("body").GetString());
+        using (var after = await Send(http, HttpMethod.Get, "/api/v1/reminders", tenant))
+        {
+            using var json = await Json(after);
+            var reminder = json.RootElement.EnumerateArray().First(r => r.GetProperty("id").GetGuid() == id);
+            Assert.NotEqual(JsonValueKind.Null, reminder.GetProperty("lastSentAt").ValueKind);
+            Assert.True(reminder.GetProperty("nextRunAt").GetDateTimeOffset() > DateTimeOffset.UtcNow);
+        }
+        // Nothing is due any more: a second pass sends nothing.
+        await Dispatch();
+        Assert.Single(fake.Sent);
+
+        using (var removed = await Send(http, HttpMethod.Delete, $"/api/v1/reminders/{id}", tenant))
+            Assert.Equal(HttpStatusCode.NoContent, removed.StatusCode);
     }
 
     private static object Rpc(string method, object? parameters = null, int id = 1) =>
@@ -749,11 +980,13 @@ public sealed class ApiConnectorTests
             ["Embeddings:Provider"] = "none",
             ["Tao:PublicBaseUrl"] = "https://tao.example.test",
             ["RateLimit:RequestsPerMinute"] = "500",
-            ["RateLimit:TenantRequestsPerMinute"] = "1000"
+            ["RateLimit:TenantRequestsPerMinute"] = "1000",
+            ["Reminders:Dispatch"] = "false"
         };
     }
 
-    private static WebApplicationFactory<Program> Host(ScriptedProvider provider, IChatModel? model = null)
+    private static WebApplicationFactory<Program> Host(ScriptedProvider provider, IChatModel? model = null,
+        IWebPushSender? push = null)
     {
         var cfg = Settings();
         return new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
@@ -764,6 +997,11 @@ public sealed class ApiConnectorTests
             {
                 s.RemoveAll<IConnectorProvider>();
                 s.AddSingleton<IConnectorProvider>(provider);
+                if (push is not null)
+                {
+                    s.RemoveAll<IWebPushSender>();
+                    s.AddSingleton(push);
+                }
                 if (model is not null)
                 {
                     s.RemoveAll<IChatModel>();

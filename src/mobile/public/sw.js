@@ -78,7 +78,34 @@ async function navigate(request) {
   }
 }
 
+/** What to show for a push payload: plain text only, bounded, and always back to the app itself. */
+function notificationOf(data, scope) {
+  const text = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');
+  const tag = text(data && data.tag, 64);
+  return {
+    title: text(data && data.title, 80) || 'Tao',
+    options: {
+      body: text(data && data.body, 200), icon: new URL('icon-192.png', scope).href,
+      ...(tag ? { tag } : {}), data: { url: scope }
+    }
+  };
+}
+
 if (typeof self.addEventListener === 'function') {
+  self.addEventListener('push', event => {
+    let data = null;
+    try { data = event.data ? event.data.json() : null; } catch { data = null; }
+    const { title, options } = notificationOf(data, self.registration.scope);
+    event.waitUntil(self.registration.showNotification(title, options));
+  });
+  self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const scope = self.registration.scope;
+    event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windows => {
+      const open = windows.find(w => w.url.startsWith(scope));
+      return open ? open.focus() : self.clients.openWindow(scope);
+    }));
+  });
   self.addEventListener('install', event => event.waitUntil(precache()));
   self.addEventListener('activate', event => event.waitUntil((async () => {
     for (const name of await caches.keys()) if (name !== SHELL && name !== STATIC) await caches.delete(name);
@@ -95,4 +122,4 @@ if (typeof self.addEventListener === 'function') {
   });
 }
 
-if (typeof module !== 'undefined') module.exports = { handles, isStaticAsset, assetUrls, relativePath, BUILD };
+if (typeof module !== 'undefined') module.exports = { handles, isStaticAsset, assetUrls, relativePath, notificationOf, BUILD };

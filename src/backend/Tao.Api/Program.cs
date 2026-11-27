@@ -180,6 +180,7 @@ builder.Services.AddScoped<IMemoryCatalog, MemoryCatalog>();
 builder.Services.AddScoped<IPersonalDataService, PostgresPersonalDataService>();
 builder.Services.AddTaoConnectors(builder.Configuration, builder.Environment);
 builder.Services.AddTaoMcp();
+builder.Services.AddTaoPush(builder.Configuration);
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(
     new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower)));
 builder.Services.AddSingleton(sp => new PostgresMigrator(
@@ -415,6 +416,7 @@ privacy.MapPost("/erase", async (EraseMyDataCommand input,
 app.MapTaoConnectors();
 app.MapTaoIntegrations();
 app.MapTaoMcp(builder.Configuration);
+app.MapTaoPush();
 
 using (var scope = app.Services.CreateScope())
 {

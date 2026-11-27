@@ -118,8 +118,8 @@ describe('the release step of the build', () => {
   it('finds the entry bundle and writes the newest release first', () => {
     expect(buildIdOf(['index.html', 'entry-4eab825b.js', 'other-1.js'])).toBe('4eab825b');
     expect(buildIdOf(['index.html'])).toBeNull();
-    const built = versionManifest({ version: '0.2.0', build: '4eab825b', releases: [...notes].reverse(), now: new Date('2026-11-27T10:00:00Z') });
-    expect(built.releases[0].version).toBe('0.2.0');
+    const built = versionManifest({ version: pkg.version, build: '4eab825b', releases: [...notes].reverse(), now: new Date('2026-11-27T10:00:00Z') });
+    expect(built.releases[0].version).toBe(pkg.version);
     expect(built.builtAt).toBe('2026-11-27T10:00:00.000Z');
   });
 

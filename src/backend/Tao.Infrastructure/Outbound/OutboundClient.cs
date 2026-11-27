@@ -35,7 +35,7 @@ public sealed class OutboundGuard(IOutboundResolver resolver)
 }
 
 public sealed record OutboundRequest(HttpMethod Method, string Url, IReadOnlyDictionary<string, string>? Headers = null,
-    string? JsonBody = null);
+    string? JsonBody = null, byte[]? BinaryBody = null);
 
 public sealed record OutboundResponse(int Status, string Body, string? ContentType);
 
@@ -85,9 +85,11 @@ public sealed class OutboundClient
         for (var hop = 0; ; hop++)
         {
             using var message = new HttpRequestMessage(method, uri);
-            foreach (var (name, value) in request.Headers ?? new Dictionary<string, string>())
-                message.Headers.TryAddWithoutValidation(name, value);
             if (body is not null) message.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            else if (request.BinaryBody is not null && method != HttpMethod.Get) message.Content = new ByteArrayContent(request.BinaryBody);
+            foreach (var (name, value) in request.Headers ?? new Dictionary<string, string>())
+                if (!message.Headers.TryAddWithoutValidation(name, value))
+                    message.Content?.Headers.TryAddWithoutValidation(name, value);
 
             using var response = await SendOnceAsync(message, ct);
             var status = (int)response.StatusCode;

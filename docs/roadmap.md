@@ -31,6 +31,7 @@ GitHub non girano).
 | #229 Stile comunicativo | profilo opt-in, modificabile, per bozze nel tuo tono (mai diagnosi) |
 | #239 Integrazioni | catalogo, server MCP (senza autenticazione, chiave, OAuth), API dirette e WhatsApp; «cosa posso allacciare?» in chat (ADR 0111, [studio](integrations.md)) |
 | #240 IdP e MCP di Tao | server MCP di sola lettura su `/api/v1/mcp` (consenso `mcp.access`), poi identity provider OpenIddict solo social che sostituisce Keycloak, DCR e consenso per client (ADR 0112) |
+| #248 App e promemoria | PWA installabile, versione e aggiornamenti con note di rilascio, promemoria come notifiche push (ADR 0113) |
 
 ## R3 — Ovunque
 

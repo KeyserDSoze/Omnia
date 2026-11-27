@@ -260,6 +260,73 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
             }
         }
         writer.WriteEndArray();
+
+        writer.WritePropertyName("reminders");
+        writer.WriteStartArray();
+        await using (var command = Command(actor, tenantId, ownerSubject, """
+            SELECT id, sealed_text, repeat, at_time, on_date, time_zone, enabled, next_run_at, last_sent_at, created_at
+            FROM reminders WHERE tenant_id = @tenant AND owner_sub = @owner ORDER BY created_at, id
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                var id = reader.GetGuid(0);
+                var plain = crypto.Open(reader.GetFieldValue<byte[]>(1), PostgresReminderStore.Scope(tenantId, ownerSubject, id));
+                try
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("id", id);
+                    writer.WriteString("text", System.Text.Encoding.UTF8.GetString(plain));
+                    writer.WriteString("repeat", reader.GetString(2));
+                    writer.WriteString("time", reader.GetFieldValue<TimeOnly>(3).ToString("HH:mm"));
+                    if (reader.IsDBNull(4)) writer.WriteNull("date");
+                    else writer.WriteString("date", reader.GetFieldValue<DateOnly>(4).ToString("yyyy-MM-dd"));
+                    writer.WriteString("timeZone", reader.GetString(5));
+                    writer.WriteBoolean("enabled", reader.GetBoolean(6));
+                    if (reader.IsDBNull(7)) writer.WriteNull("nextRunAt");
+                    else writer.WriteString("nextRunAt", reader.GetFieldValue<DateTimeOffset>(7));
+                    if (reader.IsDBNull(8)) writer.WriteNull("lastSentAt");
+                    else writer.WriteString("lastSentAt", reader.GetFieldValue<DateTimeOffset>(8));
+                    writer.WriteString("createdAt", reader.GetFieldValue<DateTimeOffset>(9));
+                    writer.WriteEndObject();
+                }
+                finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(plain); }
+            }
+        }
+        writer.WriteEndArray();
+
+        // The address of a subscription is a capability: only its host and the dates are exported, never the keys.
+        writer.WritePropertyName("pushSubscriptions");
+        writer.WriteStartArray();
+        await using (var command = Command(actor, tenantId, ownerSubject, """
+            SELECT id, sealed_subscription, created_at, last_success_at, failures FROM push_subscriptions
+            WHERE tenant_id = @tenant AND owner_sub = @owner ORDER BY created_at, id
+            """))
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                var id = reader.GetGuid(0);
+                var plain = crypto.Open(reader.GetFieldValue<byte[]>(1), PostgresPushSubscriptionStore.Scope(tenantId, ownerSubject, id));
+                try
+                {
+                    using var sealedDocument = JsonDocument.Parse(plain);
+                    var host = new Uri(sealedDocument.RootElement.GetProperty("Endpoint").GetString()!).Host;
+                    writer.WriteStartObject();
+                    writer.WriteString("id", id);
+                    writer.WriteString("service", host);
+                    writer.WriteString("keys", "sealed-not-exported");
+                    writer.WriteString("createdAt", reader.GetFieldValue<DateTimeOffset>(2));
+                    if (reader.IsDBNull(3)) writer.WriteNull("lastSuccessAt");
+                    else writer.WriteString("lastSuccessAt", reader.GetFieldValue<DateTimeOffset>(3));
+                    writer.WriteNumber("failures", reader.GetInt32(4));
+                    writer.WriteEndObject();
+                }
+                finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(plain); }
+            }
+        }
+        writer.WriteEndArray();
     }
 
     private static NpgsqlCommand Command(PostgresActorScope actor, string tenantId, string ownerSubject,
@@ -300,7 +367,7 @@ public sealed class PostgresPersonalDataService(NpgsqlDataSource db, IEnvelopeEn
             accounts = await accountDelete.ExecuteNonQueryAsync(ct);
         var workState = 0;
         foreach (var table in new[] { "connector_authorizations", "triage_decisions", "connector_actions", "user_settings",
-                     "assistant_usage" })
+                     "assistant_usage", "reminders", "push_subscriptions" })
         {
             await using var delete = Command(actor, tenantId, ownerSubject,
                 $"DELETE FROM {table} WHERE tenant_id = @tenant AND owner_sub = @owner");

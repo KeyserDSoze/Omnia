@@ -1,5 +1,19 @@
 [
   {
+    "version": "0.3.0",
+    "date": "2026-11-27",
+    "notes": {
+      "en": [
+        "Reminders: set a one-off, daily or weekday reminder and receive it as a notification on your devices, even when Tao is closed.",
+        "Notifications are opt-in, with their own consent, and each one travels encrypted."
+      ],
+      "it": [
+        "Promemoria: imposta un promemoria singolo, giornaliero o nei giorni feriali e ricevilo come notifica sui tuoi dispositivi, anche con Tao chiuso.",
+        "Le notifiche sono facoltative, con un consenso dedicato, e ognuna viaggia cifrata."
+      ]
+    }
+  },
+  {
     "version": "0.2.0",
     "date": "2026-11-27",
     "notes": {

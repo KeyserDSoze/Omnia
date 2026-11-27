@@ -10,6 +10,7 @@ import type { AiEngine } from '../services/aiRouter';
 import { intlTag, localeInfo, useLocale, useT, type MessageKey } from '../i18n';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { AppPanel } from './AppPanel';
+import { RemindersPanel } from './RemindersPanel';
 import { Button } from './Button';
 import type { AppUpdates } from '../services/useAppUpdates';
 import { LanguagePicker } from './LanguagePicker';
@@ -304,6 +305,8 @@ export function SettingsPanel({ api, theme: p, profile, accountConsoleUrl, onLog
       )}
 
       {api && <ConnectionsPanel api={api} p={p} onChanged={() => { void load(); }} onConnected={linkConnected} />}
+
+      {api && <RemindersPanel api={api} theme={p} />}
 
       <View style={card}>
         <Text style={[styles.kicker, { color: p.subtle }]}>{t('settings.notesKicker')}</Text>
